@@ -164,6 +164,12 @@
             <a href="/config/lidarpub" class="settings-card">
                 <h3>LiDAR Settings</h3>
             </a>
+            <a href="#" class="settings-card" id="studio-settings-card" onclick="showStudioSettings(); return false;">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 48px; height: 48px; color: #3E3371;">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
+                </svg>
+                <h3>EdgeFirst Studio</h3>
+            </a>
             <!-- Radar Settings card will be added dynamically if needed -->
         </div>
     </main>
@@ -198,6 +204,191 @@
         window.addEventListener('DOMContentLoaded', () => {
             initNavbar('Settings');
         });
+
+        // Show Studio settings modal - creates dialog with safe DOM methods
+        function showStudioSettings() {
+            let dialog = document.getElementById('studioSettingsDialog');
+            if (!dialog) {
+                dialog = document.createElement('dialog');
+                dialog.id = 'studioSettingsDialog';
+                dialog.className = 'modal';
+                dialog.style.padding = '0';
+
+                // Build dialog content using safe DOM methods
+                const container = document.createElement('div');
+                container.style.cssText = 'padding: 2rem; background: #fff; border-radius: 1rem; min-width: 380px; max-width: 90vw; box-shadow: 0 8px 32px rgba(0,0,0,0.18);';
+
+                // Header
+                const header = document.createElement('div');
+                header.style.cssText = 'display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.5rem;';
+
+                const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                icon.setAttribute('viewBox', '0 0 24 24');
+                icon.setAttribute('fill', 'none');
+                icon.setAttribute('stroke', '#3E3371');
+                icon.setAttribute('stroke-width', '1.5');
+                icon.style.cssText = 'width: 32px; height: 32px;';
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('stroke-linecap', 'round');
+                path.setAttribute('stroke-linejoin', 'round');
+                path.setAttribute('d', 'M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z');
+                icon.appendChild(path);
+                header.appendChild(icon);
+
+                const title = document.createElement('h2');
+                title.style.cssText = 'font-size: 1.25rem; font-weight: 600; margin: 0; color: #3E3371;';
+                title.textContent = 'EdgeFirst Studio';
+                header.appendChild(title);
+                container.appendChild(header);
+
+                // Content section
+                const content = document.createElement('div');
+                content.id = 'studioSettingsContent';
+                content.style.marginBottom = '1.5rem';
+
+                // Connection status row
+                const statusRow = document.createElement('div');
+                statusRow.style.cssText = 'display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;';
+                const dot = document.createElement('span');
+                dot.id = 'studioConnectionDot';
+                dot.style.cssText = 'width: 10px; height: 10px; border-radius: 50%; background: #9ca3af;';
+                statusRow.appendChild(dot);
+                const statusText = document.createElement('span');
+                statusText.id = 'studioConnectionStatus';
+                statusText.style.color = '#555';
+                statusText.textContent = 'Checking status...';
+                statusRow.appendChild(statusText);
+                content.appendChild(statusRow);
+
+                // User info (hidden by default)
+                const userInfo = document.createElement('div');
+                userInfo.id = 'studioUserInfo';
+                userInfo.style.cssText = 'display: none; margin-bottom: 1rem; padding: 0.75rem; background: #f0f0f0; border-radius: 0.5rem;';
+                const userLabel = document.createElement('div');
+                userLabel.style.cssText = 'font-weight: 500; color: #333;';
+                userLabel.textContent = 'Logged in as:';
+                userInfo.appendChild(userLabel);
+                const usernameEl = document.createElement('div');
+                usernameEl.id = 'studioUsername';
+                usernameEl.style.color = '#555';
+                userInfo.appendChild(usernameEl);
+                content.appendChild(userInfo);
+
+                // Server info
+                const serverInfo = document.createElement('div');
+                serverInfo.id = 'studioServerInfo';
+                serverInfo.style.cssText = 'margin-bottom: 1rem; padding: 0.75rem; background: #f8f9fa; border-radius: 0.5rem;';
+                const serverLabel = document.createElement('div');
+                serverLabel.style.cssText = 'font-weight: 500; color: #333; margin-bottom: 0.25rem;';
+                serverLabel.textContent = 'Server';
+                serverInfo.appendChild(serverLabel);
+                const serverUrl = document.createElement('div');
+                serverUrl.id = 'studioServerUrl';
+                serverUrl.style.cssText = 'color: #555; font-size: 0.875rem;';
+                serverUrl.textContent = '-';
+                serverInfo.appendChild(serverUrl);
+                content.appendChild(serverInfo);
+                container.appendChild(content);
+
+                // Button row
+                const btnRow = document.createElement('div');
+                btnRow.style.cssText = 'display: flex; gap: 0.75rem; justify-content: flex-end;';
+
+                const closeBtn = document.createElement('button');
+                closeBtn.type = 'button';
+                closeBtn.style.cssText = 'padding: 0.5rem 1rem; background: #e5e7eb; border: none; border-radius: 0.375rem; cursor: pointer; font-weight: 500;';
+                closeBtn.textContent = 'Close';
+                closeBtn.addEventListener('click', () => dialog.close());
+                btnRow.appendChild(closeBtn);
+
+                const loginBtn = document.createElement('button');
+                loginBtn.type = 'button';
+                loginBtn.id = 'studioLoginBtn';
+                loginBtn.style.cssText = 'padding: 0.5rem 1rem; background: #E8B820; color: #222; border: none; border-radius: 0.375rem; cursor: pointer; font-weight: 500;';
+                loginBtn.textContent = 'Login';
+                loginBtn.addEventListener('click', handleStudioAuth);
+                btnRow.appendChild(loginBtn);
+                container.appendChild(btnRow);
+
+                dialog.appendChild(container);
+                document.body.appendChild(dialog);
+            }
+
+            // Update status before showing
+            updateStudioSettingsStatus();
+            dialog.showModal();
+        }
+
+        // Update status in the settings dialog
+        async function updateStudioSettingsStatus() {
+            const connectionDot = document.getElementById('studioConnectionDot');
+            const connectionStatus = document.getElementById('studioConnectionStatus');
+            const userInfo = document.getElementById('studioUserInfo');
+            const username = document.getElementById('studioUsername');
+            const serverUrl = document.getElementById('studioServerUrl');
+            const loginBtn = document.getElementById('studioLoginBtn');
+
+            if (!connectionDot) return;
+
+            try {
+                const response = await fetch('/api/studio/status');
+                if (response.ok) {
+                    const data = await response.json();
+                    serverUrl.textContent = data.server_url || 'https://studio.edgefirst.ai';
+
+                    if (data.logged_in) {
+                        connectionDot.style.background = '#22c55e';
+                        connectionStatus.textContent = 'Connected';
+                        userInfo.style.display = 'block';
+                        username.textContent = data.username || 'Unknown';
+                        loginBtn.textContent = 'Logout';
+                        loginBtn.style.background = '#ef4444';
+                        loginBtn.style.color = '#fff';
+                    } else {
+                        connectionDot.style.background = '#9ca3af';
+                        connectionStatus.textContent = 'Not connected';
+                        userInfo.style.display = 'none';
+                        loginBtn.textContent = 'Login';
+                        loginBtn.style.background = '#E8B820';
+                        loginBtn.style.color = '#222';
+                    }
+                } else {
+                    connectionDot.style.background = '#9ca3af';
+                    connectionStatus.textContent = 'Not connected';
+                    userInfo.style.display = 'none';
+                    loginBtn.textContent = 'Login';
+                    loginBtn.style.background = '#E8B820';
+                    loginBtn.style.color = '#222';
+                }
+            } catch (e) {
+                connectionDot.style.background = '#ef4444';
+                connectionStatus.textContent = 'Error checking status';
+                userInfo.style.display = 'none';
+            }
+        }
+
+        // Handle login/logout
+        async function handleStudioAuth() {
+            const loginBtn = document.getElementById('studioLoginBtn');
+            const isLogout = loginBtn.textContent === 'Logout';
+
+            if (isLogout) {
+                try {
+                    await fetch('/api/studio/logout', { method: 'POST' });
+                    updateStudioSettingsStatus();
+                    if (typeof updateStudioStatus === 'function') {
+                        updateStudioStatus();
+                    }
+                } catch (e) {
+                    console.error('Logout error:', e);
+                }
+            } else {
+                if (typeof showStudioLoginDialog === 'function') {
+                    document.getElementById('studioSettingsDialog').close();
+                    showStudioLoginDialog();
+                }
+            }
+        }
     </script>
 </body>
 

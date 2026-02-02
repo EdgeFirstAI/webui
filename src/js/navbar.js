@@ -1,11 +1,11 @@
 function createNavbar(pageTitle) {
     const navbar = document.createElement('header');
-    navbar.className = 'bg-[#24088E]'; // Purple background
+    navbar.className = 'bg-[#3E3371]'; // EdgeFirst Navy
     navbar.innerHTML = `
-        <nav class="navbar" style="background: #24088E;">
+        <nav class="navbar" style="background: #3E3371;">
             <div class="navbar-start">
                 <a href="/" class="flex items-center gap-2">
-                    <img src="../assets/auzoneLogo.svg" alt="AuZone Logo" class="h-12 w-auto">
+                    <img src="../assets/logo.png" alt="Logo" class="h-12 w-auto">
                 </a>
             </div>
             <div class="navbar-center">
@@ -54,6 +54,19 @@ function createNavbar(pageTitle) {
                                 Loading status...
                             </div>
                         </div>
+                    </div>
+                    <!-- Studio Login Status -->
+                    <div id="studioStatusContainer" class="relative">
+                        <button id="studioStatusBtn" class="btn btn-ghost btn-circle group" aria-label="EdgeFirst Studio">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
+                            </svg>
+                            <span id="studioStatusDot" class="absolute top-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white logged-out"></span>
+                            <div id="studioTooltip" class="studio-tooltip">
+                                <div class="font-semibold mb-1">EdgeFirst Studio</div>
+                                <div id="studioStatusText">Not logged in</div>
+                            </div>
+                        </button>
                     </div>
                     <!-- Settings Button -->
                     <a href="/settings" class="btn btn-ghost btn-circle">
@@ -270,6 +283,38 @@ function createNavbar(pageTitle) {
         .group:focus .mcap-tooltip.show {
             opacity: 1 !important;
         }
+
+        /* Studio Status Indicator */
+        #studioStatusDot.logged-out {
+            background: #9ca3af;
+        }
+        #studioStatusDot.logged-in {
+            background: #22c55e;
+        }
+        .studio-tooltip {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            top: 110%;
+            margin-top: 0.5rem;
+            background: #fff;
+            color: #333;
+            padding: 0.75rem 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            opacity: 0;
+            pointer-events: none;
+            white-space: nowrap;
+            z-index: 50;
+            transition: opacity 0.2s;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            min-width: 140px;
+            text-align: center;
+        }
+        #studioStatusBtn:hover .studio-tooltip,
+        #studioStatusBtn:focus .studio-tooltip {
+            opacity: 1;
+        }
     `;
     document.head.appendChild(style);
 
@@ -449,10 +494,57 @@ function initNavbar(pageTitle) {
                 });
             }
         }
+
+        // Studio status button click handler
+        const studioBtn = document.getElementById('studioStatusBtn');
+        if (studioBtn) {
+            studioBtn.addEventListener('click', function () {
+                if (typeof showStudioLoginDialog === 'function') {
+                    showStudioLoginDialog();
+                }
+            });
+        }
+
+        // Initial Studio status check
+        updateStudioStatus();
     }, 0);
 
     updateRecordingButtonForStorage();
 }
+
+// Update Studio login status indicator
+async function updateStudioStatus() {
+    const statusDot = document.getElementById('studioStatusDot');
+    const statusText = document.getElementById('studioStatusText');
+    if (!statusDot || !statusText) return;
+
+    try {
+        const response = await fetch('/api/studio/status');
+        if (response.ok) {
+            const data = await response.json();
+            if (data.logged_in) {
+                statusDot.classList.remove('logged-out');
+                statusDot.classList.add('logged-in');
+                statusText.textContent = `Logged in as ${data.username || 'User'}`;
+            } else {
+                statusDot.classList.remove('logged-in');
+                statusDot.classList.add('logged-out');
+                statusText.textContent = 'Not logged in';
+            }
+        } else {
+            statusDot.classList.remove('logged-in');
+            statusDot.classList.add('logged-out');
+            statusText.textContent = 'Not logged in';
+        }
+    } catch (e) {
+        statusDot.classList.remove('logged-in');
+        statusDot.classList.add('logged-out');
+        statusText.textContent = 'Status unavailable';
+    }
+}
+
+// Periodically check Studio status
+setInterval(updateStudioStatus, 30000);
 
 let navbarRecordingFile = null;
 
@@ -699,7 +791,7 @@ function showLowDiskDialog(message) {
                         Low Disk Space
                     </div>
                     <div style="margin-bottom: 1.5rem; text-align: center; font-size: 1.08rem; color: #fff;">${message}</div>
-                    <button type="submit" style="background: #fab010; color: #222; font-weight: 600; border: none; border-radius: 0.5rem; padding: 0.6rem 2.2rem; font-size: 1.08rem; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">OK</button>
+                    <button type="submit" style="background: #E8B820; color: #222; font-weight: 600; border: none; border-radius: 0.5rem; padding: 0.6rem 2.2rem; font-size: 1.08rem; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">OK</button>
                 </div>
             </form>
         `;

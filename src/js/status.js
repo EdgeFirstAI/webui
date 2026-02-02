@@ -1547,12 +1547,12 @@ window.startPlaybackFromModal = function () {
     color: #fff !important;
 }
 .mcap-btn-purple {
-    background: #7c3aed !important;
-    color: #fff !important;
+    background: #E8B820 !important;
+    color: #222 !important;
 }
 .mcap-btn-purple:hover {
-    background: #6d28d9 !important;
-    color: #fff !important;
+    background: #d4a41c !important;
+    color: #222 !important;
 }
 .mcap-toast {
     position: fixed;
@@ -1949,6 +1949,16 @@ window.showStudioLoginDialog = async function(onSuccess) {
                 <h2 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem;">Login to EdgeFirst Studio</h2>
                 <form id="studioLoginForm">
                     <div style="margin-bottom: 1rem;">
+                        <label style="display: block; font-weight: 500; margin-bottom: 0.25rem;">Server</label>
+                        <select id="studioServer"
+                            style="width: 100%; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 0.375rem; background-color: white;">
+                            <option value="saas" selected>EdgeFirst Studio</option>
+                            <option value="stage">Stage</option>
+                            <option value="test">Test</option>
+                            <option value="dev">Dev</option>
+                        </select>
+                    </div>
+                    <div style="margin-bottom: 1rem;">
                         <label style="display: block; font-weight: 500; margin-bottom: 0.25rem;">Username</label>
                         <input type="text" id="studioUsername" required
                             style="width: 100%; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 0.375rem;"
@@ -1973,6 +1983,7 @@ window.showStudioLoginDialog = async function(onSuccess) {
 
         dialog.querySelector('#studioLoginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+            const server = dialog.querySelector('#studioServer').value;
             const username = dialog.querySelector('#studioUsername').value.trim();
             const password = dialog.querySelector('#studioPassword').value.trim();
             const errorDiv = dialog.querySelector('#studioLoginError');
@@ -1988,7 +1999,7 @@ window.showStudioLoginDialog = async function(onSuccess) {
                 const response = await fetch('/api/auth/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, password })
+                    body: JSON.stringify({ username, password, server })
                 });
 
                 if (response.ok) {
@@ -2011,7 +2022,8 @@ window.showStudioLoginDialog = async function(onSuccess) {
         });
     }
 
-    // Clear previous inputs
+    // Clear previous inputs and reset server to default
+    dialog.querySelector('#studioServer').value = 'saas';
     dialog.querySelector('#studioUsername').value = '';
     dialog.querySelector('#studioPassword').value = '';
     dialog.querySelector('#studioLoginError').style.display = 'none';
@@ -2100,7 +2112,7 @@ window.showUploadOptionsDialog = async function(fileName, dirName) {
                 <div style="display: flex; gap: 0.75rem; justify-content: flex-end;">
                     <button type="button" onclick="document.getElementById('uploadOptionsDialog').close()"
                         class="mcap-btn-secondary" style="padding: 0.5rem 1rem;">Cancel</button>
-                    <button type="button" id="startUploadBtn" class="mcap-btn-primary" style="padding: 0.5rem 1rem; background: #7c3aed !important;">
+                    <button type="button" id="startUploadBtn" class="mcap-btn-primary" style="padding: 0.5rem 1rem; background: #E8B820; color: #222 !important;">
                         Upload
                     </button>
                 </div>
@@ -2241,7 +2253,7 @@ async function startUpload(dialog) {
 
     let requestBody = {
         mcap_path: `${dirName}/${fileName}`,
-        mode: mode === 'basic' ? 'Basic' : null
+        mode: { type: 'Basic' }
     };
 
     if (mode === 'extended') {
@@ -2256,12 +2268,11 @@ async function startUpload(dialog) {
             .map(cb => cb.value);
 
         requestBody.mode = {
-            Extended: {
-                project_id: projectId,
-                labels: selectedLabels,
-                dataset_name: dialog.querySelector('#uploadDatasetName').value || null,
-                dataset_description: null
-            }
+            type: 'Extended',
+            project_id: projectId,
+            labels: selectedLabels,
+            dataset_name: dialog.querySelector('#uploadDatasetName').value || null,
+            dataset_description: null
         };
     }
 
@@ -2309,7 +2320,7 @@ window.showUploadProgressDialog = function(uploadId, fileName) {
                 <div id="progressStatus" style="margin-bottom: 1rem; font-weight: 500;"></div>
 
                 <div style="background: #e5e7eb; border-radius: 9999px; height: 0.75rem; overflow: hidden; margin-bottom: 0.5rem;">
-                    <div id="progressBar" style="background: #7c3aed; height: 100%; width: 0%; transition: width 0.3s;"></div>
+                    <div id="progressBar" style="background: #E8B820; color: #222; height: 100%; width: 0%; transition: width 0.3s;"></div>
                 </div>
                 <div id="progressPercent" style="text-align: center; font-size: 0.875rem; color: #555; margin-bottom: 1rem;">0%</div>
 
@@ -2318,8 +2329,9 @@ window.showUploadProgressDialog = function(uploadId, fileName) {
                 <div id="progressResult" style="display: none; margin-bottom: 1rem; padding: 0.75rem; border-radius: 0.375rem;"></div>
 
                 <div style="display: flex; gap: 0.75rem; justify-content: flex-end;">
+                    <button type="button" id="backgroundUploadBtn" class="mcap-btn-secondary" style="padding: 0.5rem 1rem;">Continue in Background</button>
                     <button type="button" id="cancelUploadBtn" class="mcap-btn-secondary" style="padding: 0.5rem 1rem;">Cancel</button>
-                    <button type="button" id="closeProgressBtn" class="mcap-btn-primary" style="padding: 0.5rem 1rem; display: none;">Close</button>
+                    <button type="button" id="closeProgressBtn" class="mcap-btn-primary" style="padding: 0.5rem 1rem; display: none;">Done</button>
                 </div>
             </div>
         `;
@@ -2350,8 +2362,33 @@ window.showUploadProgressDialog = function(uploadId, fileName) {
             dialog.close();
         });
 
+        // Background upload button handler
+        dialog.querySelector('#backgroundUploadBtn').addEventListener('click', () => {
+            const uploadId = dialog._uploadId;
+            const fileName = dialog.querySelector('#progressFileName').textContent.replace('File: ', '');
+            if (uploadId) {
+                // Track this as a background upload
+                if (!window.backgroundUploads) {
+                    window.backgroundUploads = new Map();
+                }
+                window.backgroundUploads.set(uploadId, {
+                    fileName: fileName,
+                    progress: parseFloat(dialog.querySelector('#progressPercent').textContent) || 0,
+                    status: dialog.querySelector('#progressStatus').textContent || 'Uploading'
+                });
+                showBackgroundUploadIndicator();
+            }
+            dialog.close();
+        });
+
         // Clean up WebSocket when dialog is closed (ESC key, click outside, etc.)
         dialog.addEventListener('close', () => {
+            // Only close WebSocket if not continuing in background
+            const uploadId = dialog._uploadId;
+            if (window.backgroundUploads && window.backgroundUploads.has(uploadId)) {
+                // Keep WebSocket open for background tracking
+                return;
+            }
             if (window.uploadProgressWs) {
                 window.uploadProgressWs.close();
                 window.uploadProgressWs = null;
@@ -2367,12 +2404,16 @@ window.showUploadProgressDialog = function(uploadId, fileName) {
     dialog.querySelector('#progressStatus').textContent = 'Starting...';
     dialog.querySelector('#progressMessage').textContent = '';
     dialog.querySelector('#progressResult').style.display = 'none';
-    
+    dialog.querySelector('#progressBar').style.background = '#E8B820';
+
     const cancelBtn = dialog.querySelector('#cancelUploadBtn');
     cancelBtn.style.display = 'inline-block';
     cancelBtn.disabled = false;
     cancelBtn.textContent = 'Cancel';
-    
+
+    const backgroundBtn = dialog.querySelector('#backgroundUploadBtn');
+    backgroundBtn.style.display = 'inline-block';
+
     dialog.querySelector('#closeProgressBtn').style.display = 'none';
 
     // Connect WebSocket for progress
@@ -2473,6 +2514,15 @@ function updateProgressUI(dialog, status) {
         }
         cancelBtn.style.display = 'none';
         closeBtn.style.display = 'inline-block';
+        const backgroundBtn = dialog.querySelector('#backgroundUploadBtn');
+        if (backgroundBtn) backgroundBtn.style.display = 'none';
+
+        // Clean up background upload tracking
+        const uploadId = dialog._uploadId;
+        if (window.backgroundUploads && window.backgroundUploads.has(uploadId)) {
+            window.backgroundUploads.delete(uploadId);
+            updateBackgroundUploadIndicator();
+        }
 
         // Close WebSocket
         if (window.uploadProgressWs) {
@@ -2491,10 +2541,101 @@ function updateProgressUI(dialog, status) {
         progressResult.appendChild(document.createTextNode(': ' + (status.error || status.message || 'Unknown error')));
         cancelBtn.style.display = 'none';
         closeBtn.style.display = 'inline-block';
+        const backgroundBtnFailed = dialog.querySelector('#backgroundUploadBtn');
+        if (backgroundBtnFailed) backgroundBtnFailed.style.display = 'none';
+
+        // Clean up background upload tracking
+        const failedUploadId = dialog._uploadId;
+        if (window.backgroundUploads && window.backgroundUploads.has(failedUploadId)) {
+            window.backgroundUploads.delete(failedUploadId);
+            updateBackgroundUploadIndicator();
+        }
 
         // Close WebSocket
         if (window.uploadProgressWs) {
             window.uploadProgressWs.close();
         }
     }
+
+    // Update background upload tracking if this is a background upload
+    const bgUploadId = dialog._uploadId;
+    if (window.backgroundUploads && window.backgroundUploads.has(bgUploadId)) {
+        window.backgroundUploads.set(bgUploadId, {
+            ...window.backgroundUploads.get(bgUploadId),
+            progress: percent,
+            status: stateText
+        });
+        updateBackgroundUploadIndicator();
+    }
+}
+
+/**
+ * Show floating indicator for background uploads
+ */
+function showBackgroundUploadIndicator() {
+    let indicator = document.getElementById('backgroundUploadIndicator');
+    if (!indicator) {
+        indicator = document.createElement('div');
+        indicator.id = 'backgroundUploadIndicator';
+        indicator.style.cssText = 'position: fixed; bottom: 20px; right: 20px; background: #3E3371; color: white; padding: 12px 16px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 9999; cursor: pointer; display: flex; align-items: center; gap: 10px; font-size: 14px;';
+        indicator.addEventListener('click', () => {
+            // Re-open the progress dialog for the first background upload
+            if (window.backgroundUploads && window.backgroundUploads.size > 0) {
+                const [uploadId, info] = window.backgroundUploads.entries().next().value;
+                window.showUploadProgressDialog(uploadId, info.fileName);
+            }
+        });
+        document.body.appendChild(indicator);
+    }
+    updateBackgroundUploadIndicator();
+    indicator.style.display = 'flex';
+}
+
+/**
+ * Update background upload indicator content
+ */
+function updateBackgroundUploadIndicator() {
+    const indicator = document.getElementById('backgroundUploadIndicator');
+    if (!indicator) return;
+
+    if (!window.backgroundUploads || window.backgroundUploads.size === 0) {
+        indicator.style.display = 'none';
+        return;
+    }
+
+    const count = window.backgroundUploads.size;
+    let totalProgress = 0;
+    let completedCount = 0;
+
+    window.backgroundUploads.forEach((info) => {
+        totalProgress += info.progress || 0;
+        if (info.status === 'Completed') completedCount++;
+    });
+
+    const avgProgress = count > 0 ? (totalProgress / count).toFixed(0) : 0;
+
+    // Build indicator content using safe DOM methods
+    indicator.replaceChildren();
+
+    // Spinner
+    const spinner = document.createElement('div');
+    spinner.style.cssText = 'width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 1s linear infinite;';
+    indicator.appendChild(spinner);
+
+    // Text
+    const text = document.createElement('span');
+    text.textContent = count === 1
+        ? `Uploading... ${avgProgress}%`
+        : `${count} uploads in progress (${avgProgress}%)`;
+    indicator.appendChild(text);
+
+    // Add spin animation if not already added
+    if (!document.getElementById('bgUploadSpinStyle')) {
+        const style = document.createElement('style');
+        style.id = 'bgUploadSpinStyle';
+        style.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
+        document.head.appendChild(style);
+    }
+
+    indicator.style.display = 'flex';
 }
