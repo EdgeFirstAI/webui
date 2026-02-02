@@ -498,9 +498,32 @@ function initNavbar(pageTitle) {
         // Studio status button click handler
         const studioBtn = document.getElementById('studioStatusBtn');
         if (studioBtn) {
-            studioBtn.addEventListener('click', function () {
-                if (typeof showStudioLoginDialog === 'function') {
-                    showStudioLoginDialog();
+            studioBtn.addEventListener('click', async function () {
+                // Check if user is logged in
+                try {
+                    const response = await fetch('/api/auth/status');
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.authenticated) {
+                            // User is logged in - show account dialog with logout option
+                            showStudioAccountDialog(data.username);
+                        } else {
+                            // User not logged in - show login dialog
+                            if (typeof showStudioLoginDialog === 'function') {
+                                showStudioLoginDialog();
+                            }
+                        }
+                    } else {
+                        // Error checking status - show login dialog
+                        if (typeof showStudioLoginDialog === 'function') {
+                            showStudioLoginDialog();
+                        }
+                    }
+                } catch (e) {
+                    // Network error - show login dialog
+                    if (typeof showStudioLoginDialog === 'function') {
+                        showStudioLoginDialog();
+                    }
                 }
             });
         }
@@ -519,10 +542,10 @@ async function updateStudioStatus() {
     if (!statusDot || !statusText) return;
 
     try {
-        const response = await fetch('/api/studio/status');
+        const response = await fetch('/api/auth/status');
         if (response.ok) {
             const data = await response.json();
-            if (data.logged_in) {
+            if (data.authenticated) {
                 statusDot.classList.remove('logged-out');
                 statusDot.classList.add('logged-in');
                 statusText.textContent = `Logged in as ${data.username || 'User'}`;
@@ -541,6 +564,114 @@ async function updateStudioStatus() {
         statusDot.classList.add('logged-out');
         statusText.textContent = 'Status unavailable';
     }
+}
+
+// Expose globally so login dialog can trigger immediate refresh
+window.updateStudioStatus = updateStudioStatus;
+
+// Show Studio account dialog with logout option
+function showStudioAccountDialog(username) {
+    let dialog = document.getElementById('studioAccountDialog');
+    if (!dialog) {
+        dialog = document.createElement('dialog');
+        dialog.id = 'studioAccountDialog';
+        dialog.className = 'modal';
+
+        // Build dialog content using safe DOM methods
+        const modalBox = document.createElement('div');
+        modalBox.className = 'modal-box';
+        modalBox.style.cssText = 'max-width: 350px; padding: 1.5rem;';
+
+        const title = document.createElement('h2');
+        title.style.cssText = 'font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem;';
+        title.textContent = 'EdgeFirst Studio';
+        modalBox.appendChild(title);
+
+        // Status container
+        const statusContainer = document.createElement('div');
+        statusContainer.style.cssText = 'display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.5rem; padding: 1rem; background: #f0fdf4; border-radius: 0.5rem;';
+
+        const statusDot = document.createElement('div');
+        statusDot.style.cssText = 'width: 12px; height: 12px; background: #22c55e; border-radius: 50%;';
+        statusContainer.appendChild(statusDot);
+
+        const statusInfo = document.createElement('div');
+        const connectedLabel = document.createElement('div');
+        connectedLabel.style.fontWeight = '500';
+        connectedLabel.textContent = 'Connected';
+        statusInfo.appendChild(connectedLabel);
+
+        const usernameEl = document.createElement('div');
+        usernameEl.id = 'studioAccountUsername';
+        usernameEl.style.cssText = 'color: #666; font-size: 0.875rem;';
+        statusInfo.appendChild(usernameEl);
+        statusContainer.appendChild(statusInfo);
+        modalBox.appendChild(statusContainer);
+
+        // Button container
+        const buttonContainer = document.createElement('div');
+        buttonContainer.style.cssText = 'display: flex; gap: 0.75rem; justify-content: flex-end;';
+
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.id = 'studioAccountCloseBtn';
+        closeBtn.className = 'mcap-btn-secondary';
+        closeBtn.style.padding = '0.5rem 1rem';
+        closeBtn.textContent = 'Close';
+        buttonContainer.appendChild(closeBtn);
+
+        const logoutBtn = document.createElement('button');
+        logoutBtn.type = 'button';
+        logoutBtn.id = 'studioAccountLogoutBtn';
+        logoutBtn.style.cssText = 'padding: 0.5rem 1rem; background: #ef4444; color: white; border: none; border-radius: 0.375rem; cursor: pointer;';
+        logoutBtn.textContent = 'Logout';
+        buttonContainer.appendChild(logoutBtn);
+
+        modalBox.appendChild(buttonContainer);
+        dialog.appendChild(modalBox);
+        document.body.appendChild(dialog);
+
+        // Close button handler
+        closeBtn.addEventListener('click', () => {
+            dialog.close();
+        });
+
+        // Logout button handler
+        logoutBtn.addEventListener('click', async () => {
+            try {
+                await fetch('/api/auth/logout', { method: 'POST' });
+                // Update global auth state
+                if (window.studioAuth) {
+                    window.studioAuth.isLoggedIn = false;
+                    window.studioAuth.username = null;
+                }
+                // Refresh navbar status
+                updateStudioStatus();
+                dialog.close();
+                // Show toast notification if available
+                if (typeof window.showToast === 'function') {
+                    window.showToast('Logged out from EdgeFirst Studio');
+                }
+            } catch (e) {
+                console.error('Logout error:', e);
+            }
+        });
+
+        // Close on backdrop click
+        dialog.addEventListener('click', (e) => {
+            if (e.target === dialog) {
+                dialog.close();
+            }
+        });
+    }
+
+    // Update username display
+    const usernameDisplay = dialog.querySelector('#studioAccountUsername');
+    if (usernameDisplay) {
+        usernameDisplay.textContent = username || 'User';
+    }
+
+    dialog.showModal();
 }
 
 // Periodically check Studio status

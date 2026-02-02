@@ -331,12 +331,12 @@
             if (!connectionDot) return;
 
             try {
-                const response = await fetch('/api/studio/status');
+                const response = await fetch('/api/auth/status');
                 if (response.ok) {
                     const data = await response.json();
-                    serverUrl.textContent = data.server_url || 'https://studio.edgefirst.ai';
+                    serverUrl.textContent = 'https://studio.edgefirst.ai';
 
-                    if (data.logged_in) {
+                    if (data.authenticated) {
                         connectionDot.style.background = '#22c55e';
                         connectionStatus.textContent = 'Connected';
                         userInfo.style.display = 'block';
@@ -374,10 +374,10 @@
 
             if (isLogout) {
                 try {
-                    await fetch('/api/studio/logout', { method: 'POST' });
+                    await fetch('/api/auth/logout', { method: 'POST' });
                     updateStudioSettingsStatus();
-                    if (typeof updateStudioStatus === 'function') {
-                        updateStudioStatus();
+                    if (typeof window.updateStudioStatus === 'function') {
+                        window.updateStudioStatus();
                     }
                 } catch (e) {
                     console.error('Logout error:', e);

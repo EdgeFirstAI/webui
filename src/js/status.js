@@ -2007,6 +2007,10 @@ window.showStudioLoginDialog = async function(onSuccess) {
                     window.studioAuth.isLoggedIn = true;
                     window.studioAuth.username = data.username;
                     dialog.close();
+                    // Immediately refresh navbar status indicator
+                    if (typeof window.updateStudioStatus === 'function') {
+                        window.updateStudioStatus();
+                    }
                     if (typeof onSuccess === 'function') {
                         onSuccess();
                     }
@@ -2493,8 +2497,9 @@ function updateProgressUI(dialog, status) {
     progressStatus.textContent = stateText || 'Unknown';
     progressMessage.textContent = status.message || '';
 
-    // Handle completed or failed states
-    if (stateText === 'Completed') {
+    // Handle completed or failed states (backend sends lowercase: "completed", "failed")
+    const stateTextLower = stateText.toLowerCase();
+    if (stateTextLower === 'completed') {
         progressBar.style.background = '#34a853';
         progressResult.style.display = 'block';
         progressResult.style.background = '#d4edda';
@@ -2528,7 +2533,7 @@ function updateProgressUI(dialog, status) {
         if (window.uploadProgressWs) {
             window.uploadProgressWs.close();
         }
-    } else if (stateText === 'Failed' || stateText === 'Cancelled') {
+    } else if (stateTextLower === 'failed' || stateTextLower === 'cancelled') {
         progressBar.style.background = '#dc3545';
         progressResult.style.display = 'block';
         progressResult.style.background = '#f8d7da';
@@ -2609,7 +2614,7 @@ function updateBackgroundUploadIndicator() {
 
     window.backgroundUploads.forEach((info) => {
         totalProgress += info.progress || 0;
-        if (info.status === 'Completed') completedCount++;
+        if (info.status && info.status.toLowerCase() === 'completed') completedCount++;
     });
 
     const avgProgress = count > 0 ? (totalProgress / count).toFixed(0) : 0;
