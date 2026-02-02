@@ -2261,9 +2261,17 @@ async function startUpload(dialog) {
     };
 
     if (mode === 'extended') {
-        const projectId = dialog.querySelector('#uploadProject').value;
-        if (!projectId) {
+        const projectIdStr = dialog.querySelector('#uploadProject').value;
+        if (!projectIdStr) {
             errorDiv.textContent = 'Please select a project for extended mode';
+            errorDiv.style.display = 'block';
+            return;
+        }
+
+        // Convert project_id to number (backend expects u64)
+        const projectId = parseInt(projectIdStr, 10);
+        if (isNaN(projectId)) {
+            errorDiv.textContent = 'Invalid project ID';
             errorDiv.style.display = 'block';
             return;
         }
@@ -2300,6 +2308,7 @@ async function startUpload(dialog) {
             errorDiv.style.display = 'block';
         }
     } catch (error) {
+        console.error('Upload request failed:', error);
         errorDiv.textContent = 'Network error. Please try again.';
         errorDiv.style.display = 'block';
     } finally {
