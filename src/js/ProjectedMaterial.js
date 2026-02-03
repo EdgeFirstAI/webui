@@ -1,3 +1,5 @@
+// Copyright (C) 2025 Au-Zone Technologies Inc. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 import * as THREE from './three.js'
 
 // Based on https://tympanus.net/codrops/2020/01/07/playing-with-texture-projection-in-three-js/

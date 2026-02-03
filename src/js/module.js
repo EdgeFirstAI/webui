@@ -1,3 +1,5 @@
+// Copyright (C) 2025 Au-Zone Technologies Inc. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 // REF: https://stackoverflow.com/a/47880734
 const wasmSupported = (() => {
     try {

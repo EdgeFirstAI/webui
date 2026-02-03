@@ -1,3 +1,5 @@
+// Copyright (C) 2025 Au-Zone Technologies Inc. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 // Service status cache implementation
 const CACHE_DURATION = 2000; // 2 seconds cache duration
 const BACKGROUND_UPDATE_INTERVAL = 5000; // 5 seconds between background updates

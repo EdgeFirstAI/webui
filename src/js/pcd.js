@@ -1,3 +1,5 @@
+// Copyright (C) 2025 Au-Zone Technologies Inc. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 import { CdrReader } from './Cdr.js';
 export function quaternionToEuler(x, y, z, w) {
     const roll = Math.atan2(2.0 * (w * x + y * z), 1.0 - 2.0 * (x * x + y * y)) * (180 / Math.PI);

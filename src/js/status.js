@@ -1,3 +1,5 @@
+// Copyright (C) 2025 Au-Zone Technologies Inc. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 async function checkReplayStatus() {
     try {
         const deviceData = await window.serviceCache.getDeviceData();

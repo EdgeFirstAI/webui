@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.6.1] - 2026-02-03
+
+### Changed
+
+- Updated license from AGPL-3.0 to Apache-2.0
+- Added SPDX license headers and copyright notices to all source files
+
 ## [3.6.0] - 2026-02-03
 
 ### Added

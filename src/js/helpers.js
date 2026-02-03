@@ -1,3 +1,5 @@
+// Copyright (C) 2025 Au-Zone Technologies Inc. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 export class ArrayBufferHelper {
     static transfer(old_buffer, new_capacity) {
         const bytes = new Uint8Array(new ArrayBuffer(new_capacity));

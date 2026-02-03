@@ -1,3 +1,5 @@
+// Copyright (C) 2025 Au-Zone Technologies Inc. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 import { LineSegments, Color, BufferGeometry, Float32BufferAttribute, LineBasicMaterial } from "./three.js";
 
 export class PolarGridFan extends LineSegments {

@@ -1,3 +1,5 @@
+// Copyright (C) 2025 Au-Zone Technologies Inc. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 import { PolarGridFan } from "./polarGridFan.js";
 import * as THREE from './three.js'
 import { clearThree, color_points_class, color_points_field, mask_colors } from "./utils.js";

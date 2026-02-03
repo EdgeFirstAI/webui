@@ -1,3 +1,5 @@
+// Copyright (C) 2025 Au-Zone Technologies Inc. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 // https://stackoverflow.com/a/4760279
 export function dynamicSort(property) {
     let sortOrder = 1;

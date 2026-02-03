@@ -1,3 +1,5 @@
+// Copyright (C) 2025 Au-Zone Technologies Inc. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 import { CdrReader } from './Cdr.js';
 
 const CHARCODE_MINUS = "-".charCodeAt(0);
@@ -175,4 +177,3 @@ export default async function boxesstream(socketUrl, drawBoxSettings, onMessage)
     };
     return boxes;
 }
-

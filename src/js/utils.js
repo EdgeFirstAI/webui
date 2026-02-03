@@ -1,3 +1,5 @@
+// Copyright (C) 2025 Au-Zone Technologies Inc. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 import { dynamicSort } from "./sort.js";
 import SpriteText from './three-spritetext.js';
 import * as THREE from './three.js'

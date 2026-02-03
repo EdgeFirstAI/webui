@@ -1,3 +1,5 @@
+// Copyright (C) 2025 Au-Zone Technologies Inc. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 import { CdrReader } from './Cdr.js';
 
 let timeoutId;
@@ -99,4 +101,3 @@ export default async function h264stream(socketUrl, width, height, fps, canvas) 
     };
     return ctx;
 }
-

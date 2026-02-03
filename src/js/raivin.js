@@ -1,3 +1,5 @@
+// Copyright (C) 2025 Au-Zone Technologies Inc. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 import * as THREE from './three.js'
 import ProjectedMaterial from './ProjectedMaterial'
 import ProjectedMask from './ProjectedMask'

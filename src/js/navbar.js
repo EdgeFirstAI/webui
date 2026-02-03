@@ -1,3 +1,5 @@
+// Copyright (C) 2025 Au-Zone Technologies Inc. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 function createNavbar(pageTitle) {
     const navbar = document.createElement('header');
     navbar.className = 'bg-[#3E3371]'; // EdgeFirst Navy
