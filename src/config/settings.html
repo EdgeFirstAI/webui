@@ -13,45 +13,11 @@
     <link href="../css/full.css" rel="stylesheet" type="text/css" />
     <script src="../js/tailwind.js"></script>
     <script src="../js/theme.js"></script>
+    <script src="../js/neuralMesh.js"></script>
     <script src="../js/serviceCache.js"></script>
     <script src="../js/navbar.js"></script>
     <script src="../js/status.js"></script>
     <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            display: flex;
-            flex-direction: column;
-            min-height: 100vh;
-            background-color: #f8f9fa;
-        }
-
-        .navbar-start img {
-            height: 40px;
-            margin-right: 15px;
-        }
-
-        .navbar-menu {
-            display: flex;
-            gap: 20px;
-        }
-
-        .navbar-menu a {
-            color: #ffffff;
-            text-decoration: none;
-            font-size: 16px;
-            font-weight: 500;
-            transition: color 0.3s;
-        }
-
-        .navbar-menu a:hover {
-            color: #28a745;
-        }
-
-        .navbar-menu a.active {
-            border-bottom: 2px solid #28a745;
-        }
-
         .navbar-end .btn-circle svg {
             width: 24px;
             height: 24px;
@@ -94,54 +60,6 @@
             padding: 40px 20px;
         }
 
-        .container {
-            max-width: 900px;
-            width: 100%;
-            padding: 40px;
-            border-radius: 12px;
-            background-color: #ffffff;
-            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
-            display: flex;
-            gap: 20px;
-            flex-wrap: wrap;
-            justify-content: center;
-        }
-
-        .settings-card {
-            width: 200px;
-            padding: 20px;
-            border-radius: 8px;
-            background-color: #ffffff;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            text-align: center;
-            cursor: pointer;
-            transition: transform 0.3s, box-shadow 0.3s, background-color 0.3s;
-            text-decoration: none;
-            color: #333;
-        }
-
-        .settings-card h3 {
-            margin: 10px 0 0 0;
-            font-size: 18px;
-            color: #333;
-        }
-
-        .settings-card:hover {
-            transform: scale(1.05);
-            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
-            background-color: #e9ecef;
-        }
-
-        footer {
-            background-color: #343a40;
-            color: #ffffff;
-            text-align: center;
-            padding: 10px 0;
-            position: relative;
-            bottom: 0;
-            width: 100%;
-        }
-
         #radar-settings-card {
             display: none;
         }
@@ -149,32 +67,35 @@
 </head>
 
 <body>
-    <main>
-        <div class="container" id="settings-container">
-            <a href="/config/recorder" class="settings-card">
-                <h3>MCAP Recorder</h3>
-            </a>
-            <a href="/config/camera" class="settings-card">
-                <h3>Camera Settings</h3>
-            </a>
-            <a href="/config/webui" class="settings-card">
-                <h3>WebUI Settings</h3>
-            </a>
-            <a href="/config/model" class="settings-card">
-                <h3>Model Settings</h3>
-            </a>
-            <a href="/config/services" class="settings-card">
-                <h3>Service Status</h3>
-            </a>
-            <a href="/config/lidarpub" class="settings-card">
-                <h3>LiDAR Settings</h3>
-            </a>
-            <a href="#" class="settings-card" id="studio-settings-card" onclick="showStudioSettings(); return false;">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 48px; height: 48px; color: #3E3371;">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
-                </svg>
-                <h3>EdgeFirst Studio</h3>
-            </a>
+    <main class="bg-neural">
+        <div class="widget-container" id="settings-container">
+            <h1>Settings</h1>
+            <div class="widget-card-grid">
+                <a href="/config/recorder" class="widget-card">
+                    <h3>MCAP Recorder</h3>
+                </a>
+                <a href="/config/camera" class="widget-card">
+                    <h3>Camera Settings</h3>
+                </a>
+                <a href="/config/webui" class="widget-card">
+                    <h3>WebUI Settings</h3>
+                </a>
+                <a href="/config/model" class="widget-card">
+                    <h3>Model Settings</h3>
+                </a>
+                <a href="/config/services" class="widget-card">
+                    <h3>Service Status</h3>
+                </a>
+                <a href="/config/lidarpub" class="widget-card">
+                    <h3>LiDAR Settings</h3>
+                </a>
+                <a href="#" class="widget-card" id="studio-settings-card" onclick="showStudioSettings(); return false;">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 48px; height: 48px;">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
+                    </svg>
+                    <h3>EdgeFirst Studio</h3>
+                </a>
+            </div>
             <!-- Radar Settings card will be added dynamically if needed -->
         </div>
     </main>
@@ -185,19 +106,19 @@
                 .then(response => response.json())
                 .then(data => {
                     const deviceType = data.DEVICE;
-                    const settingsContainer = document.getElementById('settings-container');
+                    const cardGrid = document.querySelector('.widget-card-grid');
 
                     if (deviceType.toLowerCase() !== 'maivin') {
                         const radarSettingsCard = document.createElement('a');
                         radarSettingsCard.href = '/config/radarpub';
-                        radarSettingsCard.className = 'settings-card';
+                        radarSettingsCard.className = 'widget-card';
                         radarSettingsCard.innerHTML = '<h3>Radar Settings</h3>';
-                        settingsContainer.appendChild(radarSettingsCard);
+                        cardGrid.appendChild(radarSettingsCard);
                         const fusionSettingsCard = document.createElement('a');
                         fusionSettingsCard.href = '/config/fusion';
-                        fusionSettingsCard.className = 'settings-card';
+                        fusionSettingsCard.className = 'widget-card';
                         fusionSettingsCard.innerHTML = '<h3>Fusion Settings</h3>';
-                        settingsContainer.appendChild(fusionSettingsCard);
+                        cardGrid.appendChild(fusionSettingsCard);
 
                     }
                 })
@@ -208,6 +129,8 @@
 
         window.addEventListener('DOMContentLoaded', () => {
             initNavbar('Settings');
+            // Initialize neural mesh background (dark mode only)
+            NeuralMesh.init();
         });
 
         // Show Studio settings modal - creates dialog with safe DOM methods
@@ -221,7 +144,7 @@
 
                 // Build dialog content using safe DOM methods
                 const container = document.createElement('div');
-                container.style.cssText = 'padding: 2rem; background: #fff; border-radius: 1rem; min-width: 380px; max-width: 90vw; box-shadow: 0 8px 32px rgba(0,0,0,0.18);';
+                container.style.cssText = 'padding: 2rem; background: var(--color-card-bg); border-radius: 1rem; min-width: 380px; max-width: 90vw; box-shadow: 0 8px 32px var(--color-shadow);';
 
                 // Header
                 const header = document.createElement('div');
@@ -230,9 +153,9 @@
                 const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
                 icon.setAttribute('viewBox', '0 0 24 24');
                 icon.setAttribute('fill', 'none');
-                icon.setAttribute('stroke', '#3E3371');
+                icon.setAttribute('stroke', 'currentColor');
                 icon.setAttribute('stroke-width', '1.5');
-                icon.style.cssText = 'width: 32px; height: 32px;';
+                icon.style.cssText = 'width: 32px; height: 32px; color: var(--color-card-title);';
                 const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
                 path.setAttribute('stroke-linecap', 'round');
                 path.setAttribute('stroke-linejoin', 'round');
@@ -241,7 +164,7 @@
                 header.appendChild(icon);
 
                 const title = document.createElement('h2');
-                title.style.cssText = 'font-size: 1.25rem; font-weight: 600; margin: 0; color: #3E3371;';
+                title.style.cssText = 'font-size: 1.25rem; font-weight: 600; margin: 0; color: var(--color-card-title);';
                 title.textContent = 'EdgeFirst Studio';
                 header.appendChild(title);
                 container.appendChild(header);
@@ -260,7 +183,7 @@
                 statusRow.appendChild(dot);
                 const statusText = document.createElement('span');
                 statusText.id = 'studioConnectionStatus';
-                statusText.style.color = '#555';
+                statusText.style.color = 'var(--color-text-secondary)';
                 statusText.textContent = 'Checking status...';
                 statusRow.appendChild(statusText);
                 content.appendChild(statusRow);
@@ -268,28 +191,28 @@
                 // User info (hidden by default)
                 const userInfo = document.createElement('div');
                 userInfo.id = 'studioUserInfo';
-                userInfo.style.cssText = 'display: none; margin-bottom: 1rem; padding: 0.75rem; background: #f0f0f0; border-radius: 0.5rem;';
+                userInfo.style.cssText = 'display: none; margin-bottom: 1rem; padding: 0.75rem; background: var(--color-bg-elevated); border-radius: 0.5rem;';
                 const userLabel = document.createElement('div');
-                userLabel.style.cssText = 'font-weight: 500; color: #333;';
+                userLabel.style.cssText = 'font-weight: 500; color: var(--color-text-primary);';
                 userLabel.textContent = 'Logged in as:';
                 userInfo.appendChild(userLabel);
                 const usernameEl = document.createElement('div');
                 usernameEl.id = 'studioUsername';
-                usernameEl.style.color = '#555';
+                usernameEl.style.color = 'var(--color-text-secondary)';
                 userInfo.appendChild(usernameEl);
                 content.appendChild(userInfo);
 
                 // Server info
                 const serverInfo = document.createElement('div');
                 serverInfo.id = 'studioServerInfo';
-                serverInfo.style.cssText = 'margin-bottom: 1rem; padding: 0.75rem; background: #f8f9fa; border-radius: 0.5rem;';
+                serverInfo.style.cssText = 'margin-bottom: 1rem; padding: 0.75rem; background: var(--color-bg-elevated); border-radius: 0.5rem;';
                 const serverLabel = document.createElement('div');
-                serverLabel.style.cssText = 'font-weight: 500; color: #333; margin-bottom: 0.25rem;';
+                serverLabel.style.cssText = 'font-weight: 500; color: var(--color-text-primary); margin-bottom: 0.25rem;';
                 serverLabel.textContent = 'Server';
                 serverInfo.appendChild(serverLabel);
                 const serverUrl = document.createElement('div');
                 serverUrl.id = 'studioServerUrl';
-                serverUrl.style.cssText = 'color: #555; font-size: 0.875rem;';
+                serverUrl.style.cssText = 'color: var(--color-text-secondary); font-size: 0.875rem;';
                 serverUrl.textContent = '-';
                 serverInfo.appendChild(serverUrl);
                 content.appendChild(serverInfo);
@@ -301,7 +224,8 @@
 
                 const closeBtn = document.createElement('button');
                 closeBtn.type = 'button';
-                closeBtn.style.cssText = 'padding: 0.5rem 1rem; background: #e5e7eb; border: none; border-radius: 0.375rem; cursor: pointer; font-weight: 500;';
+                closeBtn.className = 'btn-secondary';
+                closeBtn.style.cssText = 'padding: 0.5rem 1rem;';
                 closeBtn.textContent = 'Close';
                 closeBtn.addEventListener('click', () => dialog.close());
                 btnRow.appendChild(closeBtn);
@@ -309,7 +233,8 @@
                 const loginBtn = document.createElement('button');
                 loginBtn.type = 'button';
                 loginBtn.id = 'studioLoginBtn';
-                loginBtn.style.cssText = 'padding: 0.5rem 1rem; background: #E8B820; color: #222; border: none; border-radius: 0.375rem; cursor: pointer; font-weight: 500;';
+                loginBtn.className = 'btn-primary';
+                loginBtn.style.cssText = 'padding: 0.5rem 1rem;';
                 loginBtn.textContent = 'Login';
                 loginBtn.addEventListener('click', handleStudioAuth);
                 btnRow.appendChild(loginBtn);
@@ -347,23 +272,23 @@
                         userInfo.style.display = 'block';
                         username.textContent = data.username || 'Unknown';
                         loginBtn.textContent = 'Logout';
-                        loginBtn.style.background = '#ef4444';
-                        loginBtn.style.color = '#fff';
+                        loginBtn.className = 'btn-danger';
+                        loginBtn.style.cssText = 'padding: 0.5rem 1rem;';
                     } else {
                         connectionDot.style.background = '#9ca3af';
                         connectionStatus.textContent = 'Not connected';
                         userInfo.style.display = 'none';
                         loginBtn.textContent = 'Login';
-                        loginBtn.style.background = '#E8B820';
-                        loginBtn.style.color = '#222';
+                        loginBtn.className = 'btn-primary';
+                        loginBtn.style.cssText = 'padding: 0.5rem 1rem;';
                     }
                 } else {
                     connectionDot.style.background = '#9ca3af';
                     connectionStatus.textContent = 'Not connected';
                     userInfo.style.display = 'none';
                     loginBtn.textContent = 'Login';
-                    loginBtn.style.background = '#E8B820';
-                    loginBtn.style.color = '#222';
+                    loginBtn.className = 'btn-primary';
+                    loginBtn.style.cssText = 'padding: 0.5rem 1rem;';
                 }
             } catch (e) {
                 connectionDot.style.background = '#ef4444';

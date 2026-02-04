@@ -21,7 +21,7 @@
     <style>
         body {
             font-family: 'Roboto', sans-serif;
-            background-color: #f4f7f9;
+            background-color: var(--color-bg-base);
             margin: 0;
             display: flex;
             flex-direction: column;
@@ -36,7 +36,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 2px 4px var(--color-shadow);
         }
 
         header .logo {
@@ -74,7 +74,7 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            background-color: #ffffff;
+            background-color: var(--color-card-bg);
             overflow-y: auto;
         }
 
@@ -83,28 +83,28 @@
             max-width: 600px;
             padding: 20px;
             border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            background-color: #ffffff;
+            box-shadow: 0 4px 8px var(--color-shadow);
+            background-color: var(--color-card-bg);
             overflow-y: auto;
         }
 
         h2 {
             text-align: center;
             margin-bottom: 20px;
-            color: #333;
+            color: var(--color-text-primary);
             font-size: 24px;
         }
 
         label {
             font-weight: 500;
-            color: #333;
+            color: var(--color-text-primary);
             display: block;
             margin-bottom: 8px;
         }
 
         .comment {
             font-style: italic;
-            color: #666;
+            color: var(--color-text-muted);
             margin-bottom: 20px;
             font-size: 14px;
         }
@@ -118,8 +118,10 @@
             width: 100%;
             padding: 12px;
             border-radius: 4px;
-            border: 1px solid #ddd;
+            border: 1px solid var(--color-border);
             font-size: 16px;
+            background-color: var(--color-card-bg);
+            color: var(--color-text-primary);
         }
 
         .form-group input[type="checkbox"] {
@@ -160,27 +162,6 @@
         .navbar-end .btn-circle.btn-lg:hover svg {
             color: #e2e8f0;
         }
-
-        button {
-            display: block;
-            width: 100%;
-            padding: 12px;
-            background-color: #28a745;
-            color: #ffffff;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-            transition: background-color 0.3s, transform 0.2s;
-        }
-
-        button:hover {
-            background-color: #218838;
-        }
-
-        button:active {
-            transform: scale(0.98);
-        }
     </style>
 </head>
 
@@ -220,7 +201,7 @@
                 <input type="text" id="cache_dir" name="cache_dir" placeholder="/var/cache">
             </div>
 
-            <button id="saveConfig">Save Configuration</button>
+            <button id="saveConfig" class="btn-primary btn-block">Save Configuration</button>
         </div>
     </main>
 

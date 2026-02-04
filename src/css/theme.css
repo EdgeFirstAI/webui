@@ -61,6 +61,7 @@
   /* Card Styles */
   --color-card-bg: #ffffff;
   --color-card-border: rgba(0, 0, 0, 0.125);
+  --color-card-title: var(--brand-navy);
 
   /* Header Styles */
   --color-header-bg: var(--brand-navy);
@@ -112,6 +113,10 @@
   /* Card Styles */
   --color-card-bg: #252033;
   --color-card-border: rgba(255, 255, 255, 0.08);
+
+  /* Card Text Colors - Light purple for dark mode */
+  --color-card-title: #E6E6FA;
+  --color-primary-text: #E6E6FA;
 }
 
 /* -----------------------------------------------------------------------------
@@ -148,6 +153,10 @@
     /* Card Styles */
     --color-card-bg: #252033;
     --color-card-border: rgba(255, 255, 255, 0.08);
+
+    /* Card Text Colors - Light purple for dark mode */
+    --color-card-title: #E6E6FA;
+    --color-primary-text: #E6E6FA;
   }
 }
 
@@ -189,3 +198,333 @@
     var(--bg-image) center center / cover no-repeat,
     linear-gradient(to bottom, var(--bg-gradient-start), var(--bg-gradient-end));
 }
+
+/* =============================================================================
+   Reusable Widget Components
+   ============================================================================= */
+
+/* -----------------------------------------------------------------------------
+   Navigation Card Widget
+   Used for main menu cards, settings cards, and similar navigation elements.
+   Features: gold border on hover, theme-aware colors
+   ----------------------------------------------------------------------------- */
+.widget-card {
+  background: var(--color-card-bg);
+  border: 1px solid var(--color-card-border);
+  border-radius: 15px;
+  box-shadow: 0 4px 8px var(--color-shadow);
+  padding: 20px;
+  transition: all 0.15s ease;
+  cursor: pointer;
+  text-decoration: none;
+  color: var(--color-text-primary);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+
+.widget-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 10px var(--color-shadow-hover);
+  border: 1px solid var(--color-border-hover);
+}
+
+.widget-card h2,
+.widget-card h3,
+.widget-card-title {
+  margin: 0;
+  color: var(--color-card-title);
+  font-weight: 500;
+  letter-spacing: 0.05em;
+}
+
+.widget-card h2 {
+  font-size: 24px;
+}
+
+.widget-card h3 {
+  font-size: 18px;
+  margin-top: 10px;
+}
+
+.widget-card p,
+.widget-card-description {
+  font-size: 16px;
+  margin: 10px 0 0;
+  color: var(--color-text-muted);
+}
+
+.widget-card svg {
+  color: var(--color-card-title);
+  stroke: var(--color-card-title);
+}
+
+/* -----------------------------------------------------------------------------
+   Content Container Widget
+   Used for main content areas like the visualization selector and settings pages.
+   ----------------------------------------------------------------------------- */
+.widget-container {
+  position: relative;
+  z-index: 2;
+  background: var(--color-card-bg);
+  border-radius: 20px;
+  box-shadow: 0 15px 30px var(--color-shadow);
+  padding: 40px;
+  text-align: center;
+  max-width: 800px;
+  width: 100%;
+  max-height: 100%;
+  overflow: auto;
+}
+
+.widget-container h1,
+.widget-container h2 {
+  margin-bottom: 20px;
+  color: var(--color-text-primary);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+.widget-container h1 {
+  font-size: 36px;
+  margin-bottom: 40px;
+}
+
+.widget-container h2 {
+  font-size: 24px;
+}
+
+/* -----------------------------------------------------------------------------
+   Form Container Widget
+   Used for configuration forms and settings panels.
+   ----------------------------------------------------------------------------- */
+.widget-form-container {
+  width: 100%;
+  max-width: 600px;
+  padding: 20px;
+  border-radius: 12px;
+  background-color: var(--color-card-bg);
+  box-shadow: 0 6px 12px var(--color-shadow);
+}
+
+.widget-form-container h2 {
+  text-align: center;
+  margin-bottom: 20px;
+  color: var(--color-text-primary);
+  font-size: 24px;
+}
+
+.widget-form-container label {
+  font-weight: 500;
+  color: var(--color-text-primary);
+  display: block;
+  margin-bottom: 8px;
+}
+
+.widget-form-container .comment {
+  font-style: italic;
+  color: var(--color-text-muted);
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+
+.widget-form-container .form-group {
+  margin-bottom: 20px;
+}
+
+.widget-form-container .form-group input,
+.widget-form-container .form-group select,
+.widget-form-container .form-group textarea {
+  width: 100%;
+  padding: 12px;
+  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  font-size: 16px;
+  background-color: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  transition: border-color 0.2s ease;
+}
+
+.widget-form-container .form-group input:focus,
+.widget-form-container .form-group select:focus,
+.widget-form-container .form-group textarea:focus {
+  outline: none;
+  border-color: var(--brand-gold);
+}
+
+.widget-form-container .form-group input[type="checkbox"] {
+  width: auto;
+  margin-right: 10px;
+}
+
+/* -----------------------------------------------------------------------------
+   Button Widgets
+   Primary (purple), Secondary (gray/white), and Accent (gold) buttons
+   ----------------------------------------------------------------------------- */
+
+/* Primary Button - Purple (replaces blue buttons) */
+.btn-primary {
+  display: inline-block;
+  padding: 12px 24px;
+  background-color: var(--brand-navy);
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px var(--color-shadow);
+  text-decoration: none;
+  text-align: center;
+}
+
+.btn-primary:hover {
+  background-color: var(--brand-indigo-deep);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px var(--color-shadow-hover);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px var(--color-shadow);
+}
+
+.btn-primary:focus {
+  outline: 2px solid var(--brand-gold);
+  outline-offset: 2px;
+}
+
+/* Secondary Button - Gray/White for non-primary actions */
+.btn-secondary {
+  display: inline-block;
+  padding: 12px 24px;
+  background-color: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px var(--color-shadow);
+  text-decoration: none;
+  text-align: center;
+}
+
+.btn-secondary:hover {
+  background-color: var(--color-bg-elevated);
+  border-color: var(--color-border-hover);
+  transform: translateY(-1px);
+}
+
+.btn-secondary:active {
+  transform: translateY(0);
+}
+
+.btn-secondary:focus {
+  outline: 2px solid var(--brand-gold);
+  outline-offset: 2px;
+}
+
+/* Accent Button - Gold for special actions */
+.btn-accent {
+  display: inline-block;
+  padding: 12px 24px;
+  background-color: var(--brand-gold);
+  color: #1a1625;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px var(--color-shadow);
+  text-decoration: none;
+  text-align: center;
+}
+
+.btn-accent:hover {
+  filter: brightness(1.1);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px var(--color-shadow-hover);
+}
+
+.btn-accent:active {
+  transform: translateY(0);
+  filter: brightness(0.95);
+}
+
+.btn-accent:focus {
+  outline: 2px solid var(--brand-navy);
+  outline-offset: 2px;
+}
+
+/* Danger Button - For destructive actions */
+.btn-danger {
+  display: inline-block;
+  padding: 12px 24px;
+  background-color: #dc2626;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px var(--color-shadow);
+  text-decoration: none;
+  text-align: center;
+}
+
+.btn-danger:hover {
+  background-color: #b91c1c;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px var(--color-shadow-hover);
+}
+
+.btn-danger:active {
+  transform: translateY(0);
+}
+
+.btn-danger:focus {
+  outline: 2px solid var(--brand-gold);
+  outline-offset: 2px;
+}
+
+/* Full-width button modifier */
+.btn-block {
+  display: block;
+  width: 100%;
+}
+
+/* Button container for form actions */
+.widget-button-container {
+  position: sticky;
+  bottom: 20px;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  padding: 10px;
+  background: linear-gradient(to top, var(--color-card-bg) 60%, transparent);
+}
+
+/* Card container for grid layouts */
+.widget-card-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 20px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.widget-card-grid .widget-card {
+  flex: 0 1 calc(33.333% - 20px);
+  min-width: 200px;
+  max-width: 250px;
+}
+
