@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@300;400;500;600;700&display=swap');
+@import url('./theme.css');
 
 @tailwind base;
 @tailwind components;
@@ -36,7 +37,7 @@ body * {
 
 main {
   position: relative;
-  background: #f0f2f5;
+  background: var(--color-bg-base);
   min-height: 0;
   z-index: 1;
 }
@@ -55,20 +56,6 @@ header .navbar-end summary {
 .header__logo {
   height: 50px;
   width: 68px;
-}
-
-:root {
-  /* EdgeFirst Brand Colors */
-  --color-primary: #3E3371;           /* Navy */
-  --color-primary-rgb: 62, 51, 113;
-  --color-primary-text: #3E3371;
-  --color-accent-gold: #E8B820;       /* Gold */
-  --color-accent-teal: #1FA0A8;       /* Teal */
-  --color-white: #f6f7f8;
-  --color-gray-text: hsl(201, 23%, 34%);
-  --color-light-gray-text: hsl(203, 15%, 47%);
-  --color-bg-light: #E6E6FA;          /* Light Violet */
-  --color-bg-lighter: #F0EDF8;
 }
 
 :root:has(:is(.modal-open, .modal:target, .modal-toggle:checked + .modal, .modal[open])) {

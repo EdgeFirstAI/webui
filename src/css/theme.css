@@ -1,0 +1,152 @@
+/*
+ * Copyright (C) 2025 Au-Zone Technologies Inc. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/* =============================================================================
+   Theme System - CSS Custom Properties
+   ============================================================================= */
+
+/* -----------------------------------------------------------------------------
+   Brand Tokens (Immutable)
+   These colors define the EdgeFirst brand identity and should not change
+   based on theme mode.
+   ----------------------------------------------------------------------------- */
+:root {
+  /* Primary Brand Colors */
+  --brand-navy: #3E3371;
+  --brand-navy-rgb: 62, 51, 113;
+  --brand-gold: #E8B820;
+  --brand-gold-rgb: 232, 184, 32;
+  --brand-teal: #1FA0A8;
+  --brand-teal-rgb: 31, 160, 168;
+  --brand-blue: #8FA3D4;
+
+  /* Brand Violet Palette */
+  --brand-indigo-deep: #4B0082;
+  --brand-violet-light: #E6E6FA;
+  --brand-violet-whisper: #F0EDF8;
+}
+
+/* -----------------------------------------------------------------------------
+   Light Mode (Default)
+   Applied when no theme is set or when data-theme="light"
+   ----------------------------------------------------------------------------- */
+:root {
+  /* Background Colors */
+  --color-bg-base: #f0f2f5;
+  --color-bg-surface: #ffffff;
+  --color-bg-elevated: #ffffff;
+
+  /* Text Colors */
+  --color-text-primary: #3E3371;
+  --color-text-secondary: hsl(201, 23%, 34%);
+  --color-text-muted: hsl(203, 15%, 47%);
+
+  /* Border Colors */
+  --color-border: rgba(0, 0, 0, 0.125);
+  --color-border-hover: rgba(62, 51, 113, 0.325);
+
+  /* Shadow Colors */
+  --color-shadow: rgba(0, 0, 0, 0.1);
+  --color-shadow-hover: rgba(0, 0, 0, 0.2);
+
+  /* Background Gradient & Mesh */
+  --bg-gradient-start: #f0f2f5;
+  --bg-gradient-end: #E6E6FA;
+  --bg-mesh-opacity: 0.06;
+  --bg-mesh-color: var(--brand-navy);
+  --bg-header-fade-opacity: 0.15;
+
+  /* Card Styles */
+  --color-card-bg: #ffffff;
+  --color-card-border: rgba(0, 0, 0, 0.125);
+
+  /* Header Styles */
+  --color-header-bg: var(--brand-navy);
+  --color-header-text: #f6f7f8;
+
+  /* Legacy Variables (for backward compatibility) */
+  --color-primary: var(--brand-navy);
+  --color-primary-rgb: var(--brand-navy-rgb);
+  --color-primary-text: var(--brand-navy);
+  --color-accent-gold: var(--brand-gold);
+  --color-accent-teal: var(--brand-teal);
+  --color-white: #f6f7f8;
+  --color-gray-text: var(--color-text-secondary);
+  --color-light-gray-text: var(--color-text-muted);
+  --color-bg-light: var(--brand-violet-light);
+  --color-bg-lighter: var(--brand-violet-whisper);
+}
+
+/* -----------------------------------------------------------------------------
+   Dark Mode
+   Applied when data-theme="dark" is set on the html element
+   ----------------------------------------------------------------------------- */
+[data-theme="dark"] {
+  /* Background Colors */
+  --color-bg-base: #1a1625;
+  --color-bg-surface: #252033;
+  --color-bg-elevated: #2d2740;
+
+  /* Text Colors */
+  --color-text-primary: #f6f7f8;
+  --color-text-secondary: #c9c5d4;
+  --color-text-muted: #9690a8;
+
+  /* Border Colors */
+  --color-border: rgba(255, 255, 255, 0.1);
+  --color-border-hover: rgba(232, 184, 32, 0.4);
+
+  /* Shadow Colors */
+  --color-shadow: rgba(0, 0, 0, 0.3);
+  --color-shadow-hover: rgba(0, 0, 0, 0.5);
+
+  /* Background Gradient & Mesh */
+  --bg-gradient-start: #3E3371;
+  --bg-gradient-end: #1a1625;
+  --bg-mesh-opacity: 0.15;
+  --bg-mesh-color: #5a4d8a;
+  --bg-header-fade-opacity: 0.95;
+
+  /* Card Styles */
+  --color-card-bg: #252033;
+  --color-card-border: rgba(255, 255, 255, 0.08);
+}
+
+/* -----------------------------------------------------------------------------
+   Auto Mode (System Preference)
+   Applied when data-theme="auto" and system prefers dark color scheme
+   ----------------------------------------------------------------------------- */
+@media (prefers-color-scheme: dark) {
+  [data-theme="auto"] {
+    /* Background Colors */
+    --color-bg-base: #1a1625;
+    --color-bg-surface: #252033;
+    --color-bg-elevated: #2d2740;
+
+    /* Text Colors */
+    --color-text-primary: #f6f7f8;
+    --color-text-secondary: #c9c5d4;
+    --color-text-muted: #9690a8;
+
+    /* Border Colors */
+    --color-border: rgba(255, 255, 255, 0.1);
+    --color-border-hover: rgba(232, 184, 32, 0.4);
+
+    /* Shadow Colors */
+    --color-shadow: rgba(0, 0, 0, 0.3);
+    --color-shadow-hover: rgba(0, 0, 0, 0.5);
+
+    /* Background Gradient & Mesh */
+    --bg-gradient-start: #3E3371;
+    --bg-gradient-end: #1a1625;
+    --bg-mesh-opacity: 0.15;
+    --bg-mesh-color: #5a4d8a;
+    --bg-header-fade-opacity: 0.95;
+
+    /* Card Styles */
+    --color-card-bg: #252033;
+    --color-card-border: rgba(255, 255, 255, 0.08);
+  }
+}
