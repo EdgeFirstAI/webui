@@ -14,6 +14,8 @@
     <link href="./css/full.css" rel="stylesheet" type="text/css" />
 
     <script src="./js/tailwind.js"></script>
+    <script src="./js/theme.js"></script>
+    <script src="./js/neuralMesh.js"></script>
     <script src="./js/serviceCache.js"></script>
     <script src="./js/navbar.js"></script>
     <script src="./js/status.js"></script>
@@ -23,16 +25,14 @@
             justify-content: center;
             align-items: center;
             height: 100%;
-            background:
-                linear-gradient(to bottom, rgba(62, 51, 113, 0.95) 0%, rgba(62, 51, 113, 0.4) 8%, transparent 20%),
-                url('assets/circuit-board.svg'),
-                url('assets/stacked-waves.svg') no-repeat center center / cover;
         }
 
         .content {
-            background: #ffffff;
+            position: relative;
+            z-index: 2;
+            background: var(--color-card-bg);
             border-radius: 20px;
-            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 15px 30px var(--color-shadow);
             padding: 40px;
             text-align: center;
             max-width: 800px;
@@ -44,7 +44,7 @@
         h1 {
             margin-bottom: 40px;
             font-size: 36px;
-            color: hsl(0 0% 33% / 1);
+            color: var(--color-text-primary);
             font-weight: 600;
             letter-spacing: 0.05em;
         }
@@ -62,15 +62,15 @@
             flex: 0 1 calc(33.333% - 20px);
             min-width: 200px;
             max-width: 250px;
-            background: #ffffff;
-            border: 1px solid rgba(0, 0, 0, 0.125);
+            background: var(--color-card-bg);
+            border: 1px solid var(--color-card-border);
             border-radius: 15px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 8px var(--color-shadow);
             padding: 20px;
             transition: all 0.15s ease;
             cursor: pointer;
             text-decoration: none;
-            color: #333;
+            color: var(--color-text-primary);
             display: flex;
             flex-direction: column;
             justify-content: center;
@@ -80,8 +80,8 @@
 
         .card:hover {
             transform: translateY(-2px);
-            box-shadow: 0 5px 10px rgba(0, 0, 0, 0.2);
-            border: 1px solid rgba(var(--color-primary-rgb), 0.325);
+            box-shadow: 0 5px 10px var(--color-shadow-hover);
+            border: 1px solid var(--color-border-hover);
         }
 
         .card h2 {
@@ -241,7 +241,7 @@
 </head>
 
 <body>
-    <main>
+    <main class="bg-neural">
         <div class="content">
             <h1>Select Visualization</h1>
             <br />
@@ -311,6 +311,9 @@
         window.addEventListener('load', async () => {
             // Initialize navbar
             initNavbar('Select Visualization');
+
+            // Initialize neural mesh background (dark mode only)
+            NeuralMesh.init();
 
             // Fetch config and populate cards
             await fetchConfigAndUpdateDeviceName();

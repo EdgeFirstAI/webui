@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright (C) 2025 Au-Zone Technologies Inc. All Rights Reserved.
+  SPDX-License-Identifier: Apache-2.0
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">
+  <style>
+    .node { fill: rgba(62, 51, 113, 0.12); }
+    .connection { stroke: rgba(62, 51, 113, 0.06); stroke-width: 1; fill: none; }
+  </style>
+
+  <!-- Connection lines between nodes -->
+  <g class="connections">
+    <!-- Cluster 1: Top-left region -->
+    <path class="connection" d="M120,85 L245,142"/>
+    <path class="connection" d="M245,142 L380,95"/>
+    <path class="connection" d="M120,85 L180,220"/>
+    <path class="connection" d="M245,142 L180,220"/>
+    <path class="connection" d="M180,220 L320,280"/>
+    <path class="connection" d="M380,95 L480,180"/>
+    <path class="connection" d="M320,280 L480,180"/>
+
+    <!-- Cluster 2: Top-center region -->
+    <path class="connection" d="M580,65 L720,120"/>
+    <path class="connection" d="M720,120 L850,75"/>
+    <path class="connection" d="M720,120 L680,240"/>
+    <path class="connection" d="M580,65 L520,185"/>
+    <path class="connection" d="M520,185 L680,240"/>
+    <path class="connection" d="M850,75 L920,190"/>
+    <path class="connection" d="M680,240 L820,310"/>
+    <path class="connection" d="M920,190 L820,310"/>
+
+    <!-- Cluster 3: Top-right region -->
+    <path class="connection" d="M1050,90 L1180,145"/>
+    <path class="connection" d="M1180,145 L1320,85"/>
+    <path class="connection" d="M1180,145 L1120,260"/>
+    <path class="connection" d="M1320,85 L1420,175"/>
+    <path class="connection" d="M1120,260 L1280,320"/>
+    <path class="connection" d="M1420,175 L1280,320"/>
+    <path class="connection" d="M1420,175 L1550,120"/>
+    <path class="connection" d="M1550,120 L1680,195"/>
+    <path class="connection" d="M1680,195 L1820,140"/>
+    <path class="connection" d="M1680,195 L1580,285"/>
+    <path class="connection" d="M1280,320 L1420,380"/>
+    <path class="connection" d="M1580,285 L1420,380"/>
+
+    <!-- Cluster 4: Middle-left region -->
+    <path class="connection" d="M85,380 L220,440"/>
+    <path class="connection" d="M220,440 L145,540"/>
+    <path class="connection" d="M220,440 L380,395"/>
+    <path class="connection" d="M380,395 L320,280"/>
+    <path class="connection" d="M145,540 L280,610"/>
+    <path class="connection" d="M280,610 L420,545"/>
+    <path class="connection" d="M380,395 L480,480"/>
+    <path class="connection" d="M420,545 L480,480"/>
+
+    <!-- Cluster 5: Center region -->
+    <path class="connection" d="M620,420 L760,385"/>
+    <path class="connection" d="M760,385 L820,310"/>
+    <path class="connection" d="M620,420 L720,520"/>
+    <path class="connection" d="M760,385 L880,450"/>
+    <path class="connection" d="M720,520 L880,450"/>
+    <path class="connection" d="M880,450 L1020,395"/>
+    <path class="connection" d="M1020,395 L1120,260"/>
+    <path class="connection" d="M880,450 L960,560"/>
+    <path class="connection" d="M1020,395 L1140,480"/>
+    <path class="connection" d="M960,560 L1140,480"/>
+    <path class="connection" d="M720,520 L850,620"/>
+    <path class="connection" d="M960,560 L850,620"/>
+
+    <!-- Cluster 6: Middle-right region -->
+    <path class="connection" d="M1280,420 L1420,380"/>
+    <path class="connection" d="M1280,420 L1380,520"/>
+    <path class="connection" d="M1140,480 L1280,420"/>
+    <path class="connection" d="M1380,520 L1520,455"/>
+    <path class="connection" d="M1520,455 L1580,285"/>
+    <path class="connection" d="M1520,455 L1680,520"/>
+    <path class="connection" d="M1680,520 L1820,445"/>
+    <path class="connection" d="M1820,445 L1880,340"/>
+    <path class="connection" d="M1680,520 L1580,620"/>
+    <path class="connection" d="M1380,520 L1480,640"/>
+    <path class="connection" d="M1580,620 L1480,640"/>
+
+    <!-- Cluster 7: Bottom-left region -->
+    <path class="connection" d="M120,720 L245,680"/>
+    <path class="connection" d="M245,680 L280,610"/>
+    <path class="connection" d="M120,720 L180,840"/>
+    <path class="connection" d="M245,680 L380,750"/>
+    <path class="connection" d="M180,840 L320,920"/>
+    <path class="connection" d="M380,750 L320,920"/>
+    <path class="connection" d="M380,750 L520,695"/>
+    <path class="connection" d="M320,920 L480,985"/>
+    <path class="connection" d="M520,695 L620,800"/>
+    <path class="connection" d="M480,985 L620,920"/>
+    <path class="connection" d="M620,800 L620,920"/>
+
+    <!-- Cluster 8: Bottom-center region -->
+    <path class="connection" d="M720,720 L850,620"/>
+    <path class="connection" d="M720,720 L620,800"/>
+    <path class="connection" d="M720,720 L880,780"/>
+    <path class="connection" d="M880,780 L960,560"/>
+    <path class="connection" d="M880,780 L1020,850"/>
+    <path class="connection" d="M720,720 L780,880"/>
+    <path class="connection" d="M780,880 L920,945"/>
+    <path class="connection" d="M1020,850 L920,945"/>
+    <path class="connection" d="M1020,850 L1180,790"/>
+    <path class="connection" d="M920,945 L1080,1010"/>
+    <path class="connection" d="M1180,790 L1080,1010"/>
+
+    <!-- Cluster 9: Bottom-right region -->
+    <path class="connection" d="M1280,720 L1180,790"/>
+    <path class="connection" d="M1280,720 L1380,520"/>
+    <path class="connection" d="M1280,720 L1420,785"/>
+    <path class="connection" d="M1420,785 L1480,640"/>
+    <path class="connection" d="M1420,785 L1320,890"/>
+    <path class="connection" d="M1320,890 L1480,955"/>
+    <path class="connection" d="M1420,785 L1580,850"/>
+    <path class="connection" d="M1580,850 L1580,620"/>
+    <path class="connection" d="M1580,850 L1720,920"/>
+    <path class="connection" d="M1480,955 L1720,920"/>
+    <path class="connection" d="M1720,920 L1850,845"/>
+    <path class="connection" d="M1850,845 L1820,445"/>
+    <path class="connection" d="M1720,920 L1620,1020"/>
+    <path class="connection" d="M1620,1020 L1480,955"/>
+  </g>
+
+  <!-- Neural nodes -->
+  <g class="nodes">
+    <!-- Top-left cluster -->
+    <circle class="node" cx="120" cy="85" r="3"/>
+    <circle class="node" cx="245" cy="142" r="2.5"/>
+    <circle class="node" cx="380" cy="95" r="2"/>
+    <circle class="node" cx="180" cy="220" r="3"/>
+    <circle class="node" cx="320" cy="280" r="2.5"/>
+    <circle class="node" cx="480" cy="180" r="2"/>
+
+    <!-- Top-center cluster -->
+    <circle class="node" cx="520" cy="185" r="2.5"/>
+    <circle class="node" cx="580" cy="65" r="3"/>
+    <circle class="node" cx="720" cy="120" r="2"/>
+    <circle class="node" cx="850" cy="75" r="3.5"/>
+    <circle class="node" cx="680" cy="240" r="2"/>
+    <circle class="node" cx="920" cy="190" r="2.5"/>
+    <circle class="node" cx="820" cy="310" r="3"/>
+
+    <!-- Top-right cluster -->
+    <circle class="node" cx="1050" cy="90" r="2"/>
+    <circle class="node" cx="1180" cy="145" r="3"/>
+    <circle class="node" cx="1320" cy="85" r="2.5"/>
+    <circle class="node" cx="1120" cy="260" r="2"/>
+    <circle class="node" cx="1420" cy="175" r="3"/>
+    <circle class="node" cx="1280" cy="320" r="2.5"/>
+    <circle class="node" cx="1550" cy="120" r="2"/>
+    <circle class="node" cx="1680" cy="195" r="3"/>
+    <circle class="node" cx="1820" cy="140" r="2.5"/>
+    <circle class="node" cx="1580" cy="285" r="2"/>
+    <circle class="node" cx="1420" cy="380" r="3"/>
+
+    <!-- Middle-left cluster -->
+    <circle class="node" cx="85" cy="380" r="2.5"/>
+    <circle class="node" cx="220" cy="440" r="3"/>
+    <circle class="node" cx="145" cy="540" r="2"/>
+    <circle class="node" cx="380" cy="395" r="2.5"/>
+    <circle class="node" cx="280" cy="610" r="3"/>
+    <circle class="node" cx="420" cy="545" r="2"/>
+    <circle class="node" cx="480" cy="480" r="3.5"/>
+
+    <!-- Center cluster -->
+    <circle class="node" cx="620" cy="420" r="3"/>
+    <circle class="node" cx="760" cy="385" r="2"/>
+    <circle class="node" cx="720" cy="520" r="2.5"/>
+    <circle class="node" cx="880" cy="450" r="3.5"/>
+    <circle class="node" cx="1020" cy="395" r="2"/>
+    <circle class="node" cx="960" cy="560" r="3"/>
+    <circle class="node" cx="1140" cy="480" r="2.5"/>
+    <circle class="node" cx="850" cy="620" r="2"/>
+
+    <!-- Middle-right cluster -->
+    <circle class="node" cx="1280" cy="420" r="3"/>
+    <circle class="node" cx="1380" cy="520" r="2.5"/>
+    <circle class="node" cx="1520" cy="455" r="2"/>
+    <circle class="node" cx="1680" cy="520" r="3"/>
+    <circle class="node" cx="1820" cy="445" r="2.5"/>
+    <circle class="node" cx="1880" cy="340" r="2"/>
+    <circle class="node" cx="1580" cy="620" r="3"/>
+    <circle class="node" cx="1480" cy="640" r="2"/>
+
+    <!-- Bottom-left cluster -->
+    <circle class="node" cx="120" cy="720" r="2.5"/>
+    <circle class="node" cx="245" cy="680" r="3"/>
+    <circle class="node" cx="180" cy="840" r="2"/>
+    <circle class="node" cx="380" cy="750" r="3"/>
+    <circle class="node" cx="320" cy="920" r="2.5"/>
+    <circle class="node" cx="520" cy="695" r="2"/>
+    <circle class="node" cx="480" cy="985" r="3"/>
+    <circle class="node" cx="620" cy="800" r="2.5"/>
+    <circle class="node" cx="620" cy="920" r="2"/>
+
+    <!-- Bottom-center cluster -->
+    <circle class="node" cx="720" cy="720" r="3.5"/>
+    <circle class="node" cx="880" cy="780" r="2.5"/>
+    <circle class="node" cx="780" cy="880" r="2"/>
+    <circle class="node" cx="1020" cy="850" r="3"/>
+    <circle class="node" cx="920" cy="945" r="2.5"/>
+    <circle class="node" cx="1180" cy="790" r="2"/>
+    <circle class="node" cx="1080" cy="1010" r="3"/>
+
+    <!-- Bottom-right cluster -->
+    <circle class="node" cx="1280" cy="720" r="2.5"/>
+    <circle class="node" cx="1420" cy="785" r="3"/>
+    <circle class="node" cx="1320" cy="890" r="2"/>
+    <circle class="node" cx="1480" cy="955" r="2.5"/>
+    <circle class="node" cx="1580" cy="850" r="3"/>
+    <circle class="node" cx="1720" cy="920" r="2"/>
+    <circle class="node" cx="1850" cy="845" r="3"/>
+    <circle class="node" cx="1620" cy="1020" r="2.5"/>
+  </g>
+</svg>
