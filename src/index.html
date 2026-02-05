@@ -168,7 +168,7 @@
             max-height: 400px;
             overflow-y: auto;
             scrollbar-width: thin;
-            scrollbar-color: #CBD5E0 #EDF2F7;
+            scrollbar-color: var(--color-scrollbar-thumb) var(--color-scrollbar-track);
         }
 
         #serviceStatusContent::-webkit-scrollbar {
@@ -176,12 +176,12 @@
         }
 
         #serviceStatusContent::-webkit-scrollbar-track {
-            background: #EDF2F7;
+            background: var(--color-scrollbar-track);
             border-radius: 3px;
         }
 
         #serviceStatusContent::-webkit-scrollbar-thumb {
-            background-color: #CBD5E0;
+            background-color: var(--color-scrollbar-thumb);
             border-radius: 3px;
         }
 
@@ -221,7 +221,7 @@
 
         #serviceDialogContent {
             scrollbar-width: thin;
-            scrollbar-color: #CBD5E0 #EDF2F7;
+            scrollbar-color: var(--color-scrollbar-thumb) var(--color-scrollbar-track);
         }
 
         #serviceDialogContent::-webkit-scrollbar {
@@ -229,12 +229,12 @@
         }
 
         #serviceDialogContent::-webkit-scrollbar-track {
-            background: #EDF2F7;
+            background: var(--color-scrollbar-track);
             border-radius: 3px;
         }
 
         #serviceDialogContent::-webkit-scrollbar-thumb {
-            background-color: #CBD5E0;
+            background-color: var(--color-scrollbar-thumb);
             border-radius: 3px;
         }
     </style>
@@ -271,41 +271,50 @@
             const cardContainer = document.getElementById('card-container');
             const isRaivin = deviceType.toLowerCase().includes('raivin');
 
-            const commonCards = `
-                <a href="/gps" class="card">
-                    <h2>GPS</h2>
-                    <p>Explore Location</p>
-                </a>
-                <a href="/imu" class="card">
-                    <h2>IMU</h2>
-                    <p>IMU Visualization</p>
-                </a>
-            `;
+            // Clear existing cards
+            cardContainer.replaceChildren();
 
-            const raivinOnlyCards = `
-                <a href="/grid" class="card">
-                    <h2>Occupancy Grid</h2>
-                    <p>Occupancy Grid<br />+<br />Radar Point Cloud</p>
-                </a>
-                <a href="/combined" class="card">
-                    <h2>Segmentation View</h2>
-                    <p>Segmentation<br />+<br />Occupancy Grid</p>
-                </a>
-                <a href="/combined_lidar" class="card">
-                    <h2>Lidar View</h2>
-                    <p>Segmentation <br />+<br />Lidar + <r />Radar</p>
-                </a>
-            `;
+            // Helper function to create a card element with test ID
+            function createCard(href, title, descriptionParts) {
+                const card = document.createElement('a');
+                card.href = href;
+                card.className = 'card';
 
-            const maivinOnlyCards = `
-                <a href="/segmentation" class="card">
-                    <h2>Segmentation</h2>
-                    <p>Segmentation Mask</p>
-                </a>
-            `;
+                // Create sanitized name for ID (lowercase, alphanumeric and hyphens only)
+                const cardName = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+                card.id = `index-card-${cardName}`;
+                card.setAttribute('data-testid', `index-card-${cardName}`);
 
-            cardContainer.innerHTML = commonCards +
-                (isRaivin ? raivinOnlyCards : maivinOnlyCards);
+                const h2 = document.createElement('h2');
+                h2.textContent = title;
+                card.appendChild(h2);
+
+                const p = document.createElement('p');
+                // Build description with line breaks safely
+                descriptionParts.forEach((part, index) => {
+                    if (index > 0) {
+                        p.appendChild(document.createElement('br'));
+                    }
+                    p.appendChild(document.createTextNode(part));
+                });
+                card.appendChild(p);
+
+                return card;
+            }
+
+            // Common cards for all devices
+            cardContainer.appendChild(createCard('/gps', 'GPS', ['Explore Location']));
+            cardContainer.appendChild(createCard('/imu', 'IMU', ['IMU Visualization']));
+
+            if (isRaivin) {
+                // Raivin-only cards
+                cardContainer.appendChild(createCard('/grid', 'Occupancy Grid', ['Occupancy Grid', '+', 'Radar Point Cloud']));
+                cardContainer.appendChild(createCard('/combined', 'Segmentation View', ['Segmentation', '+', 'Occupancy Grid']));
+                cardContainer.appendChild(createCard('/combined_lidar', 'Lidar View', ['Segmentation', '+', 'Lidar +', 'Radar']));
+            } else {
+                // Maivin-only cards
+                cardContainer.appendChild(createCard('/segmentation', 'Segmentation', ['Segmentation Mask']));
+            }
         }
 
         window.addEventListener('load', async () => {

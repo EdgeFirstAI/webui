@@ -15,19 +15,19 @@
 
     <script src="../js/tailwind.js"></script>
     <script src="../js/theme.js"></script>
+    <script src="../js/neuralMesh.js"></script>
     <script src="../js/serviceCache.js"></script>
     <script src="../js/navbar.js"></script>
     <script src="../js/status.js"></script>
     <style>
         body {
             font-family: 'Roboto', sans-serif;
-            background-color: #f4f7f9;
+            background-color: var(--color-bg-base);
             margin: 0;
             display: flex;
             flex-direction: column;
             min-height: 100vh;
         }
-
 
         main {
             flex: 1;
@@ -35,7 +35,7 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            background-color: #ffffff;
+            background-color: var(--color-bg-base);
             overflow-y: auto;
         }
 
@@ -44,8 +44,8 @@
             max-width: 600px;
             padding: 20px;
             border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            background-color: #ffffff;
+            box-shadow: 0 4px 8px var(--color-shadow);
+            background-color: var(--color-card-bg);
             max-height: auto;
             margin-top: auto;
         }
@@ -53,20 +53,20 @@
         h2 {
             text-align: center;
             margin-bottom: 20px;
-            color: #333;
+            color: var(--color-text-primary);
             font-size: 24px;
         }
 
         label {
             font-weight: 500;
-            color: #333;
+            color: var(--color-text-primary);
             display: block;
             margin-bottom: 8px;
         }
 
         .comment {
             font-style: italic;
-            color: #666;
+            color: var(--color-text-muted);
             margin-bottom: 20px;
             font-size: 14px;
         }
@@ -80,8 +80,16 @@
             width: 100%;
             padding: 12px;
             border-radius: 4px;
-            border: 1px solid #ddd;
+            border: 1px solid var(--color-border);
             font-size: 16px;
+            background-color: var(--color-bg-surface);
+            color: var(--color-text-primary);
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: var(--brand-gold);
         }
 
         .form-group input[type="checkbox"] {
@@ -123,72 +131,77 @@
             color: #e2e8f0;
         }
 
-        button {
-            display: block;
+        /* Save Button Container */
+        .button-container {
+            position: sticky;
+            bottom: 20px;
             width: 100%;
-            padding: 12px;
-            background-color: #28a745;
-            color: #ffffff;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-            transition: background-color 0.3s, transform 0.2s;
+            display: flex;
+            justify-content: center;
+            padding: 10px;
+            background: linear-gradient(to top, var(--color-card-bg) 60%, transparent);
         }
 
-        button:hover {
-            background-color: #218838;
-        }
-
-        button:active {
-            transform: scale(0.98);
+        /* Save Button Style - using btn-primary from theme */
+        button#saveConfig {
+            margin-top: 20px;
+            width: 100%;
+            max-width: 400px;
+            margin-left: auto;
+            margin-right: auto;
         }
     </style>
 </head>
 
 <body>
-    <div class="container">
-        <h2>VPKUI Configuration</h2>
+    <main class="bg-neural">
+        <div class="container">
+            <h2>VPKUI Configuration</h2>
 
-        <div class="form-group">
-            <label for="cache_graph">Enable Graph Caching:</label>
-            <select id="cache_graph" name="cache_graph">
-                <option value="0">Disable</option>
-                <option value="1">Enable</option>
-            </select>
+            <div class="form-group">
+                <label for="cache_graph">Enable Graph Caching:</label>
+                <select id="cache_graph" name="cache_graph">
+                    <option value="0">Disable</option>
+                    <option value="1">Enable</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="cache_dir">Cache Directory:</label>
+                <input type="text" id="cache_dir" name="cache_dir" placeholder="/var/cache">
+            </div>
+
+            <div class="form-group">
+                <label for="show_overlay">Show Overlay:</label>
+                <select id="show_overlay" name="show_overlay">
+                    <option value="false">Disable</option>
+                    <option value="true">Enable</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="show_model_output">Show Model Output:</label>
+                <select id="show_model_output" name="show_model_output">
+                    <option value="false">Disable</option>
+                    <option value="true">Enable</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="show_timing">Show Model Timing:</label>
+                <select id="show_timing" name="show_timing">
+                    <option value="false">Disable</option>
+                    <option value="true">Enable</option>
+                </select>
+            </div>
+
+            <div class="button-container">
+                <button id="saveConfig" class="btn-primary btn-block">
+                    Save Configuration
+                </button>
+            </div>
         </div>
-
-        <div class="form-group">
-            <label for="cache_dir">Cache Directory:</label>
-            <input type="text" id="cache_dir" name="cache_dir" placeholder="/var/cache">
-        </div>
-
-        <div class="form-group">
-            <label for="show_overlay">Show Overlay:</label>
-            <select id="show_overlay" name="show_overlay">
-                <option value="false">Disable</option>
-                <option value="true">Enable</option>
-            </select>
-        </div>
-
-        <div class="form-group">
-            <label for="show_model_output">Show Model Output:</label>
-            <select id="show_model_output" name="show_model_output">
-                <option value="false">Disable</option>
-                <option value="true">Enable</option>
-            </select>
-        </div>
-
-        <div class="form-group">
-            <label for="show_timing">Show Model Timing:</label>
-            <select id="show_timing" name="show_timing">
-                <option value="false">Disable</option>
-                <option value="true">Enable</option>
-            </select>
-        </div>
-
-        <button id="saveConfig">Save Configuration</button>
-    </div>
+    </main>
 
     <script>
         document.addEventListener('DOMContentLoaded', function () {
@@ -242,6 +255,7 @@
 
         window.addEventListener('DOMContentLoaded', () => {
             initNavbar('VPKUI');
+            NeuralMesh.init();
         });
     </script>
 </body>

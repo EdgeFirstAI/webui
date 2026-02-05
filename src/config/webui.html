@@ -16,6 +16,7 @@
     <!-- Include Tailwind CSS script -->
     <script src="../js/tailwind.js"></script>
     <script src="../js/theme.js"></script>
+    <script src="../js/neuralMesh.js"></script>
     <script src="../js/serviceCache.js"></script>
     <script src="../js/navbar.js"></script>
     <script src="../js/status.js"></script>
@@ -297,7 +298,7 @@
 <body>
     <input type="hidden" id="device_type" value="MAIVIN">
 
-    <main>
+    <main class="bg-neural">
         <div class="container">
             <h2>WebUI Configuration</h2>
             <div class="comment">
@@ -601,6 +602,7 @@
 
         window.addEventListener('DOMContentLoaded', () => {
             initNavbar('WebUI');
+            NeuralMesh.init();
         });
     </script>
 </body>

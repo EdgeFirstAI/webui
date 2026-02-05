@@ -13,6 +13,7 @@
     <link href="../css/full.css" rel="stylesheet" type="text/css" />
     <script src="../js/tailwind.js"></script>
     <script src="../js/theme.js"></script>
+    <script src="../js/neuralMesh.js"></script>
     <script src="../js/navbar.js"></script>
     <script src="../js/serviceCache.js"></script>
     <script src="../js/status.js"></script>
@@ -196,7 +197,7 @@
 </head>
 
 <body>
-    <main>
+    <main class="bg-neural">
         <div class="container">
             <h2>Radar Configuration</h2>
 
@@ -418,6 +419,7 @@
 
         window.addEventListener('DOMContentLoaded', () => {
             initNavbar('RadarPub');
+            NeuralMesh.init();
         });
     </script>
 </body>

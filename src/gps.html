@@ -14,6 +14,7 @@
     <link href="./css/full.css" rel="stylesheet" type="text/css" />
     <script src="./js/tailwind.js"></script>
     <script src="./js/theme.js"></script>
+    <script src="./js/neuralMesh.js"></script>
     <script src="./js/serviceCache.js"></script>
     <script src="./js/navbar.js"></script>
     <script src="./js/status.js"></script>
@@ -54,7 +55,7 @@
             margin-top: 0px;
             padding: 5px 10px;
             font-size: 14px;
-            background-color: #007bff;
+            background-color: var(--brand-navy);
             color: #fff;
             border: none;
             border-radius: 4px;
@@ -62,7 +63,7 @@
         }
 
         .refresh-button:hover {
-            background-color: #0056b3;
+            background-color: var(--brand-indigo-deep);
         }
 
         .navbar-end .btn-circle svg {
@@ -193,9 +194,10 @@
     <script>
         window.addEventListener('load', () => {
             initNavbar('GPS');
+            NeuralMesh.init();
         });
     </script>
-    <main>
+    <main class="bg-neural">
         <div id="gps-data">
             <div class="stats shadow">
                 <div id="timeout" class="stat hidden">
@@ -210,7 +212,7 @@
                     <div class="stat-title">Longitude</div>
                     <div id="longitude" class="stat-value text-xl">0</div>
                 </div>
-                <button class="refresh-button" onclick="location.reload()">Refresh</button>
+                <button id="gps-btn-refresh" class="refresh-button" onclick="location.reload()">Refresh</button>
             </div>
         </div>
         <div id="map"></div>

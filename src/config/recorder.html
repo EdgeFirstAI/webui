@@ -13,6 +13,7 @@
     <link href="../css/full.css" rel="stylesheet" type="text/css" />
     <script src="../js/tailwind.js"></script>
     <script src="../js/theme.js"></script>
+    <script src="../js/neuralMesh.js"></script>
     <script src="../js/navbar.js"></script>
     <script src="../js/status.js"></script>
     <script src="../js/serviceCache.js"></script>
@@ -360,11 +361,11 @@
         }
 
         .status-active {
-            background-color: #10b981;
+            background-color: var(--color-status-success);
         }
 
         .status-disabled {
-            background-color: #94a3b8;
+            background-color: var(--color-text-muted);
         }
 
         .fps-slider {
@@ -396,7 +397,7 @@
             width: 16px;
             height: 16px;
             border-radius: 50%;
-            background: #2563eb;
+            background: var(--brand-navy);
             cursor: pointer;
             border: 2px solid #ffffff;
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
@@ -449,6 +450,7 @@
 </head>
 
 <body>
+    <main class="bg-neural">
     <div class="container">
         <h2>MCAP Recorder Configuration</h2>
 
@@ -592,6 +594,7 @@
             </button>
         </div>
     </div>
+    </main>
 
     <div class="loading-overlay" id="loadingOverlay">
         <div class="loading-content">
@@ -1093,6 +1096,7 @@
 
         window.addEventListener('DOMContentLoaded', () => {
             initNavbar('Recorder');
+            NeuralMesh.init();
         });
     </script>
 </body>

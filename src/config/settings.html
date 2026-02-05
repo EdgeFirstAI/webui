@@ -71,25 +71,25 @@
         <div class="widget-container" id="settings-container">
             <h1>Settings</h1>
             <div class="widget-card-grid">
-                <a href="/config/recorder" class="widget-card">
+                <a href="/config/recorder" class="widget-card" id="settings-card-recorder" data-testid="settings-card-recorder">
                     <h3>MCAP Recorder</h3>
                 </a>
-                <a href="/config/camera" class="widget-card">
+                <a href="/config/camera" class="widget-card" id="settings-card-camera" data-testid="settings-card-camera">
                     <h3>Camera Settings</h3>
                 </a>
-                <a href="/config/webui" class="widget-card">
+                <a href="/config/webui" class="widget-card" id="settings-card-webui" data-testid="settings-card-webui">
                     <h3>WebUI Settings</h3>
                 </a>
-                <a href="/config/model" class="widget-card">
+                <a href="/config/model" class="widget-card" id="settings-card-model" data-testid="settings-card-model">
                     <h3>Model Settings</h3>
                 </a>
-                <a href="/config/services" class="widget-card">
+                <a href="/config/services" class="widget-card" id="settings-card-services" data-testid="settings-card-services">
                     <h3>Service Status</h3>
                 </a>
-                <a href="/config/lidarpub" class="widget-card">
+                <a href="/config/lidarpub" class="widget-card" id="settings-card-lidar" data-testid="settings-card-lidar">
                     <h3>LiDAR Settings</h3>
                 </a>
-                <a href="#" class="widget-card" id="studio-settings-card" onclick="showStudioSettings(); return false;">
+                <a href="#" class="widget-card" id="settings-card-studio" data-testid="settings-card-studio" onclick="showStudioSettings(); return false;">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 48px; height: 48px;">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
                     </svg>
@@ -112,14 +112,22 @@
                         const radarSettingsCard = document.createElement('a');
                         radarSettingsCard.href = '/config/radarpub';
                         radarSettingsCard.className = 'widget-card';
-                        radarSettingsCard.innerHTML = '<h3>Radar Settings</h3>';
+                        radarSettingsCard.id = 'settings-card-radar';
+                        radarSettingsCard.setAttribute('data-testid', 'settings-card-radar');
+                        const radarHeading = document.createElement('h3');
+                        radarHeading.textContent = 'Radar Settings';
+                        radarSettingsCard.appendChild(radarHeading);
                         cardGrid.appendChild(radarSettingsCard);
+
                         const fusionSettingsCard = document.createElement('a');
                         fusionSettingsCard.href = '/config/fusion';
                         fusionSettingsCard.className = 'widget-card';
-                        fusionSettingsCard.innerHTML = '<h3>Fusion Settings</h3>';
+                        fusionSettingsCard.id = 'settings-card-fusion';
+                        fusionSettingsCard.setAttribute('data-testid', 'settings-card-fusion');
+                        const fusionHeading = document.createElement('h3');
+                        fusionHeading.textContent = 'Fusion Settings';
+                        fusionSettingsCard.appendChild(fusionHeading);
                         cardGrid.appendChild(fusionSettingsCard);
-
                     }
                 })
                 .catch(error => {

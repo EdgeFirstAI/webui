@@ -14,6 +14,7 @@
 
     <script src="./js/tailwind.js"></script>
     <script src="./js/theme.js"></script>
+    <script src="./js/neuralMesh.js"></script>
     <script src="./js/serviceCache.js"></script>
     <script src="./js/navbar.js"></script>
     <script src="./js/status.js"></script>
@@ -92,9 +93,10 @@
     <script>
         window.addEventListener('load', () => {
             initNavbar('IMU');
+            NeuralMesh.init();
         });
     </script>
-    <main>
+    <main class="bg-neural">
         <div id="imu-data">
             <div class="stats shadow">
                 <div id="timeout" class="stat hidden">
@@ -114,7 +116,7 @@
                     <div id="yaw" class="stat-value text-xl">0</div>
                 </div>
             </div>
-            <button onclick="resetIMU()" class="btn btn-primary mt-4 w-full">Reset Orientation</button>
+            <button id="imu-btn-reset-orientation" onclick="resetIMU()" class="btn btn-primary mt-4 w-full">Reset Orientation</button>
         </div>
     </main>
 

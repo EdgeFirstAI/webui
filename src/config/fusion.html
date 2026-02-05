@@ -14,6 +14,7 @@
 
     <script src="../js/tailwind.js"></script>
     <script src="../js/theme.js"></script>
+    <script src="../js/neuralMesh.js"></script>
     <script src="../js/navbar.js"></script>
     <script src="../js/serviceCache.js"></script>
     <script src="../js/status.js"></script>
@@ -197,7 +198,7 @@
 </head>
 
 <body>
-    <main>
+    <main class="bg-neural">
         <div class="container">
             <h2>Fusion Configuration</h2>
 
@@ -347,6 +348,7 @@
 
         window.addEventListener('DOMContentLoaded', () => {
             initNavbar('Fusion');
+            NeuralMesh.init();
         });
     </script>
 </body>

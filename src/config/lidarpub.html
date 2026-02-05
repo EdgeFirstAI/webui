@@ -13,6 +13,7 @@
     <link href="../css/full.css" rel="stylesheet" type="text/css" />
     <script src="../js/tailwind.js"></script>
     <script src="../js/theme.js"></script>
+    <script src="../js/neuralMesh.js"></script>
     <script src="../js/serviceCache.js"></script>
     <script src="../js/navbar.js"></script>
     <script src="../js/status.js"></script>
@@ -305,7 +306,7 @@
 
         .angle-input input:focus {
             outline: none;
-            border-color: #3b82f6;
+            border-color: var(--brand-indigo);
             box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
         }
 
@@ -321,7 +322,7 @@
         .slider-track-highlight {
             position: absolute;
             height: 100%;
-            background: #3b82f6;
+            background: var(--brand-indigo);
             border-radius: 3px;
             transition: all 0.2s ease;
         }
@@ -347,7 +348,7 @@
             height: 20px;
             border-radius: 50%;
             cursor: pointer;
-            background: #3b82f6;
+            background: var(--brand-indigo);
             border: 2px solid white;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
             pointer-events: auto;
@@ -363,11 +364,11 @@
         }
 
         .min-range::-webkit-slider-thumb {
-            background: #3b82f6;
+            background: var(--brand-indigo);
         }
 
         .max-range::-webkit-slider-thumb {
-            background: #1e40af;
+            background: var(--brand-navy);
         }
 
         .range-values {
@@ -382,7 +383,7 @@
         .fov-value {
             text-align: center;
             font-size: 15px;
-            color: #1e40af;
+            color: var(--brand-navy);
             margin-top: 20px;
             font-weight: 600;
             background: rgba(59, 130, 246, 0.1);
@@ -394,7 +395,7 @@
 </head>
 
 <body>
-    <main>
+    <main class="bg-neural">
         <div class="container">
             <!-- Add timeout element for streamH264.js -->
             <p id="timeout" style="display: none;"></p>
@@ -812,18 +813,18 @@
                     // Normal case
                     highlight.style.left = `${startPercent}%`;
                     highlight.style.width = `${stopPercent - startPercent}%`;
-                    highlight.style.background = '#3b82f6';
+                    highlight.style.background = 'var(--brand-indigo)';
                 } else {
                     // Wraparound case - use gradient
                     highlight.style.left = '0%';
                     highlight.style.width = '100%';
                     highlight.style.background = `linear-gradient(90deg, 
-                        #3b82f6 0%, 
-                        #3b82f6 ${stopPercent}%, 
+                        var(--brand-indigo) 0%, 
+                        var(--brand-indigo) ${stopPercent}%, 
                         #e2e8f0 ${stopPercent}%, 
                         #e2e8f0 ${startPercent}%, 
-                        #3b82f6 ${startPercent}%, 
-                        #3b82f6 100%)`;
+                        var(--brand-indigo) ${startPercent}%, 
+                        var(--brand-indigo) 100%)`;
                 }
             }
 
@@ -959,6 +960,7 @@
 
         window.addEventListener('DOMContentLoaded', () => {
             initNavbar('LidarPub');
+            NeuralMesh.init();
         });
     </script>
 </body>

@@ -14,6 +14,7 @@
     <link href="./css/full.css" rel="stylesheet" type="text/css" />
     <script src="./js/tailwind.js"></script>
     <script src="./js/theme.js"></script>
+    <script src="./js/neuralMesh.js"></script>
     <script src="./js/navbar.js"></script>
     <script src="./js/status.js"></script>
     <script src="./js/serviceCache.js"></script>
@@ -94,9 +95,10 @@
     <script>
         window.addEventListener('load', () => {
             initNavbar('Segmentation');
+            NeuralMesh.init();
         });
     </script>
-    <main id="container">
+    <main id="container" class="bg-neural">
         <div id="test">
             <div id="player_div">
                 <canvas id="player"></canvas>

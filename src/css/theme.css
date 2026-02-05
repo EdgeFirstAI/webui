@@ -78,6 +78,31 @@
   --color-light-gray-text: var(--color-text-muted);
   --color-bg-light: var(--brand-violet-light);
   --color-bg-lighter: var(--brand-violet-whisper);
+
+  /* Status Colors */
+  --color-status-success: #34d399;
+  --color-status-success-bg: #d1fae5;
+  --color-status-error: #ef4444;
+  --color-status-error-bg: #fee2e2;
+  --color-status-warning: #f59e0b;
+  --color-status-info: #3b82f6;
+
+  /* Interactive Elements */
+  --color-interactive-primary: var(--brand-navy);
+  --color-interactive-primary-hover: var(--brand-indigo-deep);
+
+  /* Loading/Spinner */
+  --color-spinner-track: var(--color-border);
+  --color-spinner-active: var(--brand-navy);
+
+  /* Scrollbar */
+  --color-scrollbar-track: #EDF2F7;
+  --color-scrollbar-thumb: #CBD5E0;
+  --color-scrollbar-thumb-hover: #A0AEC0;
+
+  /* Overlay */
+  --color-overlay-bg: rgba(136, 136, 136, 0.67);
+  --color-backdrop: rgba(0, 0, 0, 0.5);
 }
 
 /* -----------------------------------------------------------------------------
@@ -117,6 +142,20 @@
   /* Card Text Colors - Light purple for dark mode */
   --color-card-title: #E6E6FA;
   --color-primary-text: #E6E6FA;
+
+  /* Status Colors */
+  --color-status-success: #10b981;
+  --color-status-error: #f87171;
+  --color-status-warning: #fbbf24;
+  --color-status-info: #60a5fa;
+
+  /* Scrollbar */
+  --color-scrollbar-track: #2d2740;
+  --color-scrollbar-thumb: #4a4560;
+
+  /* Overlay */
+  --color-overlay-bg: rgba(45, 39, 64, 0.85);
+  --color-backdrop: rgba(0, 0, 0, 0.7);
 }
 
 /* -----------------------------------------------------------------------------
@@ -157,6 +196,20 @@
     /* Card Text Colors - Light purple for dark mode */
     --color-card-title: #E6E6FA;
     --color-primary-text: #E6E6FA;
+
+    /* Status Colors */
+    --color-status-success: #10b981;
+    --color-status-error: #f87171;
+    --color-status-warning: #fbbf24;
+    --color-status-info: #60a5fa;
+
+    /* Scrollbar */
+    --color-scrollbar-track: #2d2740;
+    --color-scrollbar-thumb: #4a4560;
+
+    /* Overlay */
+    --color-overlay-bg: rgba(45, 39, 64, 0.85);
+    --color-backdrop: rgba(0, 0, 0, 0.7);
   }
 }
 
@@ -528,3 +581,205 @@
   max-width: 250px;
 }
 
+/* -----------------------------------------------------------------------------
+   Status Badge Widget
+   Used for showing running/stopped/error status on service items
+   ----------------------------------------------------------------------------- */
+.widget-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.widget-status-badge--running {
+  background-color: var(--color-status-success-bg);
+  color: var(--color-status-success);
+}
+
+.widget-status-badge--stopped {
+  background-color: var(--color-bg-elevated);
+  color: var(--color-text-muted);
+}
+
+.widget-status-badge--error {
+  background-color: var(--color-status-error-bg);
+  color: var(--color-status-error);
+}
+
+/* -----------------------------------------------------------------------------
+   Status Dot Widget
+   Used for inline status indicators (active/inactive/error)
+   ----------------------------------------------------------------------------- */
+.widget-status-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 8px;
+}
+
+.widget-status-dot--active {
+  background-color: var(--color-status-success);
+}
+
+.widget-status-dot--inactive {
+  background-color: var(--color-text-muted);
+}
+
+.widget-status-dot--error {
+  background-color: var(--color-status-error);
+}
+
+/* -----------------------------------------------------------------------------
+   Loading Overlay Widget
+   Used for full-screen or container loading states
+   ----------------------------------------------------------------------------- */
+.widget-loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: var(--color-backdrop);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.widget-loading-content {
+  text-align: center;
+  color: var(--color-text-primary);
+}
+
+.widget-loading-spinner {
+  width: 50px;
+  height: 50px;
+  border: 5px solid var(--color-spinner-track);
+  border-top-color: var(--color-spinner-active);
+  border-radius: 50%;
+  animation: widget-spin 1s linear infinite;
+}
+
+@keyframes widget-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* -----------------------------------------------------------------------------
+   Toggle Switch Widget
+   Used for enable/disable toggles on services
+   ----------------------------------------------------------------------------- */
+.widget-toggle {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 26px;
+}
+
+.widget-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.widget-toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--color-text-muted);
+  transition: 0.3s;
+  border-radius: 26px;
+}
+
+.widget-toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: 3px;
+  bottom: 3px;
+  background-color: var(--color-bg-surface);
+  transition: 0.3s;
+  border-radius: 50%;
+}
+
+.widget-toggle input:checked + .widget-toggle-slider {
+  background-color: var(--color-status-success);
+}
+
+.widget-toggle input:checked + .widget-toggle-slider:before {
+  transform: translateX(24px);
+}
+
+.widget-toggle input:focus + .widget-toggle-slider {
+  box-shadow: 0 0 1px var(--color-status-success);
+}
+
+/* -----------------------------------------------------------------------------
+   Service Item Card Widget
+   Used for service list items in services.html
+   ----------------------------------------------------------------------------- */
+.widget-service-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background-color: var(--color-card-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  transition: border-color 0.2s ease;
+}
+
+.widget-service-item:hover {
+  border-color: var(--color-border-hover);
+}
+
+.widget-service-item-name {
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.widget-service-item-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* -----------------------------------------------------------------------------
+   Scrollbar Styling Widget
+   Apply to scrollable containers for consistent theme-aware scrollbars
+   ----------------------------------------------------------------------------- */
+.widget-scrollable {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-scrollbar-thumb) var(--color-scrollbar-track);
+}
+
+.widget-scrollable::-webkit-scrollbar {
+  width: 8px;
+}
+
+.widget-scrollable::-webkit-scrollbar-track {
+  background: var(--color-scrollbar-track);
+  border-radius: 4px;
+}
+
+.widget-scrollable::-webkit-scrollbar-thumb {
+  background-color: var(--color-scrollbar-thumb);
+  border-radius: 4px;
+}
+
+.widget-scrollable::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-scrollbar-thumb-hover);
+}

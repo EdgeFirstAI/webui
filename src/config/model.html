@@ -13,6 +13,7 @@
     <link href="../css/full.css" rel="stylesheet" type="text/css" />
     <script src="../js/tailwind.js"></script>
     <script src="../js/theme.js"></script>
+    <script src="../js/neuralMesh.js"></script>
     <script src="../js/navbar.js"></script>
     <script src="../js/status.js"></script>
     <script src="../js/serviceCache.js"></script>
@@ -198,6 +199,7 @@
 </head>
 
 <body>
+    <main class="bg-neural">
     <div class="container">
         <h2>Model Configuration</h2>
 
@@ -296,6 +298,7 @@
             </button>
         </div>
     </div>
+    </main>
     <div class="loading-overlay" id="loadingOverlay">
         <div class="loading-content">
             <div class="loading-spinner"></div>
@@ -406,6 +409,7 @@
 
         window.addEventListener('DOMContentLoaded', () => {
             initNavbar('Model');
+            NeuralMesh.init();
         });
     </script>
 </body>
