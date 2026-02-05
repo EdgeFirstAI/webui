@@ -299,10 +299,13 @@ window.showMcapDialog = async function () {
         dialog.id = 'mcapDialog';
         dialog.className = 'modal';
         dialog.innerHTML = `
-            <div class="modal-box" style="padding: 0; min-width: 60vw; max-width: 90vw; width: 100%;">
+            <div class="modal-box" style="padding: 0; min-width: 60vw; max-width: 90vw; width: 100%; display: flex; flex-direction: column; max-height: 85vh;">
                 <div class="mcap-header">
                     <div class="mcap-header-left">
-                        <h2 class="mcap-title">MCAP Files</h2>
+                        <h2 class="mcap-title">MCAP Recordings</h2>
+                    </div>
+                    <div class="mcap-header-center" id="mcapHeaderControls">
+                        <!-- Controls will be populated when files are loaded -->
                     </div>
                     <div class="mcap-header-right">
                         <div id="mcapStorageInfoBar" class="mcap-storage-info"></div>
@@ -314,7 +317,7 @@ window.showMcapDialog = async function () {
                     </div>
                 </div>
 
-                <div id="mcapDialogContent" class="space-y-2" style="padding: 1.5rem; max-height: 70vh; overflow-y: auto;"></div>
+                <div id="mcapDialogContent" class="mcap-scroll-container"></div>
             </div>
         `;
         document.body.appendChild(dialog);
@@ -434,57 +437,57 @@ window.showMcapDialog = async function () {
                     };
                 }
                 let tableHTML = '';
+                const headerControls = document.getElementById('mcapHeaderControls');
                 if (files.length === 0) {
-                    tableHTML = `<div class=\"text-gray-600 text-center py-4\">No MCAP files found</div>`;
+                    tableHTML = `<div class=\"text-gray-600 text-center py-4\">No MCAP recordings found</div>`;
+                    if (headerControls) headerControls.innerHTML = '';
                 } else {
                     files.sort((a, b) => new Date(b.created) - new Date(a.created));
-                    tableHTML = `
-                        <div class="mcap-toolbar">
-                            <div class="mcap-toolbar-group">
+                    // Populate header controls
+                    if (headerControls) {
+                        headerControls.innerHTML = `
+                            <div class="mcap-header-toolbar">
                                 <label class="mcap-checkbox-label">
                                     <input type="checkbox" id="mcap-select-all" class="mcap-checkbox">
                                     <span>Select All</span>
                                 </label>
-                                <button id="mcap-delete-selected" class="mcap-btn-secondary" disabled title="Delete all selected files">
+                                <button id="mcap-delete-selected" class="mcap-btn-secondary mcap-btn-sm" disabled title="Delete all selected files">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                                     </svg>
-                                    <span>Delete Selected</span>
+                                    <span>Delete</span>
                                     <span id="mcap-selected-count" class="mcap-count-badge"></span>
                                 </button>
-                            </div>
-                            <div class="mcap-search-container">
-                                <div class="mcap-search-wrap">
+                                <div class="mcap-search-wrap mcap-search-compact">
                                     <svg class="mcap-search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                                     </svg>
-                                    <input type="text" id="mcap-search" class="mcap-search" placeholder="Search files...">
+                                    <input type="text" id="mcap-search" class="mcap-search" placeholder="Search...">
                                     <button id="mcap-search-clear" class="mcap-search-clear" title="Clear search">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                                         </svg>
                                     </button>
                                 </div>
-                            </div>
-                            <div class="mcap-toolbar-group">
-                                <button onclick="switchToLive()" class="mcap-btn-primary" title="Switch to Live Mode (restarts device)">
+                                <button onclick="switchToLive()" class="mcap-btn-primary mcap-btn-sm" title="Switch to Live Mode (restarts device)">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                                     </svg>
                                     <span>Live Mode</span>
                                 </button>
                             </div>
-                        </div>
-                        <div class="mcap-table-container">
-                            <table class="mcap-table">
+                        `;
+                    }
+                    tableHTML = `
+                        <table class="mcap-table">
                             <thead>
-                                    <tr>
-                                        <th style="text-align:center; width:2.5rem;"></th>
-                                        <th>Play</th>
-                                        <th>File Name</th>
-                                        <th>Size</th>
-                                        <th>Date/Time</th>
-                                        <th style="text-align:center;">Actions</th>
+                                <tr>
+                                    <th style="text-align:center; width:2.5rem;"></th>
+                                    <th style="width:3.5rem;">Play</th>
+                                    <th>File Name</th>
+                                    <th style="width:6rem;">Size</th>
+                                    <th style="width:10rem;">Date/Time</th>
+                                    <th style="text-align:center; width:10rem;">Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="mcap-table-body">
@@ -495,8 +498,8 @@ window.showMcapDialog = async function () {
                         const isCurrentlyPlaying = window.currentPlayingFile === file.name && window.isPlaying;
                         return `
                                 <tr class="mcap-row-card" data-filename="${file.name}">
-                                    <td style="text-align:center;"><input type="checkbox" class="mcap-select-checkbox" data-filename="${file.name}"></td>
-                                    <td style="text-align:center;">
+                                    <td style="text-align:center; width:2.5rem;"><input type="checkbox" class="mcap-select-checkbox" data-filename="${file.name}"></td>
+                                    <td style="text-align:center; width:3.5rem;">
                                         <button class="mcap-action-btn mcap-play-btn ${isCurrentlyPlaying ? 'mcap-btn-red' : 'mcap-btn-blue'}" title="${isCurrentlyPlaying ? 'Stop' : 'Play'}" data-filename="${file.name}" data-dirname="${dirName}">
                                             <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" style="width: 1.25rem; height: 1.25rem;">
                                                 ${isCurrentlyPlaying
@@ -529,7 +532,6 @@ window.showMcapDialog = async function () {
                     }).join('')}
                             </tbody>
                         </table>
-                    </div>
                     `;
                 }
                 content.innerHTML = tableHTML;
@@ -608,19 +610,7 @@ window.showMcapDialog = async function () {
             <div class="mcap-storage-progress" style="width:${usedPercent}%;"></div>
           </div>
           <div class="mcap-storage-amount">
-            <span>${usedValue.toFixed(2)} ${availUnit}</span>
-          </div>
-          <div class="mcap-storage-directory">
-            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"/>
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5a2 2 0 012-2h4a2 2 0 012 2v2H8V5z"/>
-            </svg>
-            <span class="mcap-dir-text">Directory: <span class="mcap-dir-path"></span></span>
-            <button class="mcap-dir-copy-btn" title="Copy directory path">
-              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
-              </svg>
-            </button>
+            <span>${availValueConverted.toFixed(2)} ${totalUnit} free</span>
           </div>
         </div>
       </div>
@@ -1107,23 +1097,61 @@ window.startPlaybackFromModal = function () {
     style.innerHTML = `
 .mcap-header {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
-    padding: 1.5rem 2rem 1rem 2rem;
+    padding: 1rem 1.5rem;
     border-bottom: 1px solid #e5e7eb;
     background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    gap: 1rem;
+    flex-wrap: wrap;
+    position: sticky;
+    top: 0;
+    z-index: 10;
 }
 .mcap-header-left {
     display: flex;
-    flex-direction: column;
+    align-items: center;
     gap: 0.75rem;
+    flex-shrink: 0;
 }
 .mcap-title {
-    font-size: 1.75rem;
+    font-size: 1.35rem;
     font-weight: 700;
     color: #1e293b;
     margin: 0;
     letter-spacing: -0.025em;
+    white-space: nowrap;
+}
+.mcap-header-center {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    justify-content: center;
+    min-width: 0;
+}
+.mcap-header-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+.mcap-btn-sm {
+    padding: 0.35rem 0.75rem;
+    font-size: 0.8rem;
+}
+.mcap-btn-sm svg {
+    width: 0.875rem;
+    height: 0.875rem;
+}
+.mcap-search-compact {
+    min-width: 180px;
+    max-width: 220px;
+}
+.mcap-search-compact .mcap-search {
+    padding: 0.35rem 0.75rem 0.35rem 2rem;
+    font-size: 0.8rem;
+}
 }
 .mcap-directory {
     display: flex;
@@ -1425,25 +1453,31 @@ window.startPlaybackFromModal = function () {
     background: #e5e7eb;
     color: #374151;
 }
-.mcap-table-container {
-    overflow-x: auto;
-    width: 100%;
+.mcap-scroll-container {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0.75rem 1.5rem 1.5rem 1.5rem;
 }
 .mcap-table {
     width: 100%;
     border-collapse: separate;
-    border-spacing: 0 0.7rem;
+    border-spacing: 0 0.5rem;
     font-size: 1.05rem;
 }
-.mcap-table thead th {
+.mcap-table thead {
     position: sticky;
-    top: 0;
+    top: -0.75rem;
+    z-index: 10;
+}
+.mcap-table thead th {
     background: #f3f4f6;
-    z-index: 2;
     font-weight: 700;
     color: #222;
-    padding: 0.7rem 0.7rem;
+    padding: 0.75rem 0.7rem;
+    text-align: left;
     border-bottom: 2px solid #e5e7eb;
+    box-shadow: 0 -1rem 0 0 #f3f4f6;
 }
 .mcap-row-card {
     background: #fff;
@@ -1608,6 +1642,276 @@ window.startPlaybackFromModal = function () {
     z-index: 2;
 }
 .mcap-search-wrap { position: relative; display: inline-block; }
+
+/* Dark Mode Styles for MCAP Dialog */
+[data-theme="dark"] .modal-box,
+[data-theme="dark"] #mcapDialog .modal-box {
+    background: #252033;
+    color: #f6f7f8;
+}
+[data-theme="dark"] .mcap-header {
+    background: linear-gradient(135deg, #2d2740 0%, #252033 100%);
+    border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+[data-theme="dark"] .mcap-title {
+    color: #E6E6FA;
+}
+[data-theme="dark"] .mcap-directory,
+[data-theme="dark"] .mcap-storage-display {
+    background: #2d2740;
+    border-color: rgba(255, 255, 255, 0.1);
+}
+[data-theme="dark"] .mcap-dir-text,
+[data-theme="dark"] .mcap-storage-label {
+    color: #c9c5d4;
+}
+[data-theme="dark"] .mcap-dir-path {
+    color: #E6E6FA;
+}
+[data-theme="dark"] .mcap-dir-copy-btn,
+[data-theme="dark"] .mcap-close-btn {
+    background: #3d3650;
+    color: #c9c5d4;
+}
+[data-theme="dark"] .mcap-dir-copy-btn:hover,
+[data-theme="dark"] .mcap-close-btn:hover {
+    background: #4a4560;
+    color: #E6E6FA;
+}
+[data-theme="dark"] .mcap-toolbar {
+    background: #2d2740;
+    border-color: rgba(255, 255, 255, 0.1);
+}
+[data-theme="dark"] .mcap-header-toolbar {
+    background: transparent;
+}
+[data-theme="dark"] .mcap-checkbox-label {
+    color: #c9c5d4;
+}
+[data-theme="dark"] .mcap-btn-secondary {
+    background: #3d3650;
+    color: #c9c5d4;
+    border-color: rgba(255, 255, 255, 0.1);
+}
+[data-theme="dark"] .mcap-btn-secondary:hover:not(:disabled) {
+    background: #4a4560;
+    border-color: rgba(255, 255, 255, 0.2);
+}
+[data-theme="dark"] .mcap-btn-secondary:disabled {
+    background: #2d2740;
+    color: #6b6580;
+}
+[data-theme="dark"] .mcap-search {
+    background: #2d2740;
+    border-color: rgba(255, 255, 255, 0.1);
+    color: #f6f7f8;
+}
+[data-theme="dark"] .mcap-search::placeholder {
+    color: #9690a8;
+}
+[data-theme="dark"] .mcap-search:focus {
+    border-color: #E8B820;
+    box-shadow: 0 0 0 2px rgba(232, 184, 32, 0.2);
+}
+[data-theme="dark"] .mcap-search-icon {
+    color: #9690a8;
+}
+[data-theme="dark"] .mcap-search-clear {
+    color: #9690a8;
+}
+[data-theme="dark"] .mcap-table thead th {
+    background: #2d2740;
+    color: #E6E6FA;
+    border-bottom-color: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 -1rem 0 0 #2d2740;
+}
+[data-theme="dark"] .mcap-row-card {
+    background: #2d2740;
+    color: #f6f7f8;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+[data-theme="dark"] .mcap-row-card:hover {
+    background: #3d3650;
+}
+[data-theme="dark"] .mcap-row-card.selected {
+    background: #3d3650 !important;
+    border-left-color: #E8B820;
+}
+[data-theme="dark"] .mcap-row-card td {
+    color: #c9c5d4;
+}
+[data-theme="dark"] .mcap-row-card td[style*="color:#222"],
+[data-theme="dark"] .mcap-row-card td[style*="font-weight:600"] {
+    color: #E6E6FA !important;
+}
+[data-theme="dark"] .mcap-row-card td[style*="color:#555"],
+[data-theme="dark"] .mcap-row-card td span[style*="color:#888"] {
+    color: #9690a8 !important;
+}
+[data-theme="dark"] .mcap-action-btn {
+    background: #3d3650;
+    color: #c9c5d4;
+}
+[data-theme="dark"] .mcap-action-btn:hover {
+    background: #4a4560;
+    color: #E6E6FA;
+}
+[data-theme="dark"] .mcap-storage-bar {
+    background: #3d3650;
+}
+[data-theme="dark"] .mcap-storage-percent {
+    color: #9690a8;
+}
+[data-theme="dark"] .mcap-storage-directory {
+    border-top-color: rgba(255, 255, 255, 0.1);
+    color: #9690a8;
+}
+[data-theme="dark"] .mcap-spinner-overlay {
+    background: rgba(26, 22, 37, 0.7);
+}
+[data-theme="dark"] .mcap-spinner {
+    border-color: #3d3650;
+    border-top-color: #E8B820;
+}
+[data-theme="dark"] .text-gray-600 {
+    color: #9690a8 !important;
+}
+
+/* Auto theme dark mode support */
+@media (prefers-color-scheme: dark) {
+    [data-theme="auto"] .modal-box,
+    [data-theme="auto"] #mcapDialog .modal-box {
+        background: #252033;
+        color: #f6f7f8;
+    }
+    [data-theme="auto"] .mcap-header {
+        background: linear-gradient(135deg, #2d2740 0%, #252033 100%);
+        border-bottom-color: rgba(255, 255, 255, 0.1);
+    }
+    [data-theme="auto"] .mcap-title {
+        color: #E6E6FA;
+    }
+    [data-theme="auto"] .mcap-directory,
+    [data-theme="auto"] .mcap-storage-display {
+        background: #2d2740;
+        border-color: rgba(255, 255, 255, 0.1);
+    }
+    [data-theme="auto"] .mcap-dir-text,
+    [data-theme="auto"] .mcap-storage-label {
+        color: #c9c5d4;
+    }
+    [data-theme="auto"] .mcap-dir-path {
+        color: #E6E6FA;
+    }
+    [data-theme="auto"] .mcap-dir-copy-btn,
+    [data-theme="auto"] .mcap-close-btn {
+        background: #3d3650;
+        color: #c9c5d4;
+    }
+    [data-theme="auto"] .mcap-dir-copy-btn:hover,
+    [data-theme="auto"] .mcap-close-btn:hover {
+        background: #4a4560;
+        color: #E6E6FA;
+    }
+    [data-theme="auto"] .mcap-toolbar {
+        background: #2d2740;
+        border-color: rgba(255, 255, 255, 0.1);
+    }
+    [data-theme="auto"] .mcap-header-toolbar {
+        background: transparent;
+    }
+    [data-theme="auto"] .mcap-checkbox-label {
+        color: #c9c5d4;
+    }
+    [data-theme="auto"] .mcap-btn-secondary {
+        background: #3d3650;
+        color: #c9c5d4;
+        border-color: rgba(255, 255, 255, 0.1);
+    }
+    [data-theme="auto"] .mcap-btn-secondary:hover:not(:disabled) {
+        background: #4a4560;
+        border-color: rgba(255, 255, 255, 0.2);
+    }
+    [data-theme="auto"] .mcap-btn-secondary:disabled {
+        background: #2d2740;
+        color: #6b6580;
+    }
+    [data-theme="auto"] .mcap-search {
+        background: #2d2740;
+        border-color: rgba(255, 255, 255, 0.1);
+        color: #f6f7f8;
+    }
+    [data-theme="auto"] .mcap-search::placeholder {
+        color: #9690a8;
+    }
+    [data-theme="auto"] .mcap-search:focus {
+        border-color: #E8B820;
+        box-shadow: 0 0 0 2px rgba(232, 184, 32, 0.2);
+    }
+    [data-theme="auto"] .mcap-search-icon {
+        color: #9690a8;
+    }
+    [data-theme="auto"] .mcap-search-clear {
+        color: #9690a8;
+    }
+    [data-theme="auto"] .mcap-table thead th {
+        background: #2d2740;
+        color: #E6E6FA;
+        border-bottom-color: rgba(255, 255, 255, 0.1);
+        box-shadow: 0 -1rem 0 0 #2d2740;
+    }
+    [data-theme="auto"] .mcap-row-card {
+        background: #2d2740;
+        color: #f6f7f8;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+    [data-theme="auto"] .mcap-row-card:hover {
+        background: #3d3650;
+    }
+    [data-theme="auto"] .mcap-row-card.selected {
+        background: #3d3650 !important;
+        border-left-color: #E8B820;
+    }
+    [data-theme="auto"] .mcap-row-card td {
+        color: #c9c5d4;
+    }
+    [data-theme="auto"] .mcap-row-card td[style*="color:#222"],
+    [data-theme="auto"] .mcap-row-card td[style*="font-weight:600"] {
+        color: #E6E6FA !important;
+    }
+    [data-theme="auto"] .mcap-row-card td[style*="color:#555"],
+    [data-theme="auto"] .mcap-row-card td span[style*="color:#888"] {
+        color: #9690a8 !important;
+    }
+    [data-theme="auto"] .mcap-action-btn {
+        background: #3d3650;
+        color: #c9c5d4;
+    }
+    [data-theme="auto"] .mcap-action-btn:hover {
+        background: #4a4560;
+        color: #E6E6FA;
+    }
+    [data-theme="auto"] .mcap-storage-bar {
+        background: #3d3650;
+    }
+    [data-theme="auto"] .mcap-storage-percent {
+        color: #9690a8;
+    }
+    [data-theme="auto"] .mcap-storage-directory {
+        border-top-color: rgba(255, 255, 255, 0.1);
+        color: #9690a8;
+    }
+    [data-theme="auto"] .mcap-spinner-overlay {
+        background: rgba(26, 22, 37, 0.7);
+    }
+    [data-theme="auto"] .mcap-spinner {
+        border-color: #3d3650;
+        border-top-color: #E8B820;
+    }
+    [data-theme="auto"] .text-gray-600 {
+        color: #9690a8 !important;
+    }
+}
 `;
     document.head.appendChild(style);
 })();

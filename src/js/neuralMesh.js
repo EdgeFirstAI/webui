@@ -70,13 +70,13 @@ const NeuralMesh = {
         this.container = document.createElement('div');
         this.container.id = containerId;
         this.container.style.cssText = `
-            position: absolute;
+            position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
             pointer-events: none;
-            z-index: 1;
+            z-index: -1;
             overflow: hidden;
         `;
 
