@@ -1,38 +1,141 @@
-# Web User Interface
+# EdgeFirst WebUI
 
-This project hosts the Web User Interface code.  This is the front-end
-HTML and Javascript which runs in the browser.  The code can be customized and
-re-deployed to a or Raivin platform.
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-# Deployment
+Browser-based real-time visualization platform for the EdgeFirst Maivin and Raivin embedded AI platforms.
 
-The HTML pages are found under `src` and the javascript is under `src/js`. These are static 
-HTML files and which can be copied to the target platform. The default webui is found 
-on the under `/usr/share/webui` which is read-only and cannot be modified, as it is managed
-by the Torizon for OS image.  The customized HTML folder should instead
-be copied to either the default home as `/home/torizon/webui` or into
-`/usr/local/share/webui` which is writeable (requires sudo).
+## Overview
 
-Once deployed the webui configuration needs to be updated to point to the new
-location.  Edit the configuration file `/etc/default/webui` and modify the
-`DOCROOT` variable to point to the new location.
+The EdgeFirst WebUI provides web-based access to:
 
-Once you've modified the `/etc/default/webui` configuration you must restart the
-webui server with the following command.  Then simply open and refresh the
-browser window with the WebUI to enact the changes.
+- **Live Camera Streams** - H.264 video with hardware-accelerated decoding, including tiled 4K
+- **AI Model Outputs** - Object detection bounding boxes and segmentation masks
+- **Sensor Visualization** - Radar and lidar point clouds in 2D grid and 3D views
+- **GPS/IMU Display** - Real-time position tracking and orientation visualization
+- **System Configuration** - Service management, model settings, and device configuration
+- **MCAP Recording** - Record, playback, and upload sessions to EdgeFirst Studio
+
+## Architecture
+
+The WebUI is a static HTML/JavaScript application that requires the [WebSRV](https://github.com/EdgeFirstAI/websrv) backend server. Together they form the EdgeFirst web visualization stack:
 
 ```
-sudo systemctl restart webui
+┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
+│   Web Browser   │◄────►│     WebSRV      │◄────►│  EdgeFirst      │
+│   (WebUI)       │ HTTPS│  (Rust Server)  │ Zenoh│  Services       │
+└─────────────────┘      └─────────────────┘      └─────────────────┘
 ```
 
-NOTE: The `webui` folder is renamed from HTML folder but can be any name, just make
-sure the full path of the folder which holds the `index.html` file is used for
-DOCROOT.
+- **WebUI** - Frontend visualization (this project)
+- **WebSRV** - HTTPS server, Zenoh-to-WebSocket bridge, REST API
 
-# License
+Both projects are typically deployed together on Maivin/Raivin devices.
 
-This project is licensed under the AGPL-3.0 or under the terms of the DeepView AI Middleware Commercial License.
+## Quick Start
 
-# Support
+### On Device
 
-Commercial Support is provided by Au-Zone Technologies through the [DeepView Support](https://support.deepviewml.com) site.
+The WebUI comes pre-installed on EdgeFirst devices at `/usr/share/webui`. Access via browser:
+
+```
+https://<device-hostname>.local
+```
+
+### Development
+
+For local development or customization:
+
+```bash
+# Clone the repository
+git clone https://github.com/EdgeFirstAI/webui.git
+
+# No build step required - static files only
+# Copy to device or serve with WebSRV locally
+```
+
+## Deployment
+
+### Custom WebUI Deployment
+
+To deploy customized WebUI files on a device:
+
+1. Copy files to a writable location:
+   ```bash
+   scp -r src/* torizon@maivin.local:/home/torizon/webui/
+   ```
+
+2. Update WebSRV configuration:
+   ```bash
+   # Edit /etc/default/webui
+   DOCROOT=/home/torizon/webui
+   ```
+
+3. Restart the service:
+   ```bash
+   sudo systemctl restart webui
+   ```
+
+### Deployment Locations
+
+| Location | Description |
+|----------|-------------|
+| `/usr/share/webui` | System default (read-only) |
+| `/home/torizon/webui` | User customizations |
+| `/usr/local/share/webui` | Local installs (requires sudo) |
+
+## Project Structure
+
+```
+webui/
+├── src/
+│   ├── index.html          # Home page
+│   ├── camera.html         # Camera visualization
+│   ├── combined.html       # Multi-modal view
+│   ├── combined_lidar.html # 3D lidar view
+│   ├── grid.html           # Occupancy grid
+│   ├── segmentation.html   # Segmentation only
+│   ├── gps.html            # GPS map
+│   ├── imu.html            # IMU orientation
+│   ├── config/             # Configuration pages
+│   ├── js/                 # JavaScript modules
+│   ├── css/                # Stylesheets
+│   └── assets/             # Images and models
+├── ARCHITECTURE.md         # System architecture
+├── TESTING.md              # Testing guide
+├── CHANGELOG.md            # Version history
+└── README.md               # This file
+```
+
+## Browser Requirements
+
+- **Chrome 94+** or **Edge 94+** (recommended)
+- **Firefox 97+** (WebCodecs flag may be required)
+- **Safari 16.4+** (limited WebCodecs support)
+
+Required browser features:
+- WebCodecs API (hardware H.264 decoding)
+- WebGL 2.0 (3D rendering)
+- WebSockets (real-time streaming)
+- ES6 Modules
+
+## Documentation
+
+- [ARCHITECTURE.md](ARCHITECTURE.md) - System design and data flow
+- [TESTING.md](TESTING.md) - Testing procedures and automation
+- [CHANGELOG.md](CHANGELOG.md) - Version history
+- [EdgeFirst Documentation](https://doc.edgefirst.ai/) - Platform documentation
+
+## Related Projects
+
+- [WebSRV](https://github.com/EdgeFirstAI/websrv) - Backend server (required)
+- [EdgeFirst Studio](https://studio.edgefirst.ai/) - Cloud platform for datasets and training
+
+## License
+
+Copyright 2025-2026 Au-Zone Technologies Inc.
+
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for details.
+
+## Support
+
+Commercial support is available through [EdgeFirst Support](https://support.edgefirst.ai).
