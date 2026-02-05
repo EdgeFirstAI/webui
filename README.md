@@ -19,11 +19,9 @@ The EdgeFirst WebUI provides web-based access to:
 
 The WebUI is a static HTML/JavaScript application that requires the [WebSRV](https://github.com/EdgeFirstAI/websrv) backend server. Together they form the EdgeFirst web visualization stack:
 
-```
-┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
-│   Web Browser   │◄────►│     WebSRV      │◄────►│  EdgeFirst      │
-│   (WebUI)       │ HTTPS│  (Rust Server)  │ Zenoh│  Services       │
-└─────────────────┘      └─────────────────┘      └─────────────────┘
+```mermaid
+flowchart LR
+    Browser["Web Browser<br/>(WebUI)"] <-->|HTTPS| WebSRV["WebSRV<br/>(Rust Server)"] <-->|Zenoh| Services["EdgeFirst<br/>Services"]
 ```
 
 - **WebUI** - Frontend visualization (this project)

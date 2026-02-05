@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.7.0] - 2026-02-05
+
+### Added
+
+- ThemeManager for light/dark/auto theme switching with system preference detection
+- CSS custom properties system for consistent theming across all pages
+- Theme-aware widget components with unified styling
+- Neural mesh animated background for dark mode
+- Test IDs (`data-testid` attributes) on UI elements for test automation
+- TESTING.md with manual testing workflows and Selenium/Playwright examples
+
+### Changed
+
+- Standardized all UI components to use CSS variables instead of hardcoded colors
+- Simplified ARCHITECTURE.md with mermaid diagrams, removed implementation details
+- Updated README.md with clear project overview and WebSRV relationship
+- Improved navbar with theme toggle button and consistent styling
+- Enhanced MCAP dialog styling for dark mode compatibility
+
+### Fixed
+
+- Dark mode styling consistency across all pages
+- NeuralMesh z-index layering issues
+- Widget card hover states and visual feedback
+
 ## [3.6.1] - 2026-02-03
 
 ### Changed
