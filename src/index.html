@@ -261,13 +261,13 @@
                 const data = await response.json();
                 const deviceValue = data.DEVICE;
 
-                populateCardContainer(deviceValue);
+                await populateCardContainer(deviceValue);
             } catch (error) {
                 console.error('Error fetching config details:', error);
             }
         }
 
-        function populateCardContainer(deviceType) {
+        async function populateCardContainer(deviceType) {
             const cardContainer = document.getElementById('card-container');
             const isRaivin = deviceType.toLowerCase().includes('raivin');
 
@@ -306,11 +306,18 @@
             cardContainer.appendChild(createCard('/gps', 'GPS', ['Explore Location']));
             cardContainer.appendChild(createCard('/imu', 'IMU', ['IMU Visualization']));
 
+            // LiDAR card — shown when lidarpub service is running (any device)
+            const serviceStatuses = await window.serviceCache.getServiceStatuses();
+            const lidarpub = Array.isArray(serviceStatuses)
+                && serviceStatuses.find(s => s.service === 'lidarpub');
+            if (lidarpub && lidarpub.status === 'running') {
+                cardContainer.appendChild(createCard('/lidar', 'LiDAR', ['3D Point Cloud']));
+            }
+
             if (isRaivin) {
                 // Raivin-only cards
                 cardContainer.appendChild(createCard('/grid', 'Occupancy Grid', ['Occupancy Grid', '+', 'Radar Point Cloud']));
                 cardContainer.appendChild(createCard('/combined', 'Segmentation View', ['Segmentation', '+', 'Occupancy Grid']));
-                cardContainer.appendChild(createCard('/combined_lidar', 'Lidar View', ['Segmentation', '+', 'Lidar +', 'Radar']));
             } else {
                 // Maivin-only cards
                 cardContainer.appendChild(createCard('/segmentation', 'Segmentation', ['Segmentation Mask']));

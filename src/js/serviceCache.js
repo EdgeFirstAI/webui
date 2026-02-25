@@ -66,7 +66,7 @@ async function performBackgroundUpdate() {
         const deviceData = await deviceResponse.json();
 
         const isRaivin = deviceData.DEVICE?.toLowerCase().includes('raivin');
-        const baseServices = ["camera", "imu", "navsat", "model"];
+        const baseServices = ["camera", "imu", "navsat", "model", "lidarpub"];
         const raivinServices = ["radarpub", "fusion"];
         const services = isRaivin ? [...baseServices, ...raivinServices] : baseServices;
 
