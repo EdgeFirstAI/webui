@@ -13,6 +13,9 @@ import { CdrReader } from './Cdr.js'
 const RAW_TOPIC = '/rt/lidar/points/'
 const CLUSTER_TOPIC = '/rt/lidar/clusters/'
 const FUSION_TOPIC = '/rt/fusion/lidar/'
+const UNAVAILABLE_TIMEOUT_MS = 1000
+const FUSION_WARNING_DURATION_MS = 5000
+const RECONNECT_DELAY_MS = 3000
 
 // ---------------------------------------------------------------------------
 // State
@@ -287,7 +290,7 @@ function showFusionWarning() {
     fusionWarningTimer = setTimeout(() => {
         fusionWarning.style.display = 'none'
         fusionWarningTimer = null
-    }, 5000)
+    }, FUSION_WARNING_DURATION_MS)
 }
 
 // Colour mode selector
@@ -334,14 +337,14 @@ function connectSocket() {
     clearTimeout(unavailableTimer)
     unavailableTimer = setTimeout(() => {
         lidarUnavailable.style.display = 'flex'
-    }, 1000)
+    }, UNAVAILABLE_TIMEOUT_MS)
 
     socket.onmessage = (event) => {
         lidarUnavailable.style.display = 'none'
         clearTimeout(unavailableTimer)
         unavailableTimer = setTimeout(() => {
             lidarUnavailable.style.display = 'flex'
-        }, 1000)
+        }, UNAVAILABLE_TIMEOUT_MS)
         updatePointCloud(event.data)
     }
 
@@ -354,7 +357,7 @@ function connectSocket() {
 
     socket.onclose = () => {
         console.log('LiDAR WebSocket connection closed — reconnecting in 3 s')
-        setTimeout(connectSocket, 3000)
+        setTimeout(connectSocket, RECONNECT_DELAY_MS)
     }
 }
 
