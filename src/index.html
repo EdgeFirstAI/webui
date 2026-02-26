@@ -261,13 +261,17 @@
                 const data = await response.json();
                 const deviceValue = data.DEVICE;
 
-                await populateCardContainer(deviceValue);
+                populateCardContainer(deviceValue);
             } catch (error) {
                 console.error('Error fetching config details:', error);
             }
         }
 
-        async function populateCardContainer(deviceType) {
+        // Track current device type for service-cache callback re-renders
+        let currentDeviceType = null;
+
+        function populateCardContainer(deviceType) {
+            currentDeviceType = deviceType;
             const cardContainer = document.getElementById('card-container');
             const isRaivin = deviceType.toLowerCase().includes('raivin');
 
@@ -302,15 +306,20 @@
                 return card;
             }
 
+            // Check if a service is enabled (configured) via the service cache
+            function isServiceEnabled(serviceName) {
+                const statuses = window.serviceCache?.serviceStatuses;
+                if (!Array.isArray(statuses)) return false;
+                const entry = statuses.find(s => s.service === serviceName);
+                return entry?.enabled === 'enabled';
+            }
+
             // Common cards for all devices
             cardContainer.appendChild(createCard('/gps', 'GPS', ['Explore Location']));
             cardContainer.appendChild(createCard('/imu', 'IMU', ['IMU Visualization']));
 
-            // LiDAR card — shown when lidarpub service is running (any device)
-            const serviceStatuses = await window.serviceCache.getServiceStatuses();
-            const lidarpub = Array.isArray(serviceStatuses)
-                && serviceStatuses.find(s => s.service === 'lidarpub');
-            if (lidarpub && lidarpub.status === 'running') {
+            // LiDAR card shown when lidarpub is enabled (configured)
+            if (isServiceEnabled('lidarpub')) {
                 cardContainer.appendChild(createCard('/lidar', 'LiDAR', ['3D Point Cloud']));
             }
 
@@ -330,6 +339,13 @@
 
             // Initialize neural mesh background (dark mode only)
             NeuralMesh.init();
+
+            // Re-populate cards when service statuses update (e.g. lidarpub enabled)
+            window.serviceCache.registerUpdateCallback(() => {
+                if (currentDeviceType) {
+                    populateCardContainer(currentDeviceType);
+                }
+            });
 
             // Fetch config and populate cards
             await fetchConfigAndUpdateDeviceName();

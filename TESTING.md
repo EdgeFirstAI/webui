@@ -150,17 +150,23 @@ Accept the self-signed certificate when prompted.
 - Mask colors match object classes
 - Grid shows occupied cells
 
-### 3D Lidar View Testing
+### 3D LiDAR View Testing
 
-1. Navigate to Combined Lidar view (`/combined_lidar`)
-2. Test orbit controls (drag to rotate, scroll to zoom)
-3. Verify point cloud renders with color mapping
-4. Check video overlay on 3D plane
+1. Navigate to LiDAR view (`/lidar`)
+2. Verify "LiDAR Unavailable" message shows when `lidarpub` is not running
+3. Test orbit controls (drag to rotate, scroll to zoom)
+4. Verify point cloud renders with colour mapping
+5. Test colour mode selector: Fixed, Distance, Cluster, Vision Class
+6. Check fusion warning appears when Vision Class or Cluster selected but service unavailable
 
 **Expected behavior:**
-- Smooth 3D navigation
-- Points colored by height/intensity
-- Video texture updates in real-time
+- LiDAR card only appears on home page when `lidarpub` is enabled
+- "LiDAR Unavailable" overlay when `lidarpub` is enabled but not running
+- Smooth 3D navigation with orbit controls
+- Distance mode: Turbo colourmap based on point distance from origin
+- Fixed mode: Single colour (lavender dark / deep purple light)
+- Cluster mode: Distinct colours per cluster ID (requires cluster topic)
+- Vision Class mode: Segmentation mask colours per class (requires fusion topic)
 
 ### Configuration Pages Testing
 
@@ -294,11 +300,17 @@ data-testid="<page>-<element>-<name>"
 **Home Page (`index.html`):**
 - `index-card-camera`
 - `index-card-combined`
-- `index-card-combined-lidar`
+- `index-card-lidar` (visible when `lidarpub` enabled)
 - `index-card-segmentation`
 - `index-card-grid`
 - `index-card-gps`
 - `index-card-imu`
+
+**LiDAR Page (`lidar.html`):**
+- `lidar-viewport` - 3D viewport container
+- `lidar-color-mode` - Colour mode selector (Fixed, Distance, Cluster, Vision Class)
+- `lidar-fusion-warning` - Warning banner when fusion data unavailable
+- `lidar-unavailable` - Overlay when LiDAR data is not being received
 
 **Settings Page (`config/settings.html`):**
 - `settings-card-recorder`

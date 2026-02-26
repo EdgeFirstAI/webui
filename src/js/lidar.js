@@ -33,6 +33,8 @@ let cachedIsDark = true   // cached theme state — updated on themechange
 const viewport = document.getElementById('lidar-viewport')
 const colorModeSelect = document.getElementById('color-mode')
 const fusionWarning = document.getElementById('fusion-warning')
+const lidarUnavailable = document.getElementById('lidar-unavailable')
+let unavailableTimer = null
 
 // ---------------------------------------------------------------------------
 // Part A: Scene Setup & Render Loop
@@ -329,7 +331,17 @@ function connectSocket() {
     socket = new WebSocket(topic)
     socket.binaryType = 'arraybuffer'
 
+    clearTimeout(unavailableTimer)
+    unavailableTimer = setTimeout(() => {
+        lidarUnavailable.style.display = 'flex'
+    }, 1000)
+
     socket.onmessage = (event) => {
+        lidarUnavailable.style.display = 'none'
+        clearTimeout(unavailableTimer)
+        unavailableTimer = setTimeout(() => {
+            lidarUnavailable.style.display = 'flex'
+        }, 1000)
         updatePointCloud(event.data)
     }
 
