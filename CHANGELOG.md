@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.8.0] - 2026-02-26
+
+### Added
+
+- Dedicated `/lidar` 3D point cloud viewer with Four colour modes: Fixed, Distance, Cluster, Vision Class
+- Theme-aware point cloud rendering (turbo colourmap dark, boosted contrast light)
+- "LiDAR Unavailable" overlay when `lidarpub` is enabled but not streaming data
+- Fusion warning banner when Cluster or Vision Class mode lacks upstream data
+- `data-testid` attributes on LiDAR page elements for automated testing
+
+### Changed
+
+- LiDAR card on home page now shown when `lidarpub` is enabled (configured) rather than only when running
+- Home page cards reactively update when service statuses change
+- Updated TESTING.md with `/lidar` routes, test IDs, and colour mode documentation
+
+### Removed
+
+- `/combined_lidar` multi-panel view replaced by focused `/lidar` viewer
+
 ## [3.7.0] - 2026-02-05
 
 ### Added
