@@ -19,9 +19,9 @@ const LIDAR_DOT_RADIUS = 3
 // Configurable topic URLs (overridden by /config/webui/details)
 // ---------------------------------------------------------------------------
 let socketUrlH264 = '/rt/camera/h264/'
-let socketUrlMask = '/rt/detect/mask/'
+let socketUrlMask = '/rt/model/mask/'
 let socketUrlMaskCompressed = '/rt/model/mask_compressed/'
-let socketUrlDetect = '/rt/detect/boxes2d/'
+let socketUrlDetect = '/rt/model/boxes2d/'
 let socketUrlLidar = '/rt/lidar/points/'
 let socketUrlLidarCluster = '/rt/lidar/clusters/'
 let socketUrlTfStatic = '/rt/tf_static/'
@@ -30,7 +30,6 @@ let socketUrlCameraInfo = '/rt/camera/info/'
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
-let mirror = false
 let texture_camera = null
 
 // Overlay enabled state
@@ -121,7 +120,6 @@ function initConfig(config) {
     if (config.LIDAR_TOPIC) socketUrlLidar = config.LIDAR_TOPIC
     if (config.CLUSTER_TOPIC) socketUrlLidarCluster = config.CLUSTER_TOPIC
     if (config.CAMERA_INFO_TOPIC) socketUrlCameraInfo = config.CAMERA_INFO_TOPIC
-    if (typeof config.MIRROR === 'boolean') mirror = config.MIRROR
 }
 
 // ---------------------------------------------------------------------------
@@ -143,7 +141,6 @@ function initVideoStream() {
             camera: camera,
             texture: texture_camera,
             color: '#000',
-            flip: mirror,
             transparent: true,
         })
         const mesh = new THREE.Mesh(quad, material)
@@ -171,7 +168,6 @@ function startSegmentation() {
                 camera: camera,
                 texture: texture_mask,
                 transparent: true,
-                flip: mirror,
                 colors: mask_colors,
             })
             segMesh = new THREE.Mesh(quad, material)
@@ -201,7 +197,6 @@ function startBoxes() {
         canvas: boxCanvas,
         drawBox: true,
         drawBoxText: showLabels,
-        mirror: mirror,
     }
     boxesstream(socketUrlDetect, drawBoxSettings).then((b) => {
         boxData = b
@@ -506,12 +501,8 @@ function renderLidarOverlay() {
         // Points behind the camera
         if (camZ <= 0) continue
 
-        // Pinhole projection
-        // When mirror=false (Maivin default), the video is displayed mirrored
-        // but the camera_optical transform is for the un-mirrored view, so flip u.
-        // When mirror=true, the video is un-mirrored to match the transform.
-        let u = fx * (camX / camZ) + cx
-        if (!mirror) u = width - u
+        // Pinhole projection — tf_static accounts for camera orientation
+        const u = fx * (camX / camZ) + cx
         const v = fy * (camY / camZ) + cy
 
         // Log sample points once
