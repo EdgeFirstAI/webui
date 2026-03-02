@@ -48,7 +48,6 @@ let socketUrlMask = '/rt/detect/mask/'
 let socketUrlErrors = '/ws/dropped'
 let DRAW_BOX = false
 let DRAW_BOX_TEXT = true
-let mirror = false
 let show_stats = false
 
 droppedframes(socketUrlErrors, playerCanvas)
@@ -73,10 +72,6 @@ function init_config(config) {
 
     if (typeof config.DRAW_BOX_TEXT == "boolean") {
         DRAW_BOX_TEXT = config.DRAW_BOX_TEXT
-    }
-
-    if (typeof config.MIRROR == "boolean") {
-        mirror = config.MIRROR
     }
 
     if (typeof config.SHOW_STATS == "boolean") {
@@ -111,7 +106,6 @@ loader.load(
                 camera: camera, // the camera that acts as a projector
                 texture: texture_camera, // the texture being projected
                 color: '#000', // the color of the object if it's not projected on
-                flip: mirror,
                 transparent: true,
             })
             const mesh_cam = new THREE.Mesh(quad, material_proj);
@@ -132,7 +126,6 @@ loader.load(
                     camera: camera, // the camera that acts as a projector
                     texture: texture_mask, // the texture being projected
                     transparent: true,
-                    flip: mirror,
                     colors: mask_colors,
                 })
                 const mesh_mask = new THREE.Mesh(quad, material_mask);
@@ -147,7 +140,6 @@ loader.load(
             canvas: boxCanvas,
             drawBox: DRAW_BOX,
             drawBoxText: DRAW_BOX_TEXT,
-            mirror: mirror,
         }
         boxesstream(socketUrlDetect, drawBoxSettings).then()
     },

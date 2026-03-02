@@ -112,15 +112,12 @@ function pcd_to_points(radar_data) {
     return radar_points
 }
 
-export function preprocessPoints(range_min, range_max, mirror, points) {
+export function preprocessPoints(range_min, range_max, points) {
     let filteredPoints = []
     for (let p of points) {
         const range = p.range
         if (range < range_min || range_max < range) {
             continue
-        }
-        if (mirror) {
-            p.y *= -1
         }
         filteredPoints.push(JSON.parse(JSON.stringify(p))) // deepclone the point
     }

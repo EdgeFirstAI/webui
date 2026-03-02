@@ -68,10 +68,7 @@ function drawBoxes(drawBoxSettings, message) {
             text = box.label;
         }
 
-        let x = box.center_x;
-        if (drawBoxSettings.mirror) {
-            x = 1.0 - x;
-        }
+        const x = box.center_x;
 
         if (drawBoxSettings.drawBox) {
             ctx.beginPath();

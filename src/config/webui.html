@@ -305,12 +305,6 @@
                 Configure the settings for the WebUI Service, including bin widths, thresholds, and topics.
             </div>
 
-            <!-- Mirror Inputs Checkbox -->
-            <div class="form-group">
-                <label for="mirror_inputs">Mirror Inputs</label>
-                <input type="checkbox" id="mirror_inputs" name="mirror_inputs">
-            </div>
-
             <!-- Angle Bin Configuration -->
             <div class="form-group">
                 <label for="angle_bin_width">Angle Bin Width:</label>
@@ -495,7 +489,6 @@
             })
                 .then(response => response.json())
                 .then(data => {
-                    document.getElementById('mirror_inputs').checked = data.MIRROR === 'true' || data.MIRROR === true;
                     document.getElementById('angle_bin_width').value = data.ANGLE_BIN_WIDTH || 10;
                     document.getElementById('angle_bin_limits_min').value = data.ANGLE_BIN_LIMITS_MIN || -70;
                     document.getElementById('angle_bin_limits_max').value = data.ANGLE_BIN_LIMITS_MAX || 70;
@@ -542,7 +535,6 @@
 
             const configData = {
                 fileName: "webui",
-                MIRROR: document.getElementById('mirror_inputs').checked.toString(),
                 ANGLE_BIN_WIDTH: document.getElementById('angle_bin_width').value,
                 ANGLE_BIN_LIMITS_MIN: document.getElementById('angle_bin_limits_min').value,
                 ANGLE_BIN_LIMITS_MAX: document.getElementById('angle_bin_limits_max').value,

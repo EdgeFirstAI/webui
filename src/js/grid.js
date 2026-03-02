@@ -35,7 +35,6 @@ const loader = new THREE.FileLoader();
 
 let socketUrlPcd = '/rt/radar/targets/';
 let RANGE_BIN_LIMITS = [0, 20]
-let mirror = false
 let show_stats = false
 loader.load(
     // resource URL
@@ -56,7 +55,7 @@ loader.load(
         let radar_points;
         pcdStream(socketUrlPcd, () => {
             radarFpsFn();
-            radar_points.points = preprocessPoints(RANGE_BIN_LIMITS[0], RANGE_BIN_LIMITS[1], mirror, radar_points.points)
+            radar_points.points = preprocessPoints(RANGE_BIN_LIMITS[0], RANGE_BIN_LIMITS[1], radar_points.points)
         }).then((pcd) => {
             radar_points = pcd;
             grid_set_radarpoints(pcd)
@@ -86,10 +85,6 @@ function init_config(config) {
 
     if (config.PCD_TOPIC) {
         socketUrlPcd = config.PCD_TOPIC
-    }
-
-    if (typeof config.MIRROR == "boolean") {
-        mirror = config.MIRROR
     }
 
     if (typeof config.SHOW_STATS == "boolean") {

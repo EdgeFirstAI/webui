@@ -78,7 +78,6 @@ let socketUrlDetect = '/rt/detect/boxes2d/'
 let socketUrlMask = '/rt/detect/mask/'
 let socketUrlErrors = '/ws/dropped'
 let RANGE_BIN_LIMITS = [0, 20]
-let mirror = false
 let show_stats = false
 
 
@@ -106,9 +105,6 @@ function drawBoxesSpeedDistance(canvas, boxes, radar_points, drawBoxSettings) {
         let color_text = "red"
 
         let x = box.center_x;
-        if (drawBoxSettings.mirror) {
-            x = 1.0 - x
-        }
         if (drawBoxSettings.drawBox) {
             ctx.beginPath();
             ctx.rect((x - box.width / 2) * canvas.width, (box.center_y - box.height / 2) * canvas.height, box.width * canvas.width, box.height * canvas.height);
@@ -187,7 +183,6 @@ loader.load(
                 camera: camera, // the camera that acts as a projector
                 texture: texture_camera, // the texture being projected
                 color: '#000', // the color of the object if it's not projected on
-                flip: mirror,
                 transparent: true,
             })
             const mesh_cam = new THREE.Mesh(quad, material_proj);
@@ -214,7 +209,6 @@ loader.load(
                     camera: camera, // the camera that acts as a projector
                     texture: texture_mask, // the texture being projected
                     transparent: true,
-                    flip: mirror,
                     colors: mask_colors,
                 })
                 const mesh_mask = new THREE.Mesh(quad, material_mask);
@@ -230,7 +224,6 @@ loader.load(
         let drawBoxSettings = {
             drawBox: DRAW_BOX,
             drawBoxText: DRAW_BOX_TEXT,
-            mirror: mirror,
         }
         boxesstream(socketUrlDetect, null, () => {
             if (boxes && radar_points) {
@@ -243,7 +236,7 @@ loader.load(
         let radarFpsFn = fpsUpdate(radarPanel);
         pcdStream(socketUrlPcd, () => {
             radarFpsFn();
-            radar_points.points = preprocessPoints(RANGE_BIN_LIMITS[0], RANGE_BIN_LIMITS[1], mirror, radar_points.points)
+            radar_points.points = preprocessPoints(RANGE_BIN_LIMITS[0], RANGE_BIN_LIMITS[1], radar_points.points)
         }).then((pcd) => {
             radar_points = pcd;
             grid_set_radarpoints(radar_points)
@@ -292,10 +285,6 @@ function init_config(config) {
 
     if (typeof config.DRAW_BOX_TEXT == "boolean") {
         DRAW_BOX_TEXT = config.DRAW_BOX_TEXT
-    }
-
-    if (typeof config.MIRROR == "boolean") {
-        mirror = config.MIRROR
     }
 
     if (typeof config.SHOW_STATS == "boolean") {
