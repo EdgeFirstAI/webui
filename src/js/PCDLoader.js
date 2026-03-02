@@ -14,7 +14,6 @@ import {
     Group,
     Vector3
 } from './three.js';
-import { preprocessPoints } from './pcd.js';
 import { CdrReader } from './Cdr.js';
 
 class PCDLoader extends Loader {
@@ -193,7 +192,7 @@ class PCDLoader extends Loader {
             // Assume x, y, z fields exist
             positions[i * 3] = pt.x;
             positions[i * 3 + 1] = pt.z !== undefined ? pt.z : 0;
-            positions[i * 3 + 2] = pt.y;
+            positions[i * 3 + 2] = -pt.y;
 
             // Rainbow color by distance
             const x = pt.x;
