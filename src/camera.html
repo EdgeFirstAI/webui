@@ -9,84 +9,233 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Au-Zone demo</title>
+    <title>Au-Zone Camera</title>
     <link href="./css/styles.css" rel="stylesheet">
     <link href="./css/full.css" rel="stylesheet" type="text/css" />
     <script src="./js/tailwind.js"></script>
     <script src="./js/theme.js"></script>
     <script src="./js/neuralMesh.js"></script>
-    <script src="./js/navbar.js"></script>
     <script src="./js/serviceCache.js"></script>
+    <script src="./js/navbar.js"></script>
     <script src="./js/status.js"></script>
     <style>
         body {
             margin: 0;
             display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
         }
 
         main {
             display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100%;
-        }
-
-        #container {
-            margin: 0;
-            text-align: center;
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-            justify-content: center;
+            flex: 1;
             overflow: hidden;
-            background-color: black;
         }
 
-        #test {
+        #camera-viewport {
             width: 100%;
             height: 100%;
-            max-height: 100%;
-            max-width: 100%;
-            margin: auto;
             position: relative;
-            top: 0;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            display: flex;
-            flex-direction: column;
         }
 
-        #player_div {
+        #camera-viewport canvas {
             width: 100%;
             height: 100%;
-            max-height: 100%;
-            max-width: 100%;
-            flex: 1 20 80%;
-            display: flex;
-            align-items: middle;
-            background-color: #a0a0a0;
+            display: block;
         }
 
-        #player {
-            width: 100%;
-            aspect-ratio: 16 / 9;
-            max-height: 100%;
-            max-width: 100%;
-            object-fit: contain;
-            position: relative;
-            bottom: 0px;
-        }
-
-        #boxes {
+        #boxes, #lidar-overlay {
             position: absolute;
-            top: 0px;
-            left: 0px;
+            inset: 0;
+            pointer-events: none;
+        }
+
+        /* --- Overlay Controls Panel --- */
+        .camera-controls {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            z-index: 10;
+            width: 240px;
+            border-radius: 8px;
+            border: 1px solid var(--color-border);
+            background-color: var(--color-bg-surface);
+            box-shadow: 0 4px 12px var(--color-shadow);
+            overflow: hidden;
+            opacity: 0.95;
+        }
+
+        .camera-controls__header {
+            padding: 8px 12px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--color-text-muted);
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        .camera-controls__section {
+            padding: 0;
+            border-bottom: 1px solid var(--color-border);
+            border-left: 3px solid transparent;
+        }
+
+        .camera-controls__section:last-child {
+            border-bottom: none;
+        }
+
+        .camera-controls__section[data-active="true"] {
+            border-left: 3px solid var(--brand-gold);
+        }
+
+        .camera-controls__toggle-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 12px;
+            gap: 8px;
+        }
+
+        .camera-controls__label {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--color-text-primary);
+            white-space: nowrap;
+            user-select: none;
+        }
+
+        /* Toggle switch */
+        .camera-controls__switch {
+            position: relative;
+            display: inline-block;
+            width: 36px;
+            height: 20px;
+            flex-shrink: 0;
+        }
+
+        .camera-controls__switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .camera-controls__switch-slider {
+            position: absolute;
+            cursor: pointer;
+            inset: 0;
+            background-color: var(--color-text-muted);
+            transition: background-color 0.2s ease;
+            border-radius: 20px;
+        }
+
+        .camera-controls__switch-slider::before {
+            content: "";
+            position: absolute;
+            height: 14px;
+            width: 14px;
+            left: 3px;
+            bottom: 3px;
+            background-color: var(--color-bg-surface);
+            transition: transform 0.2s ease;
+            border-radius: 50%;
+        }
+
+        .camera-controls__switch input:checked + .camera-controls__switch-slider {
+            background-color: var(--brand-gold);
+        }
+
+        .camera-controls__switch input:checked + .camera-controls__switch-slider::before {
+            transform: translateX(16px);
+        }
+
+        .camera-controls__switch input:focus-visible + .camera-controls__switch-slider {
+            outline: 2px solid var(--brand-gold);
+            outline-offset: 2px;
+        }
+
+        /* Sub-options */
+        .camera-controls__suboptions {
+            display: none;
+            padding: 0 12px 10px 12px;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .camera-controls__suboptions[data-visible="true"] {
+            display: flex;
+        }
+
+        .camera-controls__suboption-label {
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--color-text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 2px;
+        }
+
+        .camera-controls__select {
             width: 100%;
-            height: 100%;
-            max-height: 100%;
-            max-width: 100%;
-            object-fit: contain;
+            padding: 5px 8px;
+            border-radius: 4px;
+            border: 1px solid var(--color-border);
+            background-color: var(--color-bg-surface);
+            color: var(--color-text-primary);
+            font-size: 13px;
+            font-family: inherit;
+            cursor: pointer;
+        }
+
+        .camera-controls__select:focus {
+            outline: 2px solid var(--brand-gold);
+            outline-offset: 1px;
+        }
+
+        .camera-controls__checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: var(--color-text-secondary, var(--color-text-primary));
+            cursor: pointer;
+            white-space: nowrap;
+            user-select: none;
+        }
+
+        .camera-controls__checkbox-label input[type="checkbox"] {
+            accent-color: var(--brand-gold);
+            cursor: pointer;
+        }
+
+        .camera-controls__cluster-filters {
+            display: none;
+            flex-direction: row;
+            gap: 12px;
+            margin-top: 4px;
+        }
+
+        .camera-controls__cluster-filters[data-visible="true"] {
+            display: flex;
+        }
+
+        /* Camera unavailable overlay */
+        #camera-unavailable {
+            position: absolute;
+            inset: 0;
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+        }
+
+        #camera-unavailable span {
+            font-size: 2rem;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            color: var(--color-text-muted);
         }
     </style>
 </head>
@@ -99,10 +248,107 @@
         });
     </script>
     <main id="container" class="bg-neural">
-        <div id="test">
-            <div id="player_div">
-                <canvas id="player"></canvas>
-                <canvas id="boxes"></canvas>
+        <div id="camera-viewport" data-testid="camera-viewport">
+            <canvas id="player" data-testid="camera-player"></canvas>
+            <canvas id="boxes" data-testid="camera-boxes"></canvas>
+            <canvas id="lidar-overlay" data-testid="camera-lidar-overlay"></canvas>
+
+            <div id="camera-controls" class="camera-controls" data-testid="camera-controls">
+                <div class="camera-controls__header" data-testid="camera-controls-header">
+                    Overlays
+                </div>
+
+                <!-- Segmentation -->
+                <div class="camera-controls__section" data-active="false"
+                     data-testid="camera-overlay-segmentation">
+                    <div class="camera-controls__toggle-row">
+                        <span class="camera-controls__label">Segmentation</span>
+                        <label class="camera-controls__switch">
+                            <input type="checkbox" id="overlay-segmentation"
+                                   data-testid="camera-toggle-segmentation">
+                            <span class="camera-controls__switch-slider"></span>
+                        </label>
+                    </div>
+                    <div class="camera-controls__suboptions" id="segmentation-options"
+                         data-testid="camera-options-segmentation">
+                        <label class="camera-controls__suboption-label"
+                               for="segmentation-source">Source</label>
+                        <select id="segmentation-source" class="camera-controls__select"
+                                data-testid="camera-segmentation-source">
+                            <option value="compressed" selected>Compressed</option>
+                            <option value="uncompressed">Uncompressed</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Bounding Boxes -->
+                <div class="camera-controls__section" data-active="false"
+                     data-testid="camera-overlay-box2d">
+                    <div class="camera-controls__toggle-row">
+                        <span class="camera-controls__label">Bounding Boxes</span>
+                        <label class="camera-controls__switch">
+                            <input type="checkbox" id="overlay-box2d"
+                                   data-testid="camera-toggle-box2d">
+                            <span class="camera-controls__switch-slider"></span>
+                        </label>
+                    </div>
+                    <div class="camera-controls__suboptions" id="box2d-options"
+                         data-testid="camera-options-box2d">
+                        <label class="camera-controls__checkbox-label">
+                            <input type="checkbox" id="box2d-show-labels" checked
+                                   data-testid="camera-box2d-labels">
+                            Show Labels
+                        </label>
+                        <label class="camera-controls__checkbox-label">
+                            <input type="checkbox" id="box2d-show-confidence" checked
+                                   data-testid="camera-box2d-confidence">
+                            Show Confidence
+                        </label>
+                    </div>
+                </div>
+
+                <!-- LiDAR Points -->
+                <div class="camera-controls__section" data-active="false"
+                     data-testid="camera-overlay-lidar">
+                    <div class="camera-controls__toggle-row">
+                        <span class="camera-controls__label">LiDAR Points</span>
+                        <label class="camera-controls__switch">
+                            <input type="checkbox" id="overlay-lidar"
+                                   data-testid="camera-toggle-lidar">
+                            <span class="camera-controls__switch-slider"></span>
+                        </label>
+                    </div>
+                    <div class="camera-controls__suboptions" id="lidar-options"
+                         data-testid="camera-options-lidar">
+                        <label class="camera-controls__suboption-label"
+                               for="lidar-color-mode">Color</label>
+                        <select id="lidar-color-mode" class="camera-controls__select"
+                                data-testid="camera-lidar-color-mode">
+                            <option value="fixed">Fixed</option>
+                            <option value="distance" selected>Distance</option>
+                            <option value="cluster">Cluster</option>
+                            <option value="vision_class">Vision Class</option>
+                        </select>
+                        <div class="camera-controls__cluster-filters"
+                             id="lidar-cluster-filters"
+                             data-testid="camera-lidar-cluster-filters">
+                            <label class="camera-controls__checkbox-label">
+                                <input type="checkbox" id="lidar-show-noise" checked
+                                       data-testid="camera-lidar-noise">
+                                Noise
+                            </label>
+                            <label class="camera-controls__checkbox-label">
+                                <input type="checkbox" id="lidar-show-ground" checked
+                                       data-testid="camera-lidar-ground">
+                                Ground
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="camera-unavailable" data-testid="camera-unavailable">
+                <span>Camera Unavailable</span>
             </div>
         </div>
     </main>
