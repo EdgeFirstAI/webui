@@ -158,6 +158,9 @@ Accept the self-signed certificate when prompted.
 4. Verify point cloud renders with colour mapping
 5. Test colour mode selector: Fixed, Distance, Cluster, Vision Class
 6. Check fusion warning appears when Vision Class or Cluster selected but service unavailable
+7. Test cluster filter toggles: uncheck Noise to hide noise points, uncheck Ground to hide ground points
+8. Verify toggles only appear in Cluster colour mode
+9. Verify toggle state is preserved when switching modes
 
 **Expected behavior:**
 - LiDAR card only appears on home page when `lidarpub` is enabled
@@ -308,7 +311,9 @@ data-testid="<page>-<element>-<name>"
 
 **LiDAR Page (`lidar.html`):**
 - `lidar-viewport` - 3D viewport container
+- `lidar-controls` - Controls container (dropdown + cluster filters)
 - `lidar-color-mode` - Colour mode selector (Fixed, Distance, Cluster, Vision Class)
+- `lidar-cluster-filters` - Noise/Ground filter checkboxes (visible in Cluster mode)
 - `lidar-fusion-warning` - Warning banner when fusion data unavailable
 - `lidar-unavailable` - Overlay when LiDAR data is not being received
 
