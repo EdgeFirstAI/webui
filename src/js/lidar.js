@@ -29,6 +29,9 @@ let socketUrlCluster = CLUSTER_TOPIC
 let socketUrlFusion = FUSION_TOPIC
 let fusionWarningTimer = null
 let cachedIsDark = true   // cached theme state — updated on themechange
+let showNoise = true
+let showGround = true
+let lastPositions = null  // Float32Array of original XYZ positions
 
 // ---------------------------------------------------------------------------
 // DOM references
@@ -37,6 +40,9 @@ const viewport = document.getElementById('lidar-viewport')
 const colorModeSelect = document.getElementById('color-mode')
 const fusionWarning = document.getElementById('fusion-warning')
 const lidarUnavailable = document.getElementById('lidar-unavailable')
+const clusterFilters = document.getElementById('cluster-filters')
+const showNoiseCheckbox = document.getElementById('show-noise')
+const showGroundCheckbox = document.getElementById('show-ground')
 let unavailableTimer = null
 
 // ---------------------------------------------------------------------------
@@ -150,7 +156,7 @@ function distanceColor(t) {
  * Returns { r, g, b } each in [0, 1].
  */
 function clusterColor(id) {
-    if (id <= 0) return cachedIsDark ? { r: 0.3, g: 0.3, b: 0.35 } : { r: 0.6, g: 0.6, b: 0.65 }
+    if (id < 0) return cachedIsDark ? { r: 0.3, g: 0.3, b: 0.35 } : { r: 0.6, g: 0.6, b: 0.65 }
 
     // Golden angle gives good hue separation between adjacent IDs
     const hue = (id * 137.508) % 360
@@ -282,6 +288,36 @@ function applyColorMode(group) {
 }
 
 /**
+ * Hide noise/ground points by setting their positions to NaN (GPU discards them).
+ * Restores original positions first so toggling back on works correctly.
+ */
+function filterClusterPoints(group) {
+    if (currentColorMode !== 'cluster') return
+    if (!lastPositions) return
+
+    group.traverse((child) => {
+        if (!(child instanceof THREE.Points)) return
+        const posAttr = child.geometry.attributes.position
+        if (!posAttr) return
+
+        // Restore original positions first (undo previous NaN filtering)
+        posAttr.array.set(lastPositions)
+
+        const count = posAttr.count
+        const hasData = lastParsedPoints.length > 0
+
+        for (let i = 0; i < count; i++) {
+            const id = (hasData && i < lastParsedPoints.length)
+                ? lastParsedPoints[i] : 0
+            if ((id === 0 && !showNoise) || (id === 1 && !showGround)) {
+                posAttr.setXYZ(i, NaN, NaN, NaN)
+            }
+        }
+        posAttr.needsUpdate = true
+    })
+}
+
+/**
  * Show the fusion warning banner for 5 seconds.
  */
 function showFusionWarning() {
@@ -296,6 +332,7 @@ function showFusionWarning() {
 // Colour mode selector
 colorModeSelect.addEventListener('change', () => {
     currentColorMode = colorModeSelect.value
+    updateClusterFiltersVisibility()
     switchTopic()
 
     // When switching to a mode that needs a different topic, wait for the first
@@ -303,6 +340,26 @@ colorModeSelect.addEventListener('change', () => {
     const needsNewTopic = currentColorMode === 'vision_class' || currentColorMode === 'cluster'
     if (!needsNewTopic && pointsGroup) {
         applyColorMode(pointsGroup)
+    }
+})
+
+function updateClusterFiltersVisibility() {
+    clusterFilters.style.display = currentColorMode === 'cluster' ? 'flex' : 'none'
+}
+
+showNoiseCheckbox.addEventListener('change', () => {
+    showNoise = showNoiseCheckbox.checked
+    if (pointsGroup) {
+        applyColorMode(pointsGroup)
+        filterClusterPoints(pointsGroup)
+    }
+})
+
+showGroundCheckbox.addEventListener('change', () => {
+    showGround = showGroundCheckbox.checked
+    if (pointsGroup) {
+        applyColorMode(pointsGroup)
+        filterClusterPoints(pointsGroup)
     }
 })
 
@@ -387,6 +444,15 @@ function updatePointCloud(arrayBuffer) {
 
         // Apply colour
         applyColorMode(group)
+
+        // Save original positions for cluster filtering (restore when toggling)
+        group.traverse((child) => {
+            if (child instanceof THREE.Points) {
+                const posAttr = child.geometry.attributes.position
+                if (posAttr) lastPositions = new Float32Array(posAttr.array)
+            }
+        })
+        filterClusterPoints(group)
 
         // Set point material properties — larger in light mode for visibility
         const ptSize = cachedIsDark ? 3 : 4
