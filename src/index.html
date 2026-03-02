@@ -263,7 +263,8 @@
 
                 populateCardContainer(deviceValue);
             } catch (error) {
-                console.error('Error fetching config details:', error);
+                console.warn('Could not load config — using defaults:', error);
+                populateCardContainer();
             }
         }
 
@@ -271,9 +272,9 @@
         let currentDeviceType = null;
 
         function populateCardContainer(deviceType) {
-            currentDeviceType = deviceType;
+            currentDeviceType = deviceType || 'generic';
             const cardContainer = document.getElementById('card-container');
-            const isRaivin = deviceType.toLowerCase().includes('raivin');
+            const isRaivin = currentDeviceType.toLowerCase().includes('raivin');
 
             // Clear existing cards
             cardContainer.replaceChildren();
@@ -314,23 +315,18 @@
                 return entry?.enabled === 'enabled';
             }
 
-            // Common cards for all devices
-            cardContainer.appendChild(createCard('/gps', 'GPS', ['Explore Location']));
-            cardContainer.appendChild(createCard('/imu', 'IMU', ['IMU Visualization']));
-
-            // LiDAR card shown when lidarpub is enabled (configured)
+            // Top row: sensor views
+            cardContainer.appendChild(createCard('/camera', 'Camera', ['Camera View']));
             if (isServiceEnabled('lidarpub')) {
                 cardContainer.appendChild(createCard('/lidar', 'LiDAR', ['3D Point Cloud']));
             }
-
             if (isRaivin) {
-                // Raivin-only cards
-                cardContainer.appendChild(createCard('/grid', 'Occupancy Grid', ['Occupancy Grid', '+', 'Radar Point Cloud']));
-                cardContainer.appendChild(createCard('/combined', 'Segmentation View', ['Segmentation', '+', 'Occupancy Grid']));
-            } else {
-                // Maivin-only cards
-                cardContainer.appendChild(createCard('/segmentation', 'Segmentation', ['Segmentation Mask']));
+                cardContainer.appendChild(createCard('/grid', 'Radar', ['Occupancy Grid', '+', 'Radar Point Cloud']));
             }
+
+            // Bottom row: auxiliary sensors
+            cardContainer.appendChild(createCard('/imu', 'IMU', ['IMU Visualization']));
+            cardContainer.appendChild(createCard('/gps', 'GPS', ['Explore Location']));
         }
 
         window.addEventListener('load', async () => {
