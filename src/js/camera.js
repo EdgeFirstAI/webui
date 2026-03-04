@@ -242,11 +242,11 @@ function renderBoxes() {
         const w = box.width * width
         const h = box.height * height
 
-        // Determine color from track ID or default green
+        // Determine color from track ID (matching fusion clusterColor) or default green
         let color
         if (box.track && box.track.id) {
-            const rgb = trackIdToRGB(box.track.id)
-            color = `rgb(${rgb.r},${rgb.g},${rgb.b})`
+            const c = clusterColor(trackIdToHash(box.track.id))
+            color = colorToCSS(c)
         } else {
             color = '#00ff66'
         }
@@ -288,13 +288,15 @@ let offscreenCanvas = null
 let offscreenCtx = null
 
 /**
- * Convert a UUID/track-ID string to RGB bytes {r, g, b} (0–255).
- * Same algorithm as uuid_to_color() in boxes.js but returns raw bytes.
+ * Convert a UUID/track-ID string to a uint32 hash.
+ * Extracts the first 8 hex nibbles (skipping dashes/dots) so the result
+ * matches the fusion service's track_id field, allowing clusterColor() to
+ * produce the same colour for a given track in both LiDAR and mask overlays.
  */
-function trackIdToRGB(id) {
+function trackIdToHash(id) {
     const MINUS = 0x2D, DOT = 0x2E, a = 0x61, A = 0x41, ZERO = 0x30
     let hexcode = 0
-    let bytes = 0
+    let nibbles = 0
     for (const char of id) {
         const c = char.charCodeAt(0)
         if (c === MINUS || c === DOT) continue
@@ -303,14 +305,10 @@ function trackIdToRGB(id) {
         else if (c >= A) val = c - A + 10
         else if (c >= ZERO) val = c - ZERO
         hexcode = (hexcode << 4) + val
-        bytes++
-        if (bytes >= 8) break
+        nibbles++
+        if (nibbles >= 8) break
     }
-    return {
-        r: (hexcode >> 24) & 0xff,
-        g: (hexcode >> 16) & 0xff,
-        b: (hexcode >> 8) & 0xff,
-    }
+    return hexcode >>> 0
 }
 
 function startInstanceMasks() {
@@ -326,7 +324,7 @@ function stopInstanceMasks() {
 // interior pixels (sigmoid=255) reach this value while edge pixels fade
 // smoothly to transparent.  Capping below 255 ensures overlapping masks
 // blend via source-over rather than one fully replacing the other.
-const MASK_MAX_ALPHA = 153 // ~60% opacity
+const MASK_MAX_ALPHA = 191 // ~75% opacity
 
 function renderInstanceMasks() {
     if (!modelData) return
@@ -355,19 +353,23 @@ function renderInstanceMasks() {
         const padW = mask.width + 2
         const padH = mask.height + 2
 
-        // Ensure offscreen canvas is large enough for padded size
-        if (!offscreenCanvas || offscreenCanvas.width < padW || offscreenCanvas.height < padH) {
+        // Ensure offscreen canvas is exactly the padded size — using !== rather
+        // than < prevents stale pixels from a previous larger mask bleeding into
+        // the bicubic interpolation kernel at the right/bottom edges of drawImage.
+        if (!offscreenCanvas || offscreenCanvas.width !== padW || offscreenCanvas.height !== padH) {
             offscreenCanvas = document.createElement('canvas')
             offscreenCanvas.width = padW
             offscreenCanvas.height = padH
             offscreenCtx = offscreenCanvas.getContext('2d')
         }
 
-        // Determine color: track-based if available, class-based fallback
+        // Determine color: use clusterColor(hash) to match fusion track_id colours
         let cr, cg, cb
         if (box.track && box.track.id) {
-            const rgb = trackIdToRGB(box.track.id)
-            cr = rgb.r; cg = rgb.g; cb = rgb.b
+            const c = clusterColor(trackIdToHash(box.track.id))
+            cr = Math.round(c.r * 255)
+            cg = Math.round(c.g * 255)
+            cb = Math.round(c.b * 255)
         } else {
             const cls = Math.max(1, Math.min(mask_colors.length - 1, 1))
             const mc = mask_colors[cls]
@@ -380,8 +382,18 @@ function renderInstanceMasks() {
         // Alpha is sigmoid scaled to MASK_MAX_ALPHA — smooth gradient from
         // the proto-resolution mask provides anti-aliased edges when
         // upscaled, and the capped alpha lets overlapping masks blend.
+        //
+        // Pre-fill every pixel with the mask RGB at alpha=0 so that
+        // bilinear upscaling blends colour-to-same-colour at the edges,
+        // avoiding dark fringing from interpolation with black (0,0,0,0).
         const imgData = offscreenCtx.createImageData(padW, padH)
         const pixels = imgData.data
+        for (let j = 0; j < pixels.length; j += 4) {
+            pixels[j] = cr
+            pixels[j + 1] = cg
+            pixels[j + 2] = cb
+            // alpha stays 0
+        }
         const maskBytes = mask.mask
         for (let row = 0; row < mask.height; row++) {
             for (let col = 0; col < mask.width; col++) {

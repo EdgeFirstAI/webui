@@ -255,24 +255,19 @@ function applyColorMode(group) {
             }
         } else if (currentColorMode === 'vision_class') {
             const hasData = lastParsedPoints.length > 0
+            if (!hasData) showFusionWarning()
 
-            if (!hasData) {
-                showFusionWarning()
-            }
-
-            // Restore original positions before NaN-hiding
-            if (lastPositions) posAttr.array.set(lastPositions)
-
+            const gr = cachedIsDark ? 0.35 : 0.7
             const generic = getFixedColor()
             for (let i = 0; i < count; i++) {
                 const cls = (hasData && i < lastParsedPoints.length)
                     ? lastParsedPoints[i] : 0
 
                 if (cls <= 0) {
-                    posAttr.setXYZ(i, NaN, NaN, NaN)
-                    continue
-                }
-                if (cls < mask_colors.length) {
+                    colors[i * 3] = gr
+                    colors[i * 3 + 1] = gr
+                    colors[i * 3 + 2] = gr
+                } else if (cls < mask_colors.length) {
                     const mc = mask_colors[cls]
                     colors[i * 3] = mc.r
                     colors[i * 3 + 1] = mc.g
@@ -283,45 +278,44 @@ function applyColorMode(group) {
                     colors[i * 3 + 2] = generic.b
                 }
             }
-            posAttr.needsUpdate = true
         } else if (currentColorMode === 'track_id') {
             const hasData = lastParsedPoints.length > 0
             if (!hasData) showFusionWarning()
 
-            if (lastPositions) posAttr.array.set(lastPositions)
-
+            const gr = cachedIsDark ? 0.35 : 0.7
             for (let i = 0; i < count; i++) {
                 const tid = (hasData && i < lastParsedPoints.length)
                     ? lastParsedPoints[i] : 0
                 if (tid === 0) {
-                    posAttr.setXYZ(i, NaN, NaN, NaN)
-                    continue
+                    colors[i * 3] = gr
+                    colors[i * 3 + 1] = gr
+                    colors[i * 3 + 2] = gr
+                } else {
+                    const c = clusterColor(tid)
+                    colors[i * 3] = c.r
+                    colors[i * 3 + 1] = c.g
+                    colors[i * 3 + 2] = c.b
                 }
-                const c = clusterColor(tid)
-                colors[i * 3] = c.r
-                colors[i * 3 + 1] = c.g
-                colors[i * 3 + 2] = c.b
             }
-            posAttr.needsUpdate = true
         } else if (currentColorMode === 'instance_id') {
             const hasData = lastParsedPoints.length > 0
             if (!hasData) showFusionWarning()
 
-            if (lastPositions) posAttr.array.set(lastPositions)
-
+            const gr = cachedIsDark ? 0.35 : 0.7
             for (let i = 0; i < count; i++) {
                 const iid = (hasData && i < lastParsedPoints.length)
                     ? lastParsedPoints[i] : 0
                 if (iid === 0) {
-                    posAttr.setXYZ(i, NaN, NaN, NaN)
-                    continue
+                    colors[i * 3] = gr
+                    colors[i * 3 + 1] = gr
+                    colors[i * 3 + 2] = gr
+                } else {
+                    const c = clusterColor(iid)
+                    colors[i * 3] = c.r
+                    colors[i * 3 + 1] = c.g
+                    colors[i * 3 + 2] = c.b
                 }
-                const c = clusterColor(iid)
-                colors[i * 3] = c.r
-                colors[i * 3 + 1] = c.g
-                colors[i * 3 + 2] = c.b
             }
-            posAttr.needsUpdate = true
         }
 
         child.geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3))
@@ -489,16 +483,22 @@ function updatePointCloud(arrayBuffer) {
         // Orient the cloud
         group.rotation.set(0, Math.PI / 2, 0)
 
-        // Apply colour
-        applyColorMode(group)
-
-        // Save original positions for cluster filtering (restore when toggling)
+        // Save original positions before applyColorMode (which may NaN-hide
+        // points) — must happen first so the array sizes always match the
+        // current frame, even when the topic changes and point count differs.
         group.traverse((child) => {
             if (child instanceof THREE.Points) {
                 const posAttr = child.geometry.attributes.position
                 if (posAttr) lastPositions = new Float32Array(posAttr.array)
+                // Pre-compute bounding sphere from clean positions so that
+                // NaN-hidden points don't trigger a recomputation later —
+                // THREE.js skips computeBoundingSphere when it's already set.
+                child.geometry.computeBoundingSphere()
             }
         })
+
+        // Apply colour
+        applyColorMode(group)
         filterClusterPoints(group)
 
         // Set point material properties — larger in light mode for visibility
@@ -510,6 +510,9 @@ function updatePointCloud(arrayBuffer) {
                 child.material.transparent = false
                 child.material.blending = THREE.NormalBlending
                 child.material.needsUpdate = true
+                // NaN-hidden points break computeBoundingSphere — skip frustum
+                // culling since the point cloud is always in view.
+                child.frustumCulled = false
             }
         })
 
