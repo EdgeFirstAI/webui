@@ -6,7 +6,7 @@ import ProjectedMask from './ProjectedMask.js'
 import segstream, { get_shape } from './mask.js'
 import h264Stream from './stream.js'
 import SmartVideoManager from './SmartVideoManager.js'
-import boxesstream from './boxes.js'
+import modelstream from './model.js'
 import { mask_colors } from './utils.js'
 import { CdrReader } from './Cdr.js'
 import { parseNumbersInObject } from './parseNumbersInObject.js'
@@ -20,10 +20,10 @@ const LIDAR_DOT_RADIUS = 3
 // ---------------------------------------------------------------------------
 let socketUrlH264 = '/rt/camera/h264/'
 let socketUrlMask = '/rt/model/mask/'
-let socketUrlMaskCompressed = '/rt/model/mask_compressed/'
-let socketUrlDetect = '/rt/model/boxes2d/'
 let socketUrlLidar = '/rt/lidar/points/'
 let socketUrlLidarCluster = '/rt/lidar/clusters/'
+let socketUrlFusion = '/rt/fusion/lidar/'
+let socketUrlModel = '/rt/model/output/'
 let socketUrlTfStatic = '/rt/tf_static/'
 let socketUrlCameraInfo = '/rt/camera/info/'
 
@@ -35,6 +35,7 @@ let texture_camera = null
 // Overlay enabled state
 let segEnabled = false
 let boxEnabled = false
+let instanceMaskEnabled = false
 let lidarEnabled = false
 let lidarColorMode = 'distance'
 let showLabels = true
@@ -44,7 +45,8 @@ let lidarShowGround = true
 
 // Overlay scene objects (for cleanup)
 let segMesh = null
-let boxData = null
+let modelData = null
+let modelSocket = null
 let tfStaticSocket = null
 let cameraInfoSocket = null
 let lidarTransform = null
@@ -63,6 +65,8 @@ let lidarToCameraMatrix = null
 const viewport = document.getElementById('camera-viewport')
 const playerCanvas = document.getElementById('player')
 const boxCanvas = document.getElementById('boxes')
+const maskCanvas = document.getElementById('masks')
+const maskCtx = maskCanvas.getContext('2d')
 const lidarCanvas = document.getElementById('lidar-overlay')
 const lidarCtx = lidarCanvas.getContext('2d')
 const cameraUnavailable = document.getElementById('camera-unavailable')
@@ -70,14 +74,15 @@ const cameraUnavailable = document.getElementById('camera-unavailable')
 // Overlay controls
 const overlaySegToggle = document.getElementById('overlay-segmentation')
 const overlaySegSection = overlaySegToggle.closest('.camera-controls__section')
-const segOptions = document.getElementById('segmentation-options')
-const segSourceSelect = document.getElementById('segmentation-source')
 
 const overlayBoxToggle = document.getElementById('overlay-box2d')
 const overlayBoxSection = overlayBoxToggle.closest('.camera-controls__section')
 const boxOptions = document.getElementById('box2d-options')
 const boxLabelsCheckbox = document.getElementById('box2d-show-labels')
 const boxConfidenceCheckbox = document.getElementById('box2d-show-confidence')
+
+const overlayMaskToggle = document.getElementById('overlay-instance-masks')
+const overlayMaskSection = overlayMaskToggle.closest('.camera-controls__section')
 
 const overlayLidarToggle = document.getElementById('overlay-lidar')
 const overlayLidarSection = overlayLidarToggle.closest('.camera-controls__section')
@@ -104,9 +109,11 @@ const camera = new THREE.PerspectiveCamera(46.4, width / height, 0.1, 1000)
 camera.rotation.z = PI
 camera.rotation.x = PI
 
-// Box + LiDAR overlay canvas sizing
+// Overlay canvas sizing
 boxCanvas.width = width
 boxCanvas.height = height
+maskCanvas.width = width
+maskCanvas.height = height
 lidarCanvas.width = width
 lidarCanvas.height = height
 
@@ -116,9 +123,10 @@ lidarCanvas.height = height
 function initConfig(config) {
     if (config.H264_TOPIC) socketUrlH264 = config.H264_TOPIC
     if (config.MASK_TOPIC) socketUrlMask = config.MASK_TOPIC
-    if (config.DETECT_TOPIC) socketUrlDetect = config.DETECT_TOPIC
+    if (config.MODEL_TOPIC) socketUrlModel = config.MODEL_TOPIC
     if (config.LIDAR_TOPIC) socketUrlLidar = config.LIDAR_TOPIC
     if (config.CLUSTER_TOPIC) socketUrlLidarCluster = config.CLUSTER_TOPIC
+    if (config.FUSION_TOPIC) socketUrlFusion = config.FUSION_TOPIC
     if (config.CAMERA_INFO_TOPIC) socketUrlCameraInfo = config.CAMERA_INFO_TOPIC
 }
 
@@ -156,14 +164,11 @@ function initVideoStream() {
 // Segmentation Overlay
 // ---------------------------------------------------------------------------
 function startSegmentation() {
-    const topic = segSourceSelect.value === 'compressed'
-        ? socketUrlMaskCompressed : socketUrlMask
-
     const quad = new THREE.PlaneGeometry(width / height * 500, 500)
 
-    get_shape(topic, (h, w, length, mask) => {
+    get_shape(socketUrlMask, (h, w, length, mask) => {
         const classes = Math.round(mask.length / h / w)
-        segstream(topic, h, w, classes, () => {}).then((texture_mask) => {
+        segstream(socketUrlMask, h, w, classes, () => {}).then((texture_mask) => {
             const material = new ProjectedMask({
                 camera: camera,
                 texture: texture_mask,
@@ -190,23 +195,222 @@ function stopSegmentation() {
 }
 
 // ---------------------------------------------------------------------------
-// Bounding Box Overlay
+// Shared Model WebSocket (used by Bounding Boxes + Instance Masks)
 // ---------------------------------------------------------------------------
-function startBoxes() {
-    const drawBoxSettings = {
-        canvas: boxCanvas,
-        drawBox: true,
-        drawBoxText: showLabels,
-    }
-    boxesstream(socketUrlDetect, drawBoxSettings).then((b) => {
-        boxData = b
+function ensureModelSocket() {
+    if (modelSocket) return
+    modelSocket = modelstream(socketUrlModel, (msg) => {
+        modelData = msg
     })
 }
 
+function maybeCloseModelSocket() {
+    if (boxEnabled || instanceMaskEnabled) return
+    if (modelSocket) {
+        modelSocket.onclose = null
+        modelSocket.close()
+        modelSocket = null
+    }
+    modelData = null
+}
+
+// ---------------------------------------------------------------------------
+// Bounding Box Overlay
+// ---------------------------------------------------------------------------
+const boxCtx = boxCanvas.getContext('2d')
+
+function startBoxes() {
+    ensureModelSocket()
+}
+
 function stopBoxes() {
-    const ctx = boxCanvas.getContext('2d')
-    if (ctx) ctx.clearRect(0, 0, boxCanvas.width, boxCanvas.height)
-    boxData = null
+    boxCtx.clearRect(0, 0, boxCanvas.width, boxCanvas.height)
+    maybeCloseModelSocket()
+}
+
+function renderBoxes() {
+    if (!modelData) return
+
+    const { boxes } = modelData
+    if (!boxes || boxes.length === 0) return
+
+    boxCtx.clearRect(0, 0, width, height)
+
+    for (const box of boxes) {
+        const x = (box.center_x - box.width / 2) * width
+        const y = (box.center_y - box.height / 2) * height
+        const w = box.width * width
+        const h = box.height * height
+
+        // Determine color from track ID or default green
+        let color
+        if (box.track && box.track.id) {
+            const rgb = trackIdToRGB(box.track.id)
+            color = `rgb(${rgb.r},${rgb.g},${rgb.b})`
+        } else {
+            color = '#00ff66'
+        }
+
+        // Draw bounding box
+        boxCtx.strokeStyle = color
+        boxCtx.lineWidth = 2
+        boxCtx.strokeRect(x, y, w, h)
+
+        // Build label text
+        const parts = []
+        if (showLabels && box.label) parts.push(box.label)
+        if (showConfidence && box.score > 0) parts.push(`${Math.round(box.score * 100)}%`)
+        const label = parts.join(' ')
+
+        if (label) {
+            boxCtx.font = '14px sans-serif'
+            const textMetrics = boxCtx.measureText(label)
+            const textH = 18
+            const textW = textMetrics.width + 8
+
+            // Label background
+            boxCtx.fillStyle = color
+            boxCtx.fillRect(x, y - textH, textW, textH)
+
+            // Label text
+            boxCtx.fillStyle = '#000'
+            boxCtx.fillText(label, x + 4, y - 4)
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Instance Mask Overlay
+// ---------------------------------------------------------------------------
+
+// Reusable offscreen canvas for mask rendering
+let offscreenCanvas = null
+let offscreenCtx = null
+
+/**
+ * Convert a UUID/track-ID string to RGB bytes {r, g, b} (0–255).
+ * Same algorithm as uuid_to_color() in boxes.js but returns raw bytes.
+ */
+function trackIdToRGB(id) {
+    const MINUS = 0x2D, DOT = 0x2E, a = 0x61, A = 0x41, ZERO = 0x30
+    let hexcode = 0
+    let bytes = 0
+    for (const char of id) {
+        const c = char.charCodeAt(0)
+        if (c === MINUS || c === DOT) continue
+        let val = 0
+        if (c >= a) val = c - a + 10
+        else if (c >= A) val = c - A + 10
+        else if (c >= ZERO) val = c - ZERO
+        hexcode = (hexcode << 4) + val
+        bytes++
+        if (bytes >= 8) break
+    }
+    return {
+        r: (hexcode >> 24) & 0xff,
+        g: (hexcode >> 16) & 0xff,
+        b: (hexcode >> 8) & 0xff,
+    }
+}
+
+function startInstanceMasks() {
+    ensureModelSocket()
+}
+
+function stopInstanceMasks() {
+    maskCtx.clearRect(0, 0, maskCanvas.width, maskCanvas.height)
+    maybeCloseModelSocket()
+}
+
+// Maximum overlay opacity (0–255).  Sigmoid is scaled proportionally so
+// interior pixels (sigmoid=255) reach this value while edge pixels fade
+// smoothly to transparent.  Capping below 255 ensures overlapping masks
+// blend via source-over rather than one fully replacing the other.
+const MASK_MAX_ALPHA = 153 // ~60% opacity
+
+function renderInstanceMasks() {
+    if (!modelData) return
+
+    const { boxes, masks } = modelData
+    if (!boxes || !masks) return
+
+    maskCtx.clearRect(0, 0, width, height)
+    maskCtx.imageSmoothingEnabled = true
+    maskCtx.imageSmoothingQuality = 'high'
+
+    const count = Math.min(boxes.length, masks.length)
+
+    for (let i = 0; i < count; i++) {
+        const mask = masks[i]
+        if (!mask.boxed) continue
+        if (mask.width === 0 || mask.height === 0) continue
+        if (!mask.mask || mask.mask.length === 0) continue
+
+        const box = boxes[i]
+
+        // Pad with 1px transparent border so bilinear upscaling blends
+        // to transparent at the crop boundary instead of clamping the
+        // edge texels (the masks are at low proto resolution and may
+        // have non-zero sigmoid right up to the crop edge).
+        const padW = mask.width + 2
+        const padH = mask.height + 2
+
+        // Ensure offscreen canvas is large enough for padded size
+        if (!offscreenCanvas || offscreenCanvas.width < padW || offscreenCanvas.height < padH) {
+            offscreenCanvas = document.createElement('canvas')
+            offscreenCanvas.width = padW
+            offscreenCanvas.height = padH
+            offscreenCtx = offscreenCanvas.getContext('2d')
+        }
+
+        // Determine color: track-based if available, class-based fallback
+        let cr, cg, cb
+        if (box.track && box.track.id) {
+            const rgb = trackIdToRGB(box.track.id)
+            cr = rgb.r; cg = rgb.g; cb = rgb.b
+        } else {
+            const cls = Math.max(1, Math.min(mask_colors.length - 1, 1))
+            const mc = mask_colors[cls]
+            cr = Math.round(mc.r * 255)
+            cg = Math.round(mc.g * 255)
+            cb = Math.round(mc.b * 255)
+        }
+
+        // Build RGBA ImageData with 1px transparent padding on all sides.
+        // Alpha is sigmoid scaled to MASK_MAX_ALPHA — smooth gradient from
+        // the proto-resolution mask provides anti-aliased edges when
+        // upscaled, and the capped alpha lets overlapping masks blend.
+        const imgData = offscreenCtx.createImageData(padW, padH)
+        const pixels = imgData.data
+        const maskBytes = mask.mask
+        for (let row = 0; row < mask.height; row++) {
+            for (let col = 0; col < mask.width; col++) {
+                const srcIdx = row * mask.width + col
+                const sigmoid = srcIdx < maskBytes.length ? maskBytes[srcIdx] : 0
+                if (sigmoid === 0) continue
+                const dstIdx = ((row + 1) * padW + (col + 1)) * 4
+                pixels[dstIdx] = cr
+                pixels[dstIdx + 1] = cg
+                pixels[dstIdx + 2] = cb
+                pixels[dstIdx + 3] = (sigmoid * MASK_MAX_ALPHA + 127) >> 8
+            }
+        }
+        offscreenCtx.putImageData(imgData, 0, 0)
+
+        // Destination rect expanded by 1 mask-pixel on each side to
+        // account for the padding so mask content stays aligned.
+        const pixelW = box.width / mask.width
+        const pixelH = box.height / mask.height
+        const destX = (box.center_x - box.width / 2 - pixelW) * width
+        const destY = (box.center_y - box.height / 2 - pixelH) * height
+        const destW = (box.width + 2 * pixelW) * width
+        const destH = (box.height + 2 * pixelH) * height
+
+        // Draw with bilinear upscaling — the padding provides transparent
+        // neighbors for smooth interpolation at the crop boundary.
+        maskCtx.drawImage(offscreenCanvas, 0, 0, padW, padH,
+            destX, destY, destW, destH)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -445,9 +649,10 @@ function renderLidarOverlay() {
     const { fx, fy, cx, cy } = cameraIntrinsics
     const m = lidarToCameraMatrix
 
-    // Use cluster data when available and mode needs it, otherwise raw points
-    const useCluster = (lidarColorMode === 'cluster' || lidarColorMode === 'vision_class') && lidarClusterPoints
-    const rawData = useCluster ? lidarClusterPoints : lidarPoints
+    // Use enriched data when available and mode needs it, otherwise raw points
+    const needsEnriched = ['cluster', 'vision_class', 'track_id', 'instance_id'].includes(lidarColorMode)
+    const useEnriched = needsEnriched && lidarEnrichedPoints
+    const rawData = useEnriched ? lidarEnrichedPoints : lidarPoints
 
     let parsed
     try {
@@ -463,6 +668,8 @@ function renderLidarOverlay() {
 
     const hasClusterId = fieldMap.cluster_id
     const hasVisionClass = fieldMap.vision_class
+    const hasTrackId = fieldMap.track_id
+    const hasInstanceId = fieldMap.instance_id
 
     if (!lidarLoggedSample) {
         console.log(`LiDAR cloud: ${totalPoints} pts, fields: [${Object.keys(fieldMap).join(', ')}]`)
@@ -485,8 +692,8 @@ function renderLidarOverlay() {
         // Skip invalid points
         if (!isFinite(lx) || !isFinite(ly) || !isFinite(lz)) continue
 
-        // Filter noise/ground by cluster_id when in cluster mode
-        if (hasClusterId && (lidarColorMode === 'cluster' || lidarColorMode === 'vision_class')) {
+        // Filter noise/ground by cluster_id when using enriched data
+        if (hasClusterId && needsEnriched) {
             const cid = readField(i, hasClusterId)
             if (cid === 0 && !lidarShowNoise) continue
             if (cid === 1 && !lidarShowGround) continue
@@ -523,9 +730,18 @@ function renderLidarOverlay() {
             color = clusterColor(readField(i, hasClusterId))
         } else if (lidarColorMode === 'vision_class' && hasVisionClass) {
             const cls = readField(i, hasVisionClass)
-            color = cls > 0 && cls < mask_colors.length
-                ? { r: mask_colors[cls][0] / 255, g: mask_colors[cls][1] / 255, b: mask_colors[cls][2] / 255 }
+            if (cls <= 0) continue
+            color = cls < mask_colors.length
+                ? { r: mask_colors[cls].r, g: mask_colors[cls].g, b: mask_colors[cls].b }
                 : { r: 0.5, g: 0.5, b: 0.5 }
+        } else if (lidarColorMode === 'track_id' && hasTrackId) {
+            const tid = readField(i, hasTrackId)
+            if (tid === 0) continue
+            color = clusterColor(tid)
+        } else if (lidarColorMode === 'instance_id' && hasInstanceId) {
+            const iid = readField(i, hasInstanceId)
+            if (iid === 0) continue
+            color = clusterColor(iid)
         } else {
             // distance mode or fallback when cluster/vision_class field unavailable
             const dist = Math.sqrt(lx * lx + ly * ly + lz * lz)
@@ -551,8 +767,8 @@ function renderLidarOverlay() {
 // LiDAR Overlay — WebSocket Management
 // ---------------------------------------------------------------------------
 let lidarPointsSocket = null   // always subscribed to /lidar/points
-let lidarClusterSocket = null  // subscribed to /lidar/clusters when needed
-let lidarClusterPoints = null  // latest cluster data (or null)
+let lidarEnrichedSocket = null  // subscribed to /lidar/clusters when needed
+let lidarEnrichedPoints = null  // latest cluster data (or null)
 
 function startLidar() {
     // Subscribe to tf_static for camera-LiDAR transform
@@ -589,24 +805,26 @@ function startLidar() {
     }
 
     // Subscribe to cluster topic if needed
-    connectClusterSocket()
+    connectEnrichedSocket()
 }
 
-function connectClusterSocket() {
-    if (lidarClusterSocket) {
-        lidarClusterSocket.onclose = null
-        lidarClusterSocket.close()
-        lidarClusterSocket = null
+function connectEnrichedSocket() {
+    if (lidarEnrichedSocket) {
+        lidarEnrichedSocket.onclose = null
+        lidarEnrichedSocket.close()
+        lidarEnrichedSocket = null
     }
-    lidarClusterPoints = null
+    lidarEnrichedPoints = null
 
-    if (lidarColorMode === 'cluster' || lidarColorMode === 'vision_class') {
-        lidarClusterSocket = new WebSocket(socketUrlLidarCluster)
-        lidarClusterSocket.binaryType = 'arraybuffer'
-        lidarClusterSocket.onmessage = (event) => {
-            lidarClusterPoints = event.data
+    const needsEnriched = ['cluster', 'vision_class', 'track_id', 'instance_id'].includes(lidarColorMode)
+    if (needsEnriched) {
+        const enrichedUrl = lidarColorMode === 'cluster' ? socketUrlLidarCluster : socketUrlFusion
+        lidarEnrichedSocket = new WebSocket(enrichedUrl)
+        lidarEnrichedSocket.binaryType = 'arraybuffer'
+        lidarEnrichedSocket.onmessage = (event) => {
+            lidarEnrichedPoints = event.data
         }
-        lidarClusterSocket.onerror = (e) => console.warn('LiDAR cluster WebSocket error:', e)
+        lidarEnrichedSocket.onerror = (e) => console.warn('LiDAR cluster WebSocket error:', e)
     }
 }
 
@@ -616,10 +834,10 @@ function stopLidar() {
         lidarPointsSocket.close()
         lidarPointsSocket = null
     }
-    if (lidarClusterSocket) {
-        lidarClusterSocket.onclose = null
-        lidarClusterSocket.close()
-        lidarClusterSocket = null
+    if (lidarEnrichedSocket) {
+        lidarEnrichedSocket.onclose = null
+        lidarEnrichedSocket.close()
+        lidarEnrichedSocket = null
     }
     if (tfStaticSocket) {
         tfStaticSocket.onclose = null
@@ -632,7 +850,7 @@ function stopLidar() {
         cameraInfoSocket = null
     }
     lidarPoints = null
-    lidarClusterPoints = null
+    lidarEnrichedPoints = null
     lidarTransform = null
     cameraTransform = null
     lidarToCameraMatrix = null
@@ -777,23 +995,25 @@ function wireToggle(checkbox, section, options, onToggle) {
     })
 }
 
-wireToggle(overlaySegToggle, overlaySegSection, segOptions, (on) => {
-    segEnabled = on
-    if (on) startSegmentation()
+overlaySegToggle.addEventListener('change', () => {
+    segEnabled = overlaySegToggle.checked
+    overlaySegSection.setAttribute('data-active', segEnabled)
+    if (segEnabled) startSegmentation()
     else stopSegmentation()
-})
-
-segSourceSelect.addEventListener('change', () => {
-    if (segEnabled) {
-        stopSegmentation()
-        startSegmentation()
-    }
 })
 
 wireToggle(overlayBoxToggle, overlayBoxSection, boxOptions, (on) => {
     boxEnabled = on
     if (on) startBoxes()
     else stopBoxes()
+})
+
+// Instance Masks toggle — no sub-options panel, pass section as dummy options
+overlayMaskToggle.addEventListener('change', () => {
+    instanceMaskEnabled = overlayMaskToggle.checked
+    overlayMaskSection.setAttribute('data-active', instanceMaskEnabled)
+    if (instanceMaskEnabled) startInstanceMasks()
+    else stopInstanceMasks()
 })
 
 wireToggle(overlayLidarToggle, overlayLidarSection, lidarOptions, (on) => {
@@ -806,7 +1026,7 @@ lidarColorSelect.addEventListener('change', () => {
     lidarColorMode = lidarColorSelect.value
     lidarClusterFilters.setAttribute('data-visible', lidarColorMode === 'cluster')
     lidarLoggedSample = false
-    if (lidarEnabled) connectClusterSocket()
+    if (lidarEnabled) connectEnrichedSocket()
 })
 
 boxLabelsCheckbox.addEventListener('change', () => { showLabels = boxLabelsCheckbox.checked })
@@ -820,6 +1040,16 @@ lidarGroundCheckbox.addEventListener('change', () => { lidarShowGround = lidarGr
 renderer.setAnimationLoop(() => {
     if (texture_camera) texture_camera.needsUpdate = true
     renderer.render(scene, camera)
+
+    // Render bounding boxes on 2D canvas
+    if (boxEnabled) {
+        renderBoxes()
+    }
+
+    // Render instance masks on 2D canvas
+    if (instanceMaskEnabled) {
+        renderInstanceMasks()
+    }
 
     // Render LiDAR overlay on 2D canvas
     if (lidarEnabled) {

@@ -45,7 +45,7 @@
             display: block;
         }
 
-        #boxes, #lidar-overlay {
+        #boxes, #masks, #lidar-overlay {
             position: absolute;
             inset: 0;
             pointer-events: none;
@@ -251,6 +251,7 @@
         <div id="camera-viewport" data-testid="camera-viewport">
             <canvas id="player" data-testid="camera-player"></canvas>
             <canvas id="boxes" data-testid="camera-boxes"></canvas>
+            <canvas id="masks" data-testid="camera-masks"></canvas>
             <canvas id="lidar-overlay" data-testid="camera-lidar-overlay"></canvas>
 
             <div id="camera-controls" class="camera-controls" data-testid="camera-controls">
@@ -268,16 +269,6 @@
                                    data-testid="camera-toggle-segmentation">
                             <span class="camera-controls__switch-slider"></span>
                         </label>
-                    </div>
-                    <div class="camera-controls__suboptions" id="segmentation-options"
-                         data-testid="camera-options-segmentation">
-                        <label class="camera-controls__suboption-label"
-                               for="segmentation-source">Source</label>
-                        <select id="segmentation-source" class="camera-controls__select"
-                                data-testid="camera-segmentation-source">
-                            <option value="compressed" selected>Compressed</option>
-                            <option value="uncompressed">Uncompressed</option>
-                        </select>
                     </div>
                 </div>
 
@@ -307,6 +298,19 @@
                     </div>
                 </div>
 
+                <!-- Instance Masks -->
+                <div class="camera-controls__section" data-active="false"
+                     data-testid="camera-overlay-instance-masks">
+                    <div class="camera-controls__toggle-row">
+                        <span class="camera-controls__label">Instance Masks</span>
+                        <label class="camera-controls__switch">
+                            <input type="checkbox" id="overlay-instance-masks"
+                                   data-testid="camera-toggle-instance-masks">
+                            <span class="camera-controls__switch-slider"></span>
+                        </label>
+                    </div>
+                </div>
+
                 <!-- LiDAR Points -->
                 <div class="camera-controls__section" data-active="false"
                      data-testid="camera-overlay-lidar">
@@ -328,6 +332,8 @@
                             <option value="distance" selected>Distance</option>
                             <option value="cluster">Cluster</option>
                             <option value="vision_class">Vision Class</option>
+                            <option value="track_id">Track ID</option>
+                            <option value="instance_id">Instance ID</option>
                         </select>
                         <div class="camera-controls__cluster-filters"
                              id="lidar-cluster-filters"

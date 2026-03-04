@@ -254,31 +254,74 @@ function applyColorMode(group) {
                 colors[i * 3 + 2] = c.b
             }
         } else if (currentColorMode === 'vision_class') {
-            const hasVisionClass = lastParsedPoints.length > 0
+            const hasData = lastParsedPoints.length > 0
 
-            if (!hasVisionClass) {
+            if (!hasData) {
                 showFusionWarning()
             }
 
-            // Generic colour for class 0 / fallback
-            const generic = getFixedColor()
-            const gr = generic.r, gg = generic.g, gb = generic.b
+            // Restore original positions before NaN-hiding
+            if (lastPositions) posAttr.array.set(lastPositions)
 
+            const generic = getFixedColor()
             for (let i = 0; i < count; i++) {
-                const cls = (hasVisionClass && i < lastParsedPoints.length)
+                const cls = (hasData && i < lastParsedPoints.length)
                     ? lastParsedPoints[i] : 0
 
-                if (cls > 0 && cls < mask_colors.length) {
+                if (cls <= 0) {
+                    posAttr.setXYZ(i, NaN, NaN, NaN)
+                    continue
+                }
+                if (cls < mask_colors.length) {
                     const mc = mask_colors[cls]
                     colors[i * 3] = mc.r
                     colors[i * 3 + 1] = mc.g
                     colors[i * 3 + 2] = mc.b
                 } else {
-                    colors[i * 3] = gr
-                    colors[i * 3 + 1] = gg
-                    colors[i * 3 + 2] = gb
+                    colors[i * 3] = generic.r
+                    colors[i * 3 + 1] = generic.g
+                    colors[i * 3 + 2] = generic.b
                 }
             }
+            posAttr.needsUpdate = true
+        } else if (currentColorMode === 'track_id') {
+            const hasData = lastParsedPoints.length > 0
+            if (!hasData) showFusionWarning()
+
+            if (lastPositions) posAttr.array.set(lastPositions)
+
+            for (let i = 0; i < count; i++) {
+                const tid = (hasData && i < lastParsedPoints.length)
+                    ? lastParsedPoints[i] : 0
+                if (tid === 0) {
+                    posAttr.setXYZ(i, NaN, NaN, NaN)
+                    continue
+                }
+                const c = clusterColor(tid)
+                colors[i * 3] = c.r
+                colors[i * 3 + 1] = c.g
+                colors[i * 3 + 2] = c.b
+            }
+            posAttr.needsUpdate = true
+        } else if (currentColorMode === 'instance_id') {
+            const hasData = lastParsedPoints.length > 0
+            if (!hasData) showFusionWarning()
+
+            if (lastPositions) posAttr.array.set(lastPositions)
+
+            for (let i = 0; i < count; i++) {
+                const iid = (hasData && i < lastParsedPoints.length)
+                    ? lastParsedPoints[i] : 0
+                if (iid === 0) {
+                    posAttr.setXYZ(i, NaN, NaN, NaN)
+                    continue
+                }
+                const c = clusterColor(iid)
+                colors[i * 3] = c.r
+                colors[i * 3 + 1] = c.g
+                colors[i * 3 + 2] = c.b
+            }
+            posAttr.needsUpdate = true
         }
 
         child.geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3))
@@ -337,7 +380,7 @@ colorModeSelect.addEventListener('change', () => {
 
     // When switching to a mode that needs a different topic, wait for the first
     // frame from that topic rather than recolouring stale data.
-    const needsNewTopic = currentColorMode === 'vision_class' || currentColorMode === 'cluster'
+    const needsNewTopic = ['vision_class', 'cluster', 'track_id', 'instance_id'].includes(currentColorMode)
     if (!needsNewTopic && pointsGroup) {
         applyColorMode(pointsGroup)
     }
@@ -371,7 +414,7 @@ showGroundCheckbox.addEventListener('change', () => {
  * Return the active WebSocket topic based on current colour mode.
  */
 function getActiveTopic() {
-    if (currentColorMode === 'vision_class') return socketUrlFusion
+    if (['vision_class', 'track_id', 'instance_id'].includes(currentColorMode)) return socketUrlFusion
     if (currentColorMode === 'cluster') return socketUrlCluster
     return socketUrlRaw
 }
@@ -407,7 +450,7 @@ function connectSocket() {
 
     socket.onerror = (error) => {
         console.error('LiDAR WebSocket error:', error)
-        if (currentColorMode === 'vision_class' || currentColorMode === 'cluster') {
+        if (['vision_class', 'cluster', 'track_id', 'instance_id'].includes(currentColorMode)) {
             showFusionWarning()
         }
     }
@@ -437,6 +480,10 @@ function updatePointCloud(arrayBuffer) {
             extractField(arrayBuffer, 'vision_class')
         } else if (currentColorMode === 'cluster') {
             extractField(arrayBuffer, 'cluster_id')
+        } else if (currentColorMode === 'track_id') {
+            extractField(arrayBuffer, 'track_id')
+        } else if (currentColorMode === 'instance_id') {
+            extractField(arrayBuffer, 'instance_id')
         }
 
         // Orient the cloud
