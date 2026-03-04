@@ -45,7 +45,7 @@
             display: block;
         }
 
-        #boxes, #masks, #lidar-overlay {
+        #boxes, #lidar-overlay {
             position: absolute;
             inset: 0;
             pointer-events: none;
@@ -251,7 +251,6 @@
         <div id="camera-viewport" data-testid="camera-viewport">
             <canvas id="player" data-testid="camera-player"></canvas>
             <canvas id="boxes" data-testid="camera-boxes"></canvas>
-            <canvas id="masks" data-testid="camera-masks"></canvas>
             <canvas id="lidar-overlay" data-testid="camera-lidar-overlay"></canvas>
 
             <div id="camera-controls" class="camera-controls" data-testid="camera-controls">
@@ -294,19 +293,6 @@
                             <input type="checkbox" id="box2d-show-confidence" checked
                                    data-testid="camera-box2d-confidence">
                             Show Confidence
-                        </label>
-                    </div>
-                </div>
-
-                <!-- Instance Masks -->
-                <div class="camera-controls__section" data-active="false"
-                     data-testid="camera-overlay-instance-masks">
-                    <div class="camera-controls__toggle-row">
-                        <span class="camera-controls__label">Instance Masks</span>
-                        <label class="camera-controls__switch">
-                            <input type="checkbox" id="overlay-instance-masks"
-                                   data-testid="camera-toggle-instance-masks">
-                            <span class="camera-controls__switch-slider"></span>
                         </label>
                     </div>
                 </div>

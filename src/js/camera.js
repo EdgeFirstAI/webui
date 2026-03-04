@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import * as THREE from './three.js'
 import ProjectedMaterial from './ProjectedMaterial.js'
-import ProjectedMask from './ProjectedMask.js'
-import segstream, { get_shape } from './mask.js'
 import h264Stream from './stream.js'
 import SmartVideoManager from './SmartVideoManager.js'
 import modelstream from './model.js'
@@ -19,7 +17,6 @@ const LIDAR_DOT_RADIUS = 3
 // Configurable topic URLs (overridden by /config/webui/details)
 // ---------------------------------------------------------------------------
 let socketUrlH264 = '/rt/camera/h264/'
-let socketUrlMask = '/rt/model/mask/'
 let socketUrlLidar = '/rt/lidar/points/'
 let socketUrlLidarCluster = '/rt/lidar/clusters/'
 let socketUrlFusion = '/rt/fusion/lidar/'
@@ -35,7 +32,6 @@ let texture_camera = null
 // Overlay enabled state
 let segEnabled = false
 let boxEnabled = false
-let instanceMaskEnabled = false
 let lidarEnabled = false
 let lidarColorMode = 'distance'
 let showLabels = true
@@ -65,8 +61,6 @@ let lidarToCameraMatrix = null
 const viewport = document.getElementById('camera-viewport')
 const playerCanvas = document.getElementById('player')
 const boxCanvas = document.getElementById('boxes')
-const maskCanvas = document.getElementById('masks')
-const maskCtx = maskCanvas.getContext('2d')
 const lidarCanvas = document.getElementById('lidar-overlay')
 const lidarCtx = lidarCanvas.getContext('2d')
 const cameraUnavailable = document.getElementById('camera-unavailable')
@@ -80,9 +74,6 @@ const overlayBoxSection = overlayBoxToggle.closest('.camera-controls__section')
 const boxOptions = document.getElementById('box2d-options')
 const boxLabelsCheckbox = document.getElementById('box2d-show-labels')
 const boxConfidenceCheckbox = document.getElementById('box2d-show-confidence')
-
-const overlayMaskToggle = document.getElementById('overlay-instance-masks')
-const overlayMaskSection = overlayMaskToggle.closest('.camera-controls__section')
 
 const overlayLidarToggle = document.getElementById('overlay-lidar')
 const overlayLidarSection = overlayLidarToggle.closest('.camera-controls__section')
@@ -112,8 +103,6 @@ camera.rotation.x = PI
 // Overlay canvas sizing
 boxCanvas.width = width
 boxCanvas.height = height
-maskCanvas.width = width
-maskCanvas.height = height
 lidarCanvas.width = width
 lidarCanvas.height = height
 
@@ -122,7 +111,6 @@ lidarCanvas.height = height
 // ---------------------------------------------------------------------------
 function initConfig(config) {
     if (config.H264_TOPIC) socketUrlH264 = config.H264_TOPIC
-    if (config.MASK_TOPIC) socketUrlMask = config.MASK_TOPIC
     if (config.MODEL_TOPIC) socketUrlModel = config.MODEL_TOPIC
     if (config.LIDAR_TOPIC) socketUrlLidar = config.LIDAR_TOPIC
     if (config.CLUSTER_TOPIC) socketUrlLidarCluster = config.CLUSTER_TOPIC
@@ -161,41 +149,266 @@ function initVideoStream() {
 }
 
 // ---------------------------------------------------------------------------
-// Segmentation Overlay
+// Segmentation Overlay (unified shader — handles both instance and semantic)
 // ---------------------------------------------------------------------------
-function startSegmentation() {
-    const quad = new THREE.PlaneGeometry(width / height * 500, 500)
+const MAX_SEG_MASKS = 32
+let segTexture = null
+let segTextureW = 0
+let segTextureH = 0
+function ensureSegTexture(w, h) {
+    if (segTexture && segTextureW === w && segTextureH === h) return
+    if (segTexture) segTexture.dispose()
 
-    get_shape(socketUrlMask, (h, w, length, mask) => {
-        const classes = Math.round(mask.length / h / w)
-        segstream(socketUrlMask, h, w, classes, () => {}).then((texture_mask) => {
-            const material = new ProjectedMask({
-                camera: camera,
-                texture: texture_mask,
-                transparent: true,
-                colors: mask_colors,
-            })
-            segMesh = new THREE.Mesh(quad, material)
-            segMesh.needsUpdate = true
-            segMesh.position.z = 50
-            segMesh.rotation.x = PI
-            segMesh.renderOrder = 1
-            scene.add(segMesh)
-        })
+    // Allocate max depth once so we don't recreate when detection count changes
+    const data = new Uint8Array(w * h * MAX_SEG_MASKS)
+    segTexture = new THREE.DataArrayTexture(data, w, h, MAX_SEG_MASKS)
+    segTexture.format = THREE.RedFormat
+    segTexture.internalFormat = 'R8'
+    segTexture.type = THREE.UnsignedByteType
+    segTexture.minFilter = THREE.LinearFilter
+    segTexture.magFilter = THREE.LinearFilter
+    segTexture.needsUpdate = true
+
+    segTextureW = w
+    segTextureH = h
+}
+
+const SEG_VERTEX_SHADER = `
+    out vec2 vUv;
+    void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+`
+
+const SEG_FRAGMENT_SHADER = `
+    precision highp sampler2DArray;
+
+    uniform sampler2DArray masks;
+    uniform vec4 colors[${MAX_SEG_MASKS}];
+    uniform vec4 bboxes[${MAX_SEG_MASKS}];
+    uniform int maskCount;
+    uniform bool isInstance;
+
+    in vec2 vUv;
+    out vec4 pc_fragColor;
+
+    void main() {
+        // Camera has rotation.z=PI + rotation.x=PI → right axis is -X, so flip U
+        // vUv.y already maps correctly: screen top → vUv.y=0 → image top
+        vec2 uv = vec2(1.0 - vUv.x, vUv.y);
+
+        if (isInstance) {
+            // Instance mode: composite masks within their bounding boxes
+            vec4 result = vec4(0.0);
+            for (int i = 0; i < ${MAX_SEG_MASKS}; i++) {
+                if (i >= maskCount) break;
+                vec4 bb = bboxes[i];
+                // Check if fragment is within this mask's bbox
+                if (uv.x < bb.x || uv.x > bb.x + bb.z ||
+                    uv.y < bb.y || uv.y > bb.y + bb.w) continue;
+                // Map UV to mask-local coordinates
+                vec2 maskUV = (uv - bb.xy) / bb.zw;
+                float sig = texture(masks, vec3(maskUV, float(i))).r;
+                // Normalize from uint8 [0,255] → [0,1] sigmoid
+                float sigNorm = sig;
+                float a = sigNorm * colors[i].a;
+                // Source-over composite (premultiplied)
+                result.rgb = colors[i].rgb * a + result.rgb * (1.0 - a);
+                result.a = a + result.a * (1.0 - a);
+            }
+            pc_fragColor = result;
+        } else {
+            // Semantic mode: argmax across all mask layers
+            float maxVal = 0.0;
+            int maxIdx = 0;
+            for (int i = 0; i < ${MAX_SEG_MASKS}; i++) {
+                if (i >= maskCount) break;
+                float val = texture(masks, vec3(uv, float(i))).r;
+                if (val > maxVal) { maxVal = val; maxIdx = i; }
+            }
+            // Show only if above threshold (sigmoid > 0.5 ≈ normalized 0.5)
+            if (maxVal > 0.5) {
+                pc_fragColor = vec4(colors[maxIdx].rgb, colors[maxIdx].a);
+            } else {
+                pc_fragColor = vec4(0.0);
+            }
+        }
+    }
+`
+
+function ensureSegMesh() {
+    if (segMesh) return
+    // Size quad to exactly fill the camera frustum at z=50 so geometry UVs
+    // map 1:1 to normalized image coordinates (0,0)→(1,1)
+    const fovRad = camera.fov * Math.PI / 180
+    const planeH = 2 * 50 * Math.tan(fovRad / 2)
+    const planeW = planeH * camera.aspect
+    const quad = new THREE.PlaneGeometry(planeW, planeH)
+
+    // Build initial uniform arrays (flat vec4 arrays → Float32Array)
+    const colorsArr = new Float32Array(MAX_SEG_MASKS * 4)
+    const bboxesArr = new Float32Array(MAX_SEG_MASKS * 4)
+
+    // Create a 1x1x1 placeholder so the sampler2DArray binding is valid
+    // before real mask data arrives
+    const placeholder = new THREE.DataArrayTexture(new Uint8Array(1), 1, 1, 1)
+    placeholder.format = THREE.RedFormat
+    placeholder.internalFormat = 'R8'
+    placeholder.type = THREE.UnsignedByteType
+    placeholder.needsUpdate = true
+
+    const mat = new THREE.ShaderMaterial({
+        transparent: true,
+        depthWrite: false,
+        uniforms: {
+            masks: { value: placeholder },
+            colors: { value: colorsArr },
+            bboxes: { value: bboxesArr },
+            maskCount: { value: 0 },
+            isInstance: { value: true },
+        },
+        vertexShader: SEG_VERTEX_SHADER,
+        fragmentShader: SEG_FRAGMENT_SHADER,
+        glslVersion: THREE.GLSL3,
     })
+    segMesh = new THREE.Mesh(quad, mat)
+    segMesh.position.z = 50
+    segMesh.rotation.x = PI
+    segMesh.renderOrder = 1
+    segMesh.visible = false
+    scene.add(segMesh)
+}
+
+function renderSegmentation() {
+    if (!modelData) {
+        if (segMesh) segMesh.visible = false
+        return
+    }
+
+    const { boxes, masks } = modelData
+    if (!masks || masks.length === 0) {
+        if (segMesh) segMesh.visible = false
+        return
+    }
+
+    const isInstance = masks[0].boxed
+    const maskCount = Math.min(masks.length, MAX_SEG_MASKS)
+
+    // All masks share dimensions (proto res for instance, model res for semantic)
+    const mW = masks[0].width
+    const mH = masks[0].height
+    if (mW === 0 || mH === 0) return
+
+    // Pad each mask with a 1px transparent border so GPU bilinear
+    // interpolation blends to zero at the crop boundary instead of
+    // clamping the edge texels (matches old canvas padding approach)
+    const padW = mW + 2
+    const padH = mH + 2
+
+    ensureSegTexture(padW, padH)
+
+    // Copy mask data into DataArrayTexture buffer with 1px zero border
+    const buf = segTexture.image.data
+    const layerSize = padW * padH
+    // Clear entire buffer (sets borders + unused layers to zero)
+    buf.fill(0)
+    for (let i = 0; i < maskCount; i++) {
+        const mask = masks[i]
+        if (!mask.mask || mask.mask.length === 0) continue
+        const layerOffset = i * layerSize
+        // Copy mask data starting at row+1, col+1 within padded layer
+        for (let row = 0; row < mH; row++) {
+            const srcStart = row * mW
+            const dstStart = layerOffset + (row + 1) * padW + 1
+            for (let col = 0; col < mW; col++) {
+                buf[dstStart + col] = srcStart + col < mask.mask.length ? mask.mask[srcStart + col] : 0
+            }
+        }
+    }
+    segTexture.needsUpdate = true
+
+    // Update uniforms
+    const uniforms = segMesh.material.uniforms
+    uniforms.masks.value = segTexture
+    uniforms.isInstance.value = isInstance
+    uniforms.maskCount.value = maskCount
+
+    const colorsArr = uniforms.colors.value
+    const bboxesArr = uniforms.bboxes.value
+
+    for (let i = 0; i < maskCount; i++) {
+        const base = i * 4
+
+        if (isInstance) {
+            // Instance color from track ID
+            const box = boxes && boxes[i] ? boxes[i] : null
+            let cr, cg, cb
+            if (box && box.track && box.track.id) {
+                const c = clusterColor(trackIdToHash(box.track.id))
+                cr = c.r; cg = c.g; cb = c.b
+            } else {
+                cr = 0; cg = 1; cb = 0.4  // default green
+            }
+            colorsArr[base] = cr
+            colorsArr[base + 1] = cg
+            colorsArr[base + 2] = cb
+            colorsArr[base + 3] = MASK_MAX_ALPHA
+
+            // Bbox expanded by 1 mask pixel for transparent border padding
+            if (box) {
+                const pixelW = box.width / mW
+                const pixelH = box.height / mH
+                bboxesArr[base] = box.center_x - box.width / 2 - pixelW
+                bboxesArr[base + 1] = box.center_y - box.height / 2 - pixelH
+                bboxesArr[base + 2] = box.width + 2 * pixelW
+                bboxesArr[base + 3] = box.height + 2 * pixelH
+            } else {
+                bboxesArr[base] = 0
+                bboxesArr[base + 1] = 0
+                bboxesArr[base + 2] = 1
+                bboxesArr[base + 3] = 1
+            }
+        } else {
+            // Semantic color from mask_colors
+            const cls = Math.min(i, mask_colors.length - 1)
+            const mc = mask_colors[cls]
+            colorsArr[base] = mc.r
+            colorsArr[base + 1] = mc.g
+            colorsArr[base + 2] = mc.b
+            colorsArr[base + 3] = i === 0 ? 0.0 : 0.7  // class 0 is background → transparent
+
+            // Full-frame for semantic
+            bboxesArr[base] = 0
+            bboxesArr[base + 1] = 0
+            bboxesArr[base + 2] = 1
+            bboxesArr[base + 3] = 1
+        }
+    }
+
+    segMesh.visible = true
+}
+
+function startSegmentation() {
+    ensureModelSocket()
+    ensureSegMesh()
 }
 
 function stopSegmentation() {
     if (segMesh) {
-        scene.remove(segMesh)
-        segMesh.geometry.dispose()
-        segMesh.material.dispose()
-        segMesh = null
+        segMesh.visible = false
     }
+    if (segTexture) {
+        segTexture.dispose()
+        segTexture = null
+        segTextureW = 0
+        segTextureH = 0
+    }
+    maybeCloseModelSocket()
 }
 
 // ---------------------------------------------------------------------------
-// Shared Model WebSocket (used by Bounding Boxes + Instance Masks)
+// Shared Model WebSocket (used by Bounding Boxes + Segmentation)
 // ---------------------------------------------------------------------------
 function ensureModelSocket() {
     if (modelSocket) return
@@ -205,7 +418,7 @@ function ensureModelSocket() {
 }
 
 function maybeCloseModelSocket() {
-    if (boxEnabled || instanceMaskEnabled) return
+    if (boxEnabled || segEnabled) return
     if (modelSocket) {
         modelSocket.onclose = null
         modelSocket.close()
@@ -279,14 +492,6 @@ function renderBoxes() {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Instance Mask Overlay
-// ---------------------------------------------------------------------------
-
-// Reusable offscreen canvas for mask rendering
-let offscreenCanvas = null
-let offscreenCtx = null
-
 /**
  * Convert a UUID/track-ID string to a uint32 hash.
  * Extracts the first 8 hex nibbles (skipping dashes/dots) so the result
@@ -311,119 +516,9 @@ function trackIdToHash(id) {
     return hexcode >>> 0
 }
 
-function startInstanceMasks() {
-    ensureModelSocket()
-}
-
-function stopInstanceMasks() {
-    maskCtx.clearRect(0, 0, maskCanvas.width, maskCanvas.height)
-    maybeCloseModelSocket()
-}
-
-// Maximum overlay opacity (0–255).  Sigmoid is scaled proportionally so
-// interior pixels (sigmoid=255) reach this value while edge pixels fade
-// smoothly to transparent.  Capping below 255 ensures overlapping masks
-// blend via source-over rather than one fully replacing the other.
-const MASK_MAX_ALPHA = 191 // ~75% opacity
-
-function renderInstanceMasks() {
-    if (!modelData) return
-
-    const { boxes, masks } = modelData
-    if (!boxes || !masks) return
-
-    maskCtx.clearRect(0, 0, width, height)
-    maskCtx.imageSmoothingEnabled = true
-    maskCtx.imageSmoothingQuality = 'high'
-
-    const count = Math.min(boxes.length, masks.length)
-
-    for (let i = 0; i < count; i++) {
-        const mask = masks[i]
-        if (!mask.boxed) continue
-        if (mask.width === 0 || mask.height === 0) continue
-        if (!mask.mask || mask.mask.length === 0) continue
-
-        const box = boxes[i]
-
-        // Pad with 1px transparent border so bilinear upscaling blends
-        // to transparent at the crop boundary instead of clamping the
-        // edge texels (the masks are at low proto resolution and may
-        // have non-zero sigmoid right up to the crop edge).
-        const padW = mask.width + 2
-        const padH = mask.height + 2
-
-        // Ensure offscreen canvas is exactly the padded size — using !== rather
-        // than < prevents stale pixels from a previous larger mask bleeding into
-        // the bicubic interpolation kernel at the right/bottom edges of drawImage.
-        if (!offscreenCanvas || offscreenCanvas.width !== padW || offscreenCanvas.height !== padH) {
-            offscreenCanvas = document.createElement('canvas')
-            offscreenCanvas.width = padW
-            offscreenCanvas.height = padH
-            offscreenCtx = offscreenCanvas.getContext('2d')
-        }
-
-        // Determine color: use clusterColor(hash) to match fusion track_id colours
-        let cr, cg, cb
-        if (box.track && box.track.id) {
-            const c = clusterColor(trackIdToHash(box.track.id))
-            cr = Math.round(c.r * 255)
-            cg = Math.round(c.g * 255)
-            cb = Math.round(c.b * 255)
-        } else {
-            const cls = Math.max(1, Math.min(mask_colors.length - 1, 1))
-            const mc = mask_colors[cls]
-            cr = Math.round(mc.r * 255)
-            cg = Math.round(mc.g * 255)
-            cb = Math.round(mc.b * 255)
-        }
-
-        // Build RGBA ImageData with 1px transparent padding on all sides.
-        // Alpha is sigmoid scaled to MASK_MAX_ALPHA — smooth gradient from
-        // the proto-resolution mask provides anti-aliased edges when
-        // upscaled, and the capped alpha lets overlapping masks blend.
-        //
-        // Pre-fill every pixel with the mask RGB at alpha=0 so that
-        // bilinear upscaling blends colour-to-same-colour at the edges,
-        // avoiding dark fringing from interpolation with black (0,0,0,0).
-        const imgData = offscreenCtx.createImageData(padW, padH)
-        const pixels = imgData.data
-        for (let j = 0; j < pixels.length; j += 4) {
-            pixels[j] = cr
-            pixels[j + 1] = cg
-            pixels[j + 2] = cb
-            // alpha stays 0
-        }
-        const maskBytes = mask.mask
-        for (let row = 0; row < mask.height; row++) {
-            for (let col = 0; col < mask.width; col++) {
-                const srcIdx = row * mask.width + col
-                const sigmoid = srcIdx < maskBytes.length ? maskBytes[srcIdx] : 0
-                if (sigmoid === 0) continue
-                const dstIdx = ((row + 1) * padW + (col + 1)) * 4
-                pixels[dstIdx] = cr
-                pixels[dstIdx + 1] = cg
-                pixels[dstIdx + 2] = cb
-                pixels[dstIdx + 3] = (sigmoid * MASK_MAX_ALPHA + 127) >> 8
-            }
-        }
-        offscreenCtx.putImageData(imgData, 0, 0)
-
-        // Destination rect expanded by 1 mask-pixel on each side to
-        // account for the padding so mask content stays aligned.
-        const pixelW = box.width / mask.width
-        const pixelH = box.height / mask.height
-        const destX = (box.center_x - box.width / 2 - pixelW) * width
-        const destY = (box.center_y - box.height / 2 - pixelH) * height
-        const destW = (box.width + 2 * pixelW) * width
-        const destH = (box.height + 2 * pixelH) * height
-
-        // Draw with bilinear upscaling — the padding provides transparent
-        // neighbors for smooth interpolation at the crop boundary.
-        maskCtx.drawImage(offscreenCanvas, 0, 0, padW, padH,
-            destX, destY, destW, destH)
-    }
-}
+// Maximum overlay opacity (~75%).  Capping below 1.0 ensures overlapping
+// masks blend via source-over rather than one fully replacing the other.
+const MASK_MAX_ALPHA = 0.75
 
 // ---------------------------------------------------------------------------
 // LiDAR Overlay — Transform Math
@@ -523,11 +618,6 @@ function computeLidarToCameraMatrix() {
 
     // Log matrix in row-major for readability (col-major [0,4,8,12] = row 0)
     const m = lidarToCameraMatrix
-    console.log('LiDAR→camera matrix:')
-    console.log(`  [${m[0].toFixed(4)}, ${m[4].toFixed(4)}, ${m[8].toFixed(4)}, ${m[12].toFixed(4)}]`)
-    console.log(`  [${m[1].toFixed(4)}, ${m[5].toFixed(4)}, ${m[9].toFixed(4)}, ${m[13].toFixed(4)}]`)
-    console.log(`  [${m[2].toFixed(4)}, ${m[6].toFixed(4)}, ${m[10].toFixed(4)}, ${m[14].toFixed(4)}]`)
-    console.log(`  Using: "${lidarTransform.childFrameId}" and "${cameraTransform.childFrameId}"`)
 }
 
 // ---------------------------------------------------------------------------
@@ -641,20 +731,13 @@ function parsePointCloud2(arrayBuffer) {
 // LiDAR Overlay — Projection & Rendering
 // ---------------------------------------------------------------------------
 
-let lidarLoggedSample = false
-
 /**
  * Project LiDAR points onto the camera image and draw on canvas.
  * Called from the animation loop when lidarEnabled && lidarPoints.
  */
-let lidarLoggedStatus = false
 
 function renderLidarOverlay() {
     if (!lidarPoints || !lidarToCameraMatrix || !cameraIntrinsics) {
-        if (!lidarLoggedStatus && lidarToCameraMatrix) {
-            console.log(`LiDAR overlay waiting: points=${!!lidarPoints} matrix=${!!lidarToCameraMatrix} intrinsics=${!!cameraIntrinsics}`)
-            lidarLoggedStatus = true
-        }
         return
     }
 
@@ -683,17 +766,10 @@ function renderLidarOverlay() {
     const hasTrackId = fieldMap.track_id
     const hasInstanceId = fieldMap.instance_id
 
-    if (!lidarLoggedSample) {
-        console.log(`LiDAR cloud: ${totalPoints} pts, fields: [${Object.keys(fieldMap).join(', ')}]`)
-    }
-
     lidarCtx.clearRect(0, 0, width, height)
 
     // Determine max distance for distance coloring
     const maxDist = 30.0 // metres
-
-    // Log a sample point once for debugging
-    let loggedCount = 0
 
     for (let i = 0; i < totalPoints; i++) {
         // Read LiDAR-frame coordinates
@@ -723,12 +799,6 @@ function renderLidarOverlay() {
         // Pinhole projection — tf_static accounts for camera orientation
         const u = fx * (camX / camZ) + cx
         const v = fy * (camY / camZ) + cy
-
-        // Log sample points once
-        if (!lidarLoggedSample && loggedCount < 3) {
-            console.log(`LiDAR sample[${i}]: lidar(${lx.toFixed(2)},${ly.toFixed(2)},${lz.toFixed(2)}) → cam(${camX.toFixed(2)},${camY.toFixed(2)},${camZ.toFixed(2)}) → px(${u.toFixed(0)},${v.toFixed(0)})`)
-            loggedCount++
-        }
 
         // Clip to image bounds (with small margin)
         if (u < -LIDAR_DOT_RADIUS || u > width + LIDAR_DOT_RADIUS) continue
@@ -770,9 +840,6 @@ function renderLidarOverlay() {
         )
     }
 
-    if (!lidarLoggedSample && loggedCount > 0) {
-        lidarLoggedSample = true
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -795,15 +862,12 @@ function startLidar() {
 
     // Subscribe to camera_info for intrinsics
     if (!cameraInfoSocket) {
-        console.log(`Subscribing to camera_info: ${socketUrlCameraInfo}`)
         cameraInfoSocket = new WebSocket(socketUrlCameraInfo)
         cameraInfoSocket.binaryType = 'arraybuffer'
-        cameraInfoSocket.onopen = () => console.log('camera_info WebSocket connected')
         cameraInfoSocket.onmessage = (event) => {
             parseCameraInfo(event.data)
         }
         cameraInfoSocket.onerror = (e) => console.warn('camera_info WebSocket error:', e)
-        cameraInfoSocket.onclose = (e) => console.log(`camera_info WebSocket closed: code=${e.code}`)
     }
 
     // Always subscribe to the raw points topic
@@ -867,9 +931,6 @@ function stopLidar() {
     cameraTransform = null
     lidarToCameraMatrix = null
     cameraIntrinsics = null
-    lidarLoggedSample = false
-    lidarLoggedStatus = false
-
     // Clear overlay canvas
     lidarCtx.clearRect(0, 0, width, height)
 }
@@ -902,8 +963,6 @@ function parseTfStatic(arrayBuffer) {
         const ry = reader.float64()
         const rz = reader.float64()
         const rw = reader.float64()
-
-        console.log(`tf_static: "${frameId}" → "${childFrameId}" t=[${tx.toFixed(3)}, ${ty.toFixed(3)}, ${tz.toFixed(3)}] q=[${rx.toFixed(4)}, ${ry.toFixed(4)}, ${rz.toFixed(4)}, ${rw.toFixed(4)}]`)
 
         const transform = {
             translation: { x: tx, y: ty, z: tz },
@@ -975,11 +1034,8 @@ function parseCameraInfo(arrayBuffer) {
         const cx = k[2]
         const cy = k[5]
 
-        console.log(`camera_info: frame="${ciFrameId}" ${imgWidth}x${imgHeight} model="${distModel}" D[${dLen}] K=[${k.map(v => v.toFixed(1)).join(', ')}]`)
-
         if (fx > 0 && fy > 0) {
             cameraIntrinsics = { fx, fy, cx, cy }
-            console.log(`Camera intrinsics: fx=${fx.toFixed(1)} fy=${fy.toFixed(1)} cx=${cx.toFixed(1)} cy=${cy.toFixed(1)}`)
 
             // Once we have intrinsics, we can stop subscribing
             if (cameraInfoSocket) {
@@ -1020,14 +1076,6 @@ wireToggle(overlayBoxToggle, overlayBoxSection, boxOptions, (on) => {
     else stopBoxes()
 })
 
-// Instance Masks toggle — no sub-options panel, pass section as dummy options
-overlayMaskToggle.addEventListener('change', () => {
-    instanceMaskEnabled = overlayMaskToggle.checked
-    overlayMaskSection.setAttribute('data-active', instanceMaskEnabled)
-    if (instanceMaskEnabled) startInstanceMasks()
-    else stopInstanceMasks()
-})
-
 wireToggle(overlayLidarToggle, overlayLidarSection, lidarOptions, (on) => {
     lidarEnabled = on
     if (on) startLidar()
@@ -1037,7 +1085,6 @@ wireToggle(overlayLidarToggle, overlayLidarSection, lidarOptions, (on) => {
 lidarColorSelect.addEventListener('change', () => {
     lidarColorMode = lidarColorSelect.value
     lidarClusterFilters.setAttribute('data-visible', lidarColorMode === 'cluster')
-    lidarLoggedSample = false
     if (lidarEnabled) connectEnrichedSocket()
 })
 
@@ -1051,19 +1098,18 @@ lidarGroundCheckbox.addEventListener('change', () => { lidarShowGround = lidarGr
 // ---------------------------------------------------------------------------
 renderer.setAnimationLoop(() => {
     if (texture_camera) texture_camera.needsUpdate = true
+
+    // Update segmentation uniforms before render (shader runs on GPU)
+    if (segEnabled) {
+        renderSegmentation()
+    }
+
     renderer.render(scene, camera)
 
-    // Render bounding boxes on 2D canvas
+    // Render 2D canvas overlays after GL render
     if (boxEnabled) {
         renderBoxes()
     }
-
-    // Render instance masks on 2D canvas
-    if (instanceMaskEnabled) {
-        renderInstanceMasks()
-    }
-
-    // Render LiDAR overlay on 2D canvas
     if (lidarEnabled) {
         renderLidarOverlay()
     }
