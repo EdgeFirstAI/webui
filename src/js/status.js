@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 async function checkReplayStatus() {
     try {
-        const deviceData = await window.serviceCache.getDeviceData();
         const serviceStatuses = await window.serviceCache.getServiceStatuses();
-        const isRaivin = deviceData.DEVICE?.toLowerCase().includes('raivin');
 
         // Check critical services
         const statusMap = serviceStatuses.reduce((acc, { service, status }) => {
@@ -42,9 +40,10 @@ async function checkReplayStatus() {
                 modeIndicator.className = "px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 flex items-center gap-2";
             }
         } else {
-            const isradarpubDown = !statusMap['radarpub'] || statusMap['radarpub'] !== 'running';
-            const isCameraDown = !statusMap['camera'] || statusMap['camera'] !== 'running';
-            const isDegraded = (isRaivin && isradarpubDown) || isCameraDown;
+            // Degraded = any enabled service is not running
+            const isDegraded = serviceStatuses.some(s =>
+                s.enabled === 'enabled' && s.status !== 'running'
+            );
 
             if (!allSensorActive) {
                 modeText.textContent = "Live Mode (Degraded)";
@@ -101,21 +100,17 @@ window.showServiceStatus = async function () {
     dialog.showModal();
 
     try {
-        // First get device type
-        const deviceResponse = await fetch('/config/webui/details');
-        if (!deviceResponse.ok) throw new Error(`HTTP error! status: ${deviceResponse.status}`);
-        const deviceData = await deviceResponse.json();
-        const isRaivin = deviceData.DEVICE?.toLowerCase().includes('raivin');
-        const baseServices = ["camera", "imu", "navsat", "model"];
-        const raivinServices = ["radarpub", "fusion"];
-        const services = isRaivin ? [...baseServices, ...raivinServices] : baseServices;
+        const allServices = [
+            "camera", "imu", "navsat", "model", "lidarpub",
+            "radarpub", "fusion", "zenohd", "gpsd"
+        ];
 
         const response = await fetch('/config/service/status', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ services })
+            body: JSON.stringify({ services: allServices })
         });
 
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
@@ -793,181 +788,103 @@ window.showPlayOptionsModal = function (fileName, directory) {
         document.body.appendChild(modal);
     }
 
-    // Get device name to determine if it's Maivin
-    fetch('/config/webui/details')
-        .then(response => response.json())
-        .then(deviceData => {
-            const isMaivin = deviceData.DEVICE?.toLowerCase().includes('maivin');
+    // Use cached service state — no fetch needed
+    const fusionEnabled = window.serviceCache.isServiceEnabled('fusion');
 
-            modal.innerHTML = `
-                <div class="bg-white p-8 rounded-xl max-w-md w-full">
-                    <div class="flex items-center justify-between mb-6">
-                        <h2 class="text-2xl font-semibold text-gray-800">Play Options</h2>
-                        <button onclick="closePlayOptionsModal()" class="text-gray-400 hover:text-gray-600">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                        </button>
+    modal.innerHTML = `
+        <div class="bg-white p-8 rounded-xl max-w-md w-full">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-2xl font-semibold text-gray-800">Play Options</h2>
+                <button onclick="closePlayOptionsModal()" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="bg-gray-50 rounded-lg p-4 mb-6">
+                <div class="space-y-2">
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-500">File Name:</span>
+                        <span class="text-sm font-medium text-gray-900 truncate ml-4 max-w-[200px]">${fileName}</span>
                     </div>
-                    
-                    <div class="bg-gray-50 rounded-lg p-4 mb-6">
+                </div>
+
+                <div class="space-y-6">
+                    ${fusionEnabled ? `
                         <div class="space-y-2">
-                            <div class="flex justify-between items-center">
-                                <span class="text-sm text-gray-500">File Name:</span>
-                                <span class="text-sm font-medium text-gray-900 truncate ml-4 max-w-[200px]">${fileName}</span>
+                            <label class="text-sm font-medium text-gray-700">Fusion</label>
+                            <div class="inline-flex w-full rounded-lg shadow-sm" role="group">
+                                <button type="button"
+                                    class="fusion-btn flex-1 px-4 py-2.5 text-sm font-medium text-white bg-[#4285f4] rounded-l-lg active hover:bg-blue-600"
+                                    data-value="live">
+                                    Live
+                                </button>
+                                <button type="button"
+                                    class="fusion-btn flex-1 px-4 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-r-lg hover:bg-gray-200 transition-colors"
+                                    data-value="mcap">
+                                    MCAP
+                                </button>
                             </div>
                         </div>
+                    ` : ''}
 
-                        <div class="space-y-6">
-                            ${!isMaivin ? `
-                                <div class="space-y-2">
-                                    <label class="text-sm font-medium text-gray-700">Fusion</label>
-                                    <div class="inline-flex w-full rounded-lg shadow-sm" role="group">
-                                        <button type="button" 
-                                            class="fusion-btn flex-1 px-4 py-2.5 text-sm font-medium text-white bg-[#4285f4] rounded-l-lg active hover:bg-blue-600" 
-                                            data-value="live">
-                                            Live
-                                        </button>
-                                        <button type="button" 
-                                            class="fusion-btn flex-1 px-4 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-r-lg hover:bg-gray-200 transition-colors" 
-                                            data-value="mcap">
-                                            MCAP
-                                        </button>
-                                    </div>
-                                </div>
-                            ` : ''}
-
-                            <div class="space-y-2">
-                                <label class="text-sm font-medium text-gray-700">Model</label>
-                                <div class="inline-flex w-full rounded-lg shadow-sm" role="group">
-                                    <button type="button" 
-                                        class="model-btn flex-1 px-4 py-2.5 text-sm font-medium text-white bg-[#4285f4] rounded-l-lg active hover:bg-blue-600" 
-                                        data-value="live">
-                                        Live
-                                    </button>
-                                    <button type="button" 
-                                        class="model-btn flex-1 px-4 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-r-lg hover:bg-gray-200 transition-colors" 
-                                        data-value="mcap">
-                                        MCAP
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="mt-8 flex justify-end space-x-3">
-                            <button onclick="closePlayOptionsModal()" 
-                                class="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
-                                Cancel
+                    <div class="space-y-2">
+                        <label class="text-sm font-medium text-gray-700">Model</label>
+                        <div class="inline-flex w-full rounded-lg shadow-sm" role="group">
+                            <button type="button"
+                                class="model-btn flex-1 px-4 py-2.5 text-sm font-medium text-white bg-[#4285f4] rounded-l-lg active hover:bg-blue-600"
+                                data-value="live">
+                                Live
                             </button>
-                            <button onclick="startPlaybackFromModal()" 
-                                class="px-4 py-2 text-sm font-medium text-white bg-[#4285f4] rounded-lg hover:bg-blue-600 transition-colors">
-                                Start
+                            <button type="button"
+                                class="model-btn flex-1 px-4 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-r-lg hover:bg-gray-200 transition-colors"
+                                data-value="mcap">
+                                MCAP
                             </button>
                         </div>
                     </div>
                 </div>
-            `;
 
-            // Setup button groups
-            const fusionBtns = modal.querySelectorAll('.fusion-btn');
-            const modelBtns = modal.querySelectorAll('.model-btn');
-
-            function setupButtonGroup(buttons) {
-                buttons.forEach(btn => {
-                    btn.addEventListener('click', function () {
-                        buttons.forEach(b => {
-                            b.classList.remove('active', 'bg-[#4285f4]', 'text-white');
-                            b.classList.add('bg-gray-100', 'text-gray-600');
-                        });
-                        this.classList.remove('bg-gray-100', 'text-gray-600');
-                        this.classList.add('active', 'bg-[#4285f4]', 'text-white');
-                    });
-                });
-            }
-
-            setupButtonGroup(fusionBtns);
-            setupButtonGroup(modelBtns);
-
-            // Store file info for later use
-            modal.dataset.fileName = fileName;
-            modal.dataset.directory = directory;
-
-            modal.showModal();
-        })
-        .catch(error => {
-            console.error('Error fetching device info:', error);
-            // Fallback to showing modal without device-specific options
-            modal.innerHTML = `
-                <div class="bg-white p-8 rounded-xl max-w-md w-full">
-                    <div class="flex items-center justify-between mb-6">
-                        <h2 class="text-2xl font-semibold text-gray-800">Play Options</h2>
-                        <button onclick="closePlayOptionsModal()" class="text-gray-400 hover:text-gray-600">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                        </button>
-                    </div>
-                    
-                    <div class="bg-gray-50 rounded-lg p-4 mb-6">
-                        <div class="space-y-2">
-                            <div class="flex justify-between items-center">
-                                <span class="text-sm text-gray-500">File Name:</span>
-                                <span class="text-sm font-medium text-gray-900 truncate ml-4 max-w-[200px]">${fileName}</span>
-                            </div>
-                        </div>
-
-                        <div class="space-y-6">
-                            <div class="space-y-2">
-                                <label class="text-sm font-medium text-gray-700">Model</label>
-                                <div class="inline-flex w-full rounded-lg shadow-sm" role="group">
-                                    <button type="button" 
-                                        class="model-btn flex-1 px-4 py-2.5 text-sm font-medium text-white bg-[#4285f4] rounded-l-lg active hover:bg-blue-600" 
-                                        data-value="live">
-                                        Live
-                                    </button>
-                                    <button type="button" 
-                                        class="model-btn flex-1 px-4 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-r-lg hover:bg-gray-200 transition-colors" 
-                                        data-value="mcap">
-                                        MCAP
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="mt-8 flex justify-end space-x-3">
-                            <button onclick="closePlayOptionsModal()" 
-                                class="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
-                                Cancel
-                            </button>
-                            <button onclick="startPlaybackFromModal()" 
-                                class="px-4 py-2 text-sm font-medium text-white bg-[#4285f4] rounded-lg hover:bg-blue-600 transition-colors">
-                                Start
-                            </button>
-                        </div>
-                    </div>
+                <div class="mt-8 flex justify-end space-x-3">
+                    <button onclick="closePlayOptionsModal()"
+                        class="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
+                        Cancel
+                    </button>
+                    <button onclick="startPlaybackFromModal()"
+                        class="px-4 py-2 text-sm font-medium text-white bg-[#4285f4] rounded-lg hover:bg-blue-600 transition-colors">
+                        Start
+                    </button>
                 </div>
-            `;
+            </div>
+        </div>
+    `;
 
-            const modelBtns = modal.querySelectorAll('.model-btn');
-            function setupButtonGroup(buttons) {
-                buttons.forEach(btn => {
-                    btn.addEventListener('click', function () {
-                        buttons.forEach(b => {
-                            b.classList.remove('active', 'bg-[#4285f4]', 'text-white');
-                            b.classList.add('bg-gray-100', 'text-gray-600');
-                        });
-                        this.classList.remove('bg-gray-100', 'text-gray-600');
-                        this.classList.add('active', 'bg-[#4285f4]', 'text-white');
-                    });
+    // Setup button groups
+    const fusionBtns = modal.querySelectorAll('.fusion-btn');
+    const modelBtns = modal.querySelectorAll('.model-btn');
+
+    function setupButtonGroup(buttons) {
+        buttons.forEach(btn => {
+            btn.addEventListener('click', function () {
+                buttons.forEach(b => {
+                    b.classList.remove('active', 'bg-[#4285f4]', 'text-white');
+                    b.classList.add('bg-gray-100', 'text-gray-600');
                 });
-            }
-            setupButtonGroup(modelBtns);
-
-            modal.dataset.fileName = fileName;
-            modal.dataset.directory = directory;
-
-            modal.showModal();
+                this.classList.remove('bg-gray-100', 'text-gray-600');
+                this.classList.add('active', 'bg-[#4285f4]', 'text-white');
+            });
         });
+    }
+
+    setupButtonGroup(fusionBtns);
+    setupButtonGroup(modelBtns);
+
+    // Store file info for later use
+    modal.dataset.fileName = fileName;
+    modal.dataset.directory = directory;
+
+    modal.showModal();
 };
 
 window.closePlayOptionsModal = function () {
@@ -982,73 +899,62 @@ window.startPlaybackFromModal = function () {
     const fileName = modal.dataset.fileName;
     const directory = modal.dataset.directory;
 
-    // Get device name to determine if it's Maivin
-    fetch('/config/webui/details')
-        .then(response => response.json())
-        .then(deviceData => {
-            const isMaivin = deviceData.DEVICE?.toLowerCase().includes('maivin');
+    const fusionEnabled = window.serviceCache.isServiceEnabled('fusion');
+    const fusionIsLive = !fusionEnabled ? true : modal.querySelector('.fusion-btn[data-value="live"]')?.classList.contains('active') || false;
+    const modelIsLive = modal.querySelector('.model-btn[data-value="live"]')?.classList.contains('active') || false;
 
-            // Get selected options
-            const fusionIsLive = isMaivin ? true : modal.querySelector('.fusion-btn[data-value="live"]')?.classList.contains('active') || false;
-            const modelIsLive = modal.querySelector('.model-btn[data-value="live"]')?.classList.contains('active') || false;
+    const config = {
+        fileName: "replay",
+        MCAP: `${directory}/${fileName}`,
+        IGNORE_TOPICS: ""
+    };
 
-            const config = {
-                fileName: "replay",
-                MCAP: `${directory}/${fileName}`,
-                IGNORE_TOPICS: ""
-            };
+    let ignoreTopics = [];
+    if (fusionIsLive) ignoreTopics.push("/fusion/*");
+    if (modelIsLive) ignoreTopics.push("/model/*");
+    config.IGNORE_TOPICS = ignoreTopics.join(" ");
 
-            let ignoreTopics = [];
-            if (fusionIsLive) ignoreTopics.push("/fusion/*");
-            if (modelIsLive) ignoreTopics.push("/model/*");
-            config.IGNORE_TOPICS = ignoreTopics.join(" ");
-
-            fetch('/config/replay', {
+    fetch('/config/replay', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config)
+    })
+        .then(response => {
+            if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+            return response.text();
+        })
+        .then(() => {
+            return fetch('/replay', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(config)
-            })
-                .then(response => {
-                    if (!response.ok) throw new Error(`HTTP error ${response.status}`);
-                    return response.text();
+                body: JSON.stringify({
+                    file: fileName,
+                    directory: directory,
+                    dataSource: fusionIsLive ? 'live' : 'mcap',
+                    model: modelIsLive ? 'live' : 'mcap'
                 })
-                .then(() => {
-                    return fetch('/replay', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            file: fileName,
-                            directory: directory,
-                            dataSource: fusionIsLive ? 'live' : 'mcap',
-                            model: modelIsLive ? 'live' : 'mcap'
-                        })
-                    });
-                })
-                .then(response => {
-                    if (!response.ok) throw new Error(`HTTP error ${response.status}`);
-                    return response.text();
-                })
-                .then(() => {
-                    window.isPlaying = true;
-                    window.currentPlayingFile = fileName;
-                    // Save state to localStorage
-                    localStorage.setItem('mcapReplayState', JSON.stringify({
-                        isPlaying: true,
-                        currentPlayingFile: fileName
-                    }));
-                    modal.close();
-                    // Refresh the table
-                    if (typeof showMcapDialog === 'function') showMcapDialog();
-                    else if (typeof listMcapFiles === 'function') listMcapFiles();
-                })
-                .catch(error => {
-                    console.error('Error starting playback:', error);
-                    alert(`Error starting playback: ${error.message}`);
-                });
+            });
+        })
+        .then(response => {
+            if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+            return response.text();
+        })
+        .then(() => {
+            window.isPlaying = true;
+            window.currentPlayingFile = fileName;
+            // Save state to localStorage
+            localStorage.setItem('mcapReplayState', JSON.stringify({
+                isPlaying: true,
+                currentPlayingFile: fileName
+            }));
+            modal.close();
+            // Refresh the table
+            if (typeof showMcapDialog === 'function') showMcapDialog();
+            else if (typeof listMcapFiles === 'function') listMcapFiles();
         })
         .catch(error => {
-            console.error('Error fetching device info:', error);
-            alert('Error starting playback: Could not determine device type');
+            console.error('Error starting playback:', error);
+            alert(`Error starting playback: ${error.message}`);
         });
 };
 
@@ -2111,7 +2017,7 @@ window.switchToLive = async function () {
 
     let deviceName = null;
     try {
-        // Fetch device name
+        // Note: DEVICE field used here for systemd target name, not UI gating
         const response = await fetch('/config/webui/details');
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
