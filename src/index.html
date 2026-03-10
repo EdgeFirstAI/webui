@@ -252,29 +252,8 @@
     </main>
 
     <script>
-        async function fetchConfigAndUpdateDeviceName() {
-            try {
-                const response = await fetch('/config/webui/details');
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const data = await response.json();
-                const deviceValue = data.DEVICE;
-
-                populateCardContainer(deviceValue);
-            } catch (error) {
-                console.warn('Could not load config — using defaults:', error);
-                populateCardContainer();
-            }
-        }
-
-        // Track current device type for service-cache callback re-renders
-        let currentDeviceType = null;
-
-        function populateCardContainer(deviceType) {
-            currentDeviceType = deviceType || 'generic';
+        function populateCardContainer() {
             const cardContainer = document.getElementById('card-container');
-            const isRaivin = currentDeviceType.toLowerCase().includes('raivin');
 
             // Clear existing cards
             cardContainer.replaceChildren();
@@ -320,13 +299,17 @@
             if (isServiceEnabled('lidarpub')) {
                 cardContainer.appendChild(createCard('/lidar', 'LiDAR', ['3D Point Cloud']));
             }
-            if (isRaivin) {
+            if (isServiceEnabled('radarpub')) {
                 cardContainer.appendChild(createCard('/grid', 'Radar', ['Occupancy Grid', '+', 'Radar Point Cloud']));
             }
 
             // Bottom row: auxiliary sensors
-            cardContainer.appendChild(createCard('/imu', 'IMU', ['IMU Visualization']));
-            cardContainer.appendChild(createCard('/gps', 'GPS', ['Explore Location']));
+            if (isServiceEnabled('imu')) {
+                cardContainer.appendChild(createCard('/imu', 'IMU', ['IMU Visualization']));
+            }
+            if (isServiceEnabled('navsat')) {
+                cardContainer.appendChild(createCard('/gps', 'GPS', ['Explore Location']));
+            }
         }
 
         window.addEventListener('load', async () => {
@@ -336,15 +319,9 @@
             // Initialize neural mesh background (dark mode only)
             NeuralMesh.init();
 
-            // Re-populate cards when service statuses update (e.g. lidarpub enabled)
-            window.serviceCache.registerUpdateCallback(() => {
-                if (currentDeviceType) {
-                    populateCardContainer(currentDeviceType);
-                }
-            });
-
-            // Fetch config and populate cards
-            await fetchConfigAndUpdateDeviceName();
+            // Populate cards and re-populate when service statuses update
+            populateCardContainer();
+            window.serviceCache.registerUpdateCallback(() => populateCardContainer());
         });
     </script>
 </body>
