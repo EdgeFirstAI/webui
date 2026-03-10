@@ -700,42 +700,30 @@
                 });
             }
 
-            // First fetch device type, then config
-            fetch('/config/webui/details')
-                .then(response => response.json())
-                .then(data => {
-                    const deviceType = data.DEVICE;
-                    if (deviceType.toLowerCase() === 'maivin') {
-                        // Hide entire Radar and Fusion sections
-                        const radarGroup = document.querySelector('.topic-group:has(#topic_radar_parent)');
-                        const fusionParent = document.querySelector('.topic-item:has(#topic_fusion_parent)');
+            // Gate topic groups by service availability
+            function updateTopicVisibility() {
+                const radarGroup = document.querySelector('.topic-group:has(#topic_radar_parent)');
+                const fusionParent = document.querySelector('.topic-item:has(#topic_fusion_parent)');
 
-                        if (radarGroup) {
-                            radarGroup.style.display = 'none';
-                        }
+                if (radarGroup) {
+                    radarGroup.style.display = window.serviceCache.isServiceEnabled('radarpub') ? '' : 'none';
+                }
+                if (fusionParent) {
+                    fusionParent.style.display = window.serviceCache.isServiceEnabled('fusion') ? '' : 'none';
+                }
 
-                        if (fusionParent) {
-                            fusionParent.style.display = 'none';
-                        }
+                // Update all-models parent when fusion is hidden
+                const allModelsParent = document.getElementById('topic_all_models_parent');
+                const modelParent = document.getElementById('topic_model_parent');
+                if (!window.serviceCache.isServiceEnabled('fusion') && allModelsParent && modelParent) {
+                    window.updateAllModelsParent = function () {
+                        allModelsParent.checked = modelParent.checked;
+                    };
+                }
+            }
 
-                        // Update the all models parent checkbox behavior since fusion is hidden
-                        const allModelsParent = document.getElementById('topic_all_models_parent');
-                        const modelParent = document.getElementById('topic_model_parent');
-
-                        // Modify the updateAllModelsParent function for MAIVIN
-                        window.updateAllModelsParent = function () {
-                            if (allModelsParent && modelParent) {
-                                // For MAIVIN, all models parent matches model parent state
-                                allModelsParent.checked = modelParent.checked;
-                            }
-                        };
-                    }
-                })
-                .then(() => fetchConfigDetails())
-                .catch(error => {
-                    console.error('Error fetching device type:', error);
-                    fetchConfigDetails();
-                });
+            updateTopicVisibility();
+            fetchConfigDetails();
         });
 
         function fetchConfigDetails() {
