@@ -6,12 +6,12 @@ import h264Stream from './stream.js';
 class SmartVideoManager {
     constructor() {
         this.tileUrls = [
-            '/rt/camera/h264/tl',
-            '/rt/camera/h264/tr',
-            '/rt/camera/h264/bl',
-            '/rt/camera/h264/br'
+            '/rt/camera/h264/tl?compress=false',
+            '/rt/camera/h264/tr?compress=false',
+            '/rt/camera/h264/bl?compress=false',
+            '/rt/camera/h264/br?compress=false'
         ];
-        this.fallbackUrl = '/rt/camera/h264';
+        this.fallbackUrl = '/rt/camera/h264?compress=false';
 
         this.mode = null; // 'tiles' or 'fallback'
         this.currentTexture = null;

@@ -7,11 +7,14 @@ import SmartVideoManager from './SmartVideoManager.js'
 import modelstream from './model.js'
 import { mask_colors } from './utils.js'
 import { CdrReader } from './Cdr.js'
+import { parsePointCloud2, readField } from './pointcloud2.js'
 import { parseNumbersInObject } from './parseNumbersInObject.js'
 
 const PI = Math.PI
 const UNAVAILABLE_TIMEOUT_MS = 15000
 const LIDAR_DOT_RADIUS = 3
+const RECONNECT_MIN_MS = 1000
+const RECONNECT_MAX_MS = 8000
 
 // ---------------------------------------------------------------------------
 // Configurable topic URLs (overridden by /config/webui/details)
@@ -187,6 +190,7 @@ const SEG_FRAGMENT_SHADER = `
     uniform sampler2DArray masks;
     uniform vec4 colors[${MAX_SEG_MASKS}];
     uniform vec4 bboxes[${MAX_SEG_MASKS}];
+    uniform vec2 maskScales[${MAX_SEG_MASKS}];
     uniform int maskCount;
     uniform bool isInstance;
 
@@ -207,8 +211,9 @@ const SEG_FRAGMENT_SHADER = `
                 // Check if fragment is within this mask's bbox
                 if (uv.x < bb.x || uv.x > bb.x + bb.z ||
                     uv.y < bb.y || uv.y > bb.y + bb.w) continue;
-                // Map UV to mask-local coordinates
-                vec2 maskUV = (uv - bb.xy) / bb.zw;
+                // Map UV to mask-local coordinates, then scale to this
+                // mask's subregion within the shared texture atlas
+                vec2 maskUV = (uv - bb.xy) / bb.zw * maskScales[i];
                 float sig = texture(masks, vec3(maskUV, float(i))).r;
                 // Normalize from uint8 [0,255] → [0,1] sigmoid
                 float sigNorm = sig;
@@ -249,6 +254,8 @@ function ensureSegMesh() {
     // Build initial uniform arrays (flat vec4 arrays → Float32Array)
     const colorsArr = new Float32Array(MAX_SEG_MASKS * 4)
     const bboxesArr = new Float32Array(MAX_SEG_MASKS * 4)
+    // Per-mask UV scale: maps [0,1] to each mask's subregion in the atlas
+    const scalesArr = new Float32Array(MAX_SEG_MASKS * 2).fill(1.0)
 
     // Create a 1x1x1 placeholder so the sampler2DArray binding is valid
     // before real mask data arrives
@@ -265,6 +272,7 @@ function ensureSegMesh() {
             masks: { value: placeholder },
             colors: { value: colorsArr },
             bboxes: { value: bboxesArr },
+            maskScales: { value: scalesArr },
             maskCount: { value: 0 },
             isInstance: { value: true },
         },
@@ -295,33 +303,37 @@ function renderSegmentation() {
     const isInstance = masks[0].boxed
     const maskCount = Math.min(masks.length, MAX_SEG_MASKS)
 
-    // All masks share dimensions (proto res for instance, model res for semantic)
-    const mW = masks[0].width
-    const mH = masks[0].height
-    if (mW === 0 || mH === 0) return
+    // Instance masks have per-box crop dimensions; find the max so every
+    // mask layer fits in the same DataArrayTexture atlas.
+    let maxW = 0, maxH = 0
+    for (let i = 0; i < maskCount; i++) {
+        if (masks[i].width > maxW) maxW = masks[i].width
+        if (masks[i].height > maxH) maxH = masks[i].height
+    }
+    if (maxW === 0 || maxH === 0) return
 
-    // Pad each mask with a 1px transparent border so GPU bilinear
-    // interpolation blends to zero at the crop boundary instead of
-    // clamping the edge texels (matches old canvas padding approach)
-    const padW = mW + 2
-    const padH = mH + 2
+    // Pad with a 1px transparent border so GPU bilinear interpolation
+    // blends to zero at the crop boundary
+    const padW = maxW + 2
+    const padH = maxH + 2
 
     ensureSegTexture(padW, padH)
 
-    // Copy mask data into DataArrayTexture buffer with 1px zero border
+    // Copy each mask into its DataArrayTexture layer using that mask's
+    // own width/height (left-aligned at texel (1,1) within the layer)
     const buf = segTexture.image.data
     const layerSize = padW * padH
-    // Clear entire buffer (sets borders + unused layers to zero)
     buf.fill(0)
     for (let i = 0; i < maskCount; i++) {
         const mask = masks[i]
         if (!mask.mask || mask.mask.length === 0) continue
+        const w = mask.width
+        const h = mask.height
         const layerOffset = i * layerSize
-        // Copy mask data starting at row+1, col+1 within padded layer
-        for (let row = 0; row < mH; row++) {
-            const srcStart = row * mW
+        for (let row = 0; row < h; row++) {
+            const srcStart = row * w
             const dstStart = layerOffset + (row + 1) * padW + 1
-            for (let col = 0; col < mW; col++) {
+            for (let col = 0; col < w; col++) {
                 buf[dstStart + col] = srcStart + col < mask.mask.length ? mask.mask[srcStart + col] : 0
             }
         }
@@ -336,11 +348,17 @@ function renderSegmentation() {
 
     const colorsArr = uniforms.colors.value
     const bboxesArr = uniforms.bboxes.value
+    const scalesArr = uniforms.maskScales.value
 
     for (let i = 0; i < maskCount; i++) {
         const base = i * 4
 
         if (isInstance) {
+            const mask = masks[i]
+            // UV scale: map [0,1] to this mask's padded subregion in the atlas
+            scalesArr[i * 2]     = (mask.width + 2) / padW
+            scalesArr[i * 2 + 1] = (mask.height + 2) / padH
+
             // Instance color from track ID
             const box = boxes && boxes[i] ? boxes[i] : null
             let cr, cg, cb
@@ -357,8 +375,8 @@ function renderSegmentation() {
 
             // Bbox expanded by 1 mask pixel for transparent border padding
             if (box) {
-                const pixelW = box.width / mW
-                const pixelH = box.height / mH
+                const pixelW = box.width / mask.width
+                const pixelH = box.height / mask.height
                 bboxesArr[base] = box.center_x - box.width / 2 - pixelW
                 bboxesArr[base + 1] = box.center_y - box.height / 2 - pixelH
                 bboxesArr[base + 2] = box.width + 2 * pixelW
@@ -420,7 +438,6 @@ function ensureModelSocket() {
 function maybeCloseModelSocket() {
     if (boxEnabled || segEnabled) return
     if (modelSocket) {
-        modelSocket.onclose = null
         modelSocket.close()
         modelSocket = null
     }
@@ -621,6 +638,34 @@ function computeLidarToCameraMatrix() {
 }
 
 // ---------------------------------------------------------------------------
+// LiDAR Overlay — Dynamic Colour Mode Detection
+// ---------------------------------------------------------------------------
+
+const ENRICHED_COLOR_MODES = [
+    { value: 'cluster',      label: 'Cluster',      field: 'cluster_id' },
+    { value: 'vision_class', label: 'Vision Class',  field: 'vision_class' },
+    { value: 'track_id',     label: 'Track ID',      field: 'track_id' },
+    { value: 'instance_id',  label: 'Instance ID',   field: 'instance_id' },
+]
+
+/**
+ * Update the LiDAR colour-mode dropdown to show only modes whose fields
+ * exist in the current PointCloud2 data. fixed/distance are always present.
+ */
+function updateAvailableLidarColorModes(fieldMap) {
+    for (const mode of ENRICHED_COLOR_MODES) {
+        if (!fieldMap[mode.field]) continue
+        let option = lidarColorSelect.querySelector(`option[value="${mode.value}"]`)
+        if (!option) {
+            option = document.createElement('option')
+            option.value = mode.value
+            option.textContent = mode.label
+            lidarColorSelect.appendChild(option)
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // LiDAR Overlay — Color Functions
 // ---------------------------------------------------------------------------
 
@@ -661,73 +706,6 @@ function colorToCSS(c) {
 }
 
 // ---------------------------------------------------------------------------
-// LiDAR Overlay — Point Cloud Parsing
-// ---------------------------------------------------------------------------
-
-/**
- * Parse a PointCloud2 CDR message and return raw point data.
- * Returns { points: [{x,y,z,...}], fields: [{name,offset,datatype}], ... }
- */
-function parsePointCloud2(arrayBuffer) {
-    const view = new DataView(arrayBuffer)
-    const reader = new CdrReader(view)
-
-    // Header
-    reader.uint32() // stamp.sec
-    reader.uint32() // stamp.nsec
-    reader.string() // frame_id
-
-    const pcHeight = reader.uint32()
-    const pcWidth = reader.uint32()
-
-    // Fields
-    const fieldCount = reader.sequenceLength()
-    const fields = []
-    for (let i = 0; i < fieldCount; i++) {
-        const name = reader.string()
-        const offset = reader.uint32()
-        const datatype = reader.uint8()
-        reader.uint32() // count
-        fields.push({ name, offset, datatype })
-    }
-
-    const isBigEndian = reader.int8() > 0
-    const pointStep = reader.uint32()
-    reader.uint32() // row_step
-    const rawData = reader.uint8Array()
-    // reader.int8() // is_dense — skip
-
-    const totalPoints = pcHeight * pcWidth
-    const le = !isBigEndian
-
-    // Build field lookup
-    const fieldMap = {}
-    for (const f of fields) fieldMap[f.name] = f
-
-    // Wrap raw data in a DataView for field extraction
-    const rawBuf = rawData.buffer
-    const rawBase = rawData.byteOffset
-    const dataView2 = new DataView(rawBuf, rawBase, rawData.length)
-
-    function readField(pointIndex, field) {
-        const o = pointIndex * pointStep + field.offset
-        switch (field.datatype) {
-            case 1: return dataView2.getInt8(o)
-            case 2: return dataView2.getUint8(o)
-            case 3: return dataView2.getInt16(o, le)
-            case 4: return dataView2.getUint16(o, le)
-            case 5: return dataView2.getInt32(o, le)
-            case 6: return dataView2.getUint32(o, le)
-            case 7: return dataView2.getFloat32(o, le)
-            case 8: return dataView2.getFloat64(o, le)
-            default: return 0
-        }
-    }
-
-    return { totalPoints, fieldMap, readField }
-}
-
-// ---------------------------------------------------------------------------
 // LiDAR Overlay — Projection & Rendering
 // ---------------------------------------------------------------------------
 
@@ -757,7 +735,7 @@ function renderLidarOverlay() {
         return
     }
 
-    const { totalPoints, fieldMap, readField } = parsed
+    const { totalPoints, fieldMap } = parsed
     const hasX = fieldMap.x, hasY = fieldMap.y, hasZ = fieldMap.z
     if (!hasX || !hasY || !hasZ) return
 
@@ -773,16 +751,16 @@ function renderLidarOverlay() {
 
     for (let i = 0; i < totalPoints; i++) {
         // Read LiDAR-frame coordinates
-        const lx = readField(i, hasX)
-        const ly = readField(i, hasY)
-        const lz = readField(i, hasZ)
+        const lx = readField(parsed, i, hasX)
+        const ly = readField(parsed, i, hasY)
+        const lz = readField(parsed, i, hasZ)
 
         // Skip invalid points
         if (!isFinite(lx) || !isFinite(ly) || !isFinite(lz)) continue
 
         // Filter noise/ground by cluster_id when using enriched data
         if (hasClusterId && needsEnriched) {
-            const cid = readField(i, hasClusterId)
+            const cid = readField(parsed, i, hasClusterId)
             if (cid === 0 && !lidarShowNoise) continue
             if (cid === 1 && !lidarShowGround) continue
         }
@@ -809,19 +787,19 @@ function renderLidarOverlay() {
         if (lidarColorMode === 'fixed') {
             color = { r: 0.0, g: 1.0, b: 0.4 }
         } else if (lidarColorMode === 'cluster' && hasClusterId) {
-            color = clusterColor(readField(i, hasClusterId))
+            color = clusterColor(readField(parsed, i, hasClusterId))
         } else if (lidarColorMode === 'vision_class' && hasVisionClass) {
-            const cls = readField(i, hasVisionClass)
+            const cls = readField(parsed, i, hasVisionClass)
             if (cls <= 0) continue
             color = cls < mask_colors.length
                 ? { r: mask_colors[cls].r, g: mask_colors[cls].g, b: mask_colors[cls].b }
                 : { r: 0.5, g: 0.5, b: 0.5 }
         } else if (lidarColorMode === 'track_id' && hasTrackId) {
-            const tid = readField(i, hasTrackId)
+            const tid = readField(parsed, i, hasTrackId)
             if (tid === 0) continue
             color = clusterColor(tid)
         } else if (lidarColorMode === 'instance_id' && hasInstanceId) {
-            const iid = readField(i, hasInstanceId)
+            const iid = readField(parsed, i, hasInstanceId)
             if (iid === 0) continue
             color = clusterColor(iid)
         } else {
@@ -849,39 +827,111 @@ let lidarPointsSocket = null   // always subscribed to /lidar/points
 let lidarEnrichedSocket = null  // subscribed to /lidar/clusters when needed
 let lidarEnrichedPoints = null  // latest cluster data (or null)
 
+/**
+ * Create a WebSocket with automatic reconnection on close.
+ * Returns the socket. The caller's variable is updated via the setter callback.
+ * @param {string} url - WebSocket URL
+ * @param {function} onmessage - message handler
+ * @param {function} setter - called with new socket on reconnect (e.g., s => myVar = s)
+ * @param {function} shouldReconnect - returns false to stop reconnection
+ * @param {string} label - log label
+ */
+function reconnectingSocket(url, onmessage, setter, shouldReconnect, label) {
+    let delay = RECONNECT_MIN_MS
+    function connect() {
+        if (!shouldReconnect()) return
+        const ws = new WebSocket(url)
+        ws.binaryType = 'arraybuffer'
+        ws.onmessage = onmessage
+        ws.onerror = (e) => console.warn(`${label} WebSocket error:`, e)
+        ws.onopen = () => {
+            delay = RECONNECT_MIN_MS
+        }
+        ws.onclose = () => {
+            if (!shouldReconnect()) return
+            console.log(`${label} WebSocket closed — reconnecting in ${delay / 1000}s`)
+            setTimeout(connect, delay)
+            delay = Math.min(delay * 2, RECONNECT_MAX_MS)
+        }
+        setter(ws)
+    }
+    connect()
+}
+
 function startLidar() {
     // Subscribe to tf_static for camera-LiDAR transform
     if (!tfStaticSocket) {
-        tfStaticSocket = new WebSocket(socketUrlTfStatic)
-        tfStaticSocket.binaryType = 'arraybuffer'
-        tfStaticSocket.onmessage = (event) => {
-            parseTfStatic(event.data)
-        }
-        tfStaticSocket.onerror = (e) => console.warn('tf_static WebSocket error:', e)
+        reconnectingSocket(
+            socketUrlTfStatic,
+            (event) => parseTfStatic(event.data),
+            (ws) => { tfStaticSocket = ws },
+            () => lidarEnabled && !cameraTransform,
+            'tf_static'
+        )
     }
 
     // Subscribe to camera_info for intrinsics
     if (!cameraInfoSocket) {
-        cameraInfoSocket = new WebSocket(socketUrlCameraInfo)
-        cameraInfoSocket.binaryType = 'arraybuffer'
-        cameraInfoSocket.onmessage = (event) => {
-            parseCameraInfo(event.data)
-        }
-        cameraInfoSocket.onerror = (e) => console.warn('camera_info WebSocket error:', e)
+        reconnectingSocket(
+            socketUrlCameraInfo,
+            (event) => parseCameraInfo(event.data),
+            (ws) => { cameraInfoSocket = ws },
+            () => lidarEnabled && !cameraIntrinsics,
+            'camera_info'
+        )
     }
 
     // Always subscribe to the raw points topic
     if (!lidarPointsSocket) {
-        lidarPointsSocket = new WebSocket(socketUrlLidar)
-        lidarPointsSocket.binaryType = 'arraybuffer'
-        lidarPointsSocket.onmessage = (event) => {
-            lidarPoints = event.data
-        }
-        lidarPointsSocket.onerror = (e) => console.warn('LiDAR points WebSocket error:', e)
+        let rawFieldsDetected = false
+        reconnectingSocket(
+            socketUrlLidar,
+            (event) => {
+                lidarPoints = event.data
+                if (!rawFieldsDetected) {
+                    try {
+                        const p = parsePointCloud2(event.data)
+                        updateAvailableLidarColorModes(p.fieldMap)
+                        rawFieldsDetected = true
+                    } catch (_) { /* ignore parse errors for detection */ }
+                }
+            },
+            (ws) => { lidarPointsSocket = ws },
+            () => lidarEnabled,
+            'LiDAR points'
+        )
     }
 
-    // Subscribe to cluster topic if needed
+    // Subscribe to enriched topic if an enriched color mode is active
     connectEnrichedSocket()
+
+    // Probe cluster and fusion topics to discover available color modes
+    probeTopicFields(socketUrlLidarCluster)
+    probeTopicFields(socketUrlFusion)
+}
+
+/**
+ * Open a temporary WebSocket to discover which PointCloud2 fields a topic
+ * provides, then close the socket. Populates the colour-mode dropdown.
+ */
+function probeTopicFields(url) {
+    const ws = new WebSocket(url)
+    ws.binaryType = 'arraybuffer'
+    ws.onmessage = (event) => {
+        try {
+            const p = parsePointCloud2(event.data)
+            updateAvailableLidarColorModes(p.fieldMap)
+        } catch (_) { /* topic may not be available */ }
+        ws.close()
+    }
+    ws.onerror = () => {}
+}
+
+function resetEnrichedColorModes() {
+    for (const mode of ENRICHED_COLOR_MODES) {
+        const option = lidarColorSelect.querySelector(`option[value="${mode.value}"]`)
+        if (option) option.remove()
+    }
 }
 
 function connectEnrichedSocket() {
@@ -894,17 +944,29 @@ function connectEnrichedSocket() {
 
     const needsEnriched = ['cluster', 'vision_class', 'track_id', 'instance_id'].includes(lidarColorMode)
     if (needsEnriched) {
+        let fieldsDetected = false
         const enrichedUrl = lidarColorMode === 'cluster' ? socketUrlLidarCluster : socketUrlFusion
-        lidarEnrichedSocket = new WebSocket(enrichedUrl)
-        lidarEnrichedSocket.binaryType = 'arraybuffer'
-        lidarEnrichedSocket.onmessage = (event) => {
-            lidarEnrichedPoints = event.data
-        }
-        lidarEnrichedSocket.onerror = (e) => console.warn('LiDAR cluster WebSocket error:', e)
+        reconnectingSocket(
+            enrichedUrl,
+            (event) => {
+                lidarEnrichedPoints = event.data
+                if (!fieldsDetected) {
+                    try {
+                        const p = parsePointCloud2(event.data)
+                        updateAvailableLidarColorModes(p.fieldMap)
+                        fieldsDetected = true
+                    } catch (_) { /* ignore parse errors for detection */ }
+                }
+            },
+            (ws) => { lidarEnrichedSocket = ws },
+            () => lidarEnabled,
+            'LiDAR enriched'
+        )
     }
 }
 
 function stopLidar() {
+    // Setting lidarEnabled = false first stops reconnection via shouldReconnect checks
     if (lidarPointsSocket) {
         lidarPointsSocket.onclose = null
         lidarPointsSocket.close()
@@ -927,6 +989,7 @@ function stopLidar() {
     }
     lidarPoints = null
     lidarEnrichedPoints = null
+    resetEnrichedColorModes()
     lidarTransform = null
     cameraTransform = null
     lidarToCameraMatrix = null

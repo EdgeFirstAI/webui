@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 import { CdrReader } from './Cdr.js';
 
+const RECONNECT_MIN_MS = 1000;
+const RECONNECT_MAX_MS = 8000;
+
 function parseTime(reader) {
     return {
         sec: reader.int32(),
@@ -74,29 +77,58 @@ function parseModelMsg(arrayBuffer) {
 }
 
 export default function modelstream(socketUrl, onMessage) {
-    const socket = new WebSocket(socketUrl)
-    socket.binaryType = 'arraybuffer'
+    let stopped = false;
+    let socket = null;
+    let reconnectDelay = RECONNECT_MIN_MS;
+    let reconnectTimer = null;
 
-    socket.onopen = () => {
-        console.log('Model WebSocket connected to ' + socketUrl)
-    }
+    function connect() {
+        if (stopped) return;
 
-    socket.onmessage = (event) => {
-        try {
-            const msg = parseModelMsg(event.data)
-            onMessage(msg)
-        } catch (error) {
-            console.error('Failed to parse Model message:', error)
+        socket = new WebSocket(socketUrl)
+        socket.binaryType = 'arraybuffer'
+
+        socket.onopen = () => {
+            console.log('Model WebSocket connected to ' + socketUrl)
+            reconnectDelay = RECONNECT_MIN_MS;
+        }
+
+        socket.onmessage = (event) => {
+            try {
+                const msg = parseModelMsg(event.data)
+                onMessage(msg)
+            } catch (error) {
+                console.error('Failed to parse Model message:', error)
+            }
+        }
+
+        socket.onerror = (error) => {
+            console.error(`Model WebSocket ${socketUrl} error:`, error)
+        }
+
+        socket.onclose = () => {
+            if (stopped) return;
+            console.log(`Model WebSocket ${socketUrl} closed — reconnecting in ${reconnectDelay / 1000}s`)
+            reconnectTimer = setTimeout(connect, reconnectDelay);
+            reconnectDelay = Math.min(reconnectDelay * 2, RECONNECT_MAX_MS);
         }
     }
 
-    socket.onerror = (error) => {
-        console.error(`Model WebSocket ${socketUrl} error:`, error)
-    }
+    connect();
 
-    socket.onclose = () => {
-        console.log(`Model WebSocket ${socketUrl} closed`)
+    // Return a handle that camera.js can use to close/manage the connection
+    return {
+        close() {
+            stopped = true;
+            clearTimeout(reconnectTimer);
+            if (socket) {
+                socket.onclose = null;
+                socket.close();
+                socket = null;
+            }
+        },
+        get readyState() {
+            return socket ? socket.readyState : WebSocket.CLOSED;
+        }
     }
-
-    return socket
 }

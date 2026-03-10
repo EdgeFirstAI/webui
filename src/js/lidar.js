@@ -5,7 +5,7 @@ import * as THREE from './three.js'
 import { OrbitControls } from './OrbitControls.js'
 import { PCDLoader } from './PCDLoader.js'
 import { mask_colors } from './utils.js'
-import { CdrReader } from './Cdr.js'
+import { parsePointCloud2, extractFieldArray } from './pointcloud2.js'
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -83,6 +83,46 @@ function animate() {
     renderer.render(scene, camera)
 }
 animate()
+
+// ---------------------------------------------------------------------------
+// Dynamic Colour Mode Detection
+// ---------------------------------------------------------------------------
+
+// Enriched field names → dropdown option value and label
+const ENRICHED_COLOR_MODES = [
+    { value: 'cluster',      label: 'Cluster',      field: 'cluster_id' },
+    { value: 'vision_class', label: 'Vision Class',  field: 'vision_class' },
+    { value: 'track_id',     label: 'Track ID',      field: 'track_id' },
+    { value: 'instance_id',  label: 'Instance ID',   field: 'instance_id' },
+]
+
+/**
+ * Update the colour-mode dropdown to show only modes whose fields exist in
+ * the current PointCloud2 data. fixed/distance are always present.
+ */
+function updateAvailableColorModes(fieldMap) {
+    for (const mode of ENRICHED_COLOR_MODES) {
+        if (!fieldMap[mode.field]) continue
+        let option = colorModeSelect.querySelector(`option[value="${mode.value}"]`)
+        if (!option) {
+            option = document.createElement('option')
+            option.value = mode.value
+            option.textContent = mode.label
+            colorModeSelect.appendChild(option)
+        }
+    }
+}
+
+/**
+ * Remove all enriched colour-mode options (called on topic switch so that
+ * newly detected fields from the new topic populate the dropdown fresh).
+ */
+function resetEnrichedColorModes() {
+    for (const mode of ENRICHED_COLOR_MODES) {
+        const option = colorModeSelect.querySelector(`option[value="${mode.value}"]`)
+        if (option) option.remove()
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Part B: Colour Mode Logic
@@ -456,6 +496,23 @@ function connectSocket() {
 }
 
 /**
+ * Open a temporary WebSocket to discover which PointCloud2 fields a topic
+ * provides, then close the socket. Populates the colour-mode dropdown.
+ */
+function probeTopicFields(url) {
+    const ws = new WebSocket(url)
+    ws.binaryType = 'arraybuffer'
+    ws.onmessage = (event) => {
+        try {
+            const parsed = parsePointCloud2(event.data)
+            updateAvailableColorModes(parsed.fieldMap)
+        } catch (_) { /* topic may not be available */ }
+        ws.close()
+    }
+    ws.onerror = () => {}
+}
+
+/**
  * Switch to the appropriate topic (called when colour mode changes).
  */
 function switchTopic() {
@@ -469,15 +526,22 @@ function updatePointCloud(arrayBuffer) {
     try {
         const group = pcdLoader.parse(arrayBuffer)
 
+        // Reuse the parsed result from PCDLoader (avoids double-parsing)
+        const parsed = pcdLoader.lastParsed
+
+        // Update available colour modes based on detected fields
+        updateAvailableColorModes(parsed.fieldMap)
+
         // Extract per-point field for modes that need it
-        if (currentColorMode === 'vision_class') {
-            extractField(arrayBuffer, 'vision_class')
-        } else if (currentColorMode === 'cluster') {
-            extractField(arrayBuffer, 'cluster_id')
-        } else if (currentColorMode === 'track_id') {
-            extractField(arrayBuffer, 'track_id')
-        } else if (currentColorMode === 'instance_id') {
-            extractField(arrayBuffer, 'instance_id')
+        const fieldForMode = {
+            vision_class: 'vision_class',
+            cluster: 'cluster_id',
+            track_id: 'track_id',
+            instance_id: 'instance_id',
+        }
+        const targetField = fieldForMode[currentColorMode]
+        if (targetField) {
+            lastParsedPoints = extractFieldArray(parsed, targetField)
         }
 
         // Orient the cloud
@@ -527,80 +591,6 @@ function updatePointCloud(arrayBuffer) {
     }
 }
 
-/**
- * Re-parse CDR binary data to extract a single named field for each point.
- * Populates `lastParsedPoints` as a flat Int32Array (one entry per point).
- */
-function extractField(arrayBuffer, fieldName) {
-    try {
-        const dataView = new DataView(arrayBuffer)
-        const reader = new CdrReader(dataView)
-
-        // Deserialize PointCloud2 header
-        reader.uint32() // header.stamp.sec
-        reader.uint32() // header.stamp.nsec
-        reader.string() // header.frame_id
-
-        const height = reader.uint32()
-        const width = reader.uint32()
-
-        // Fields — find target field offset and datatype
-        const fieldCount = reader.sequenceLength()
-        let fieldOffset = -1
-        let fieldDatatype = 0
-        for (let i = 0; i < fieldCount; i++) {
-            const name = reader.string()
-            const offset = reader.uint32()
-            const datatype = reader.uint8()
-            reader.uint32() // count
-            if (name === fieldName) {
-                fieldOffset = offset
-                fieldDatatype = datatype
-            }
-        }
-
-        const is_bigendian = reader.int8() > 0
-        const point_step = reader.uint32()
-        reader.uint32() // row_step
-        const rawData = reader.uint8Array()
-
-        const totalPoints = height * width
-
-        if (fieldOffset < 0) {
-            lastParsedPoints = new Int32Array(0)
-            return
-        }
-
-        // Zero-copy: wrap the underlying buffer directly
-        const rawBuf = rawData.buffer
-        const rawBase = rawData.byteOffset
-        const view = new DataView(rawBuf, rawBase, rawData.length)
-        const le = !is_bigendian
-
-        const values = new Int32Array(totalPoints)
-
-        for (let i = 0; i < totalPoints; i++) {
-            const o = i * point_step + fieldOffset
-            switch (fieldDatatype) {
-                case 1: values[i] = view.getInt8(o); break
-                case 2: values[i] = view.getUint8(o); break
-                case 3: values[i] = view.getInt16(o, le); break
-                case 4: values[i] = view.getUint16(o, le); break
-                case 5: values[i] = view.getInt32(o, le); break
-                case 6: values[i] = view.getUint32(o, le); break
-                case 7: values[i] = view.getFloat32(o, le); break
-                case 8: values[i] = view.getFloat64(o, le); break
-                default: values[i] = 0
-            }
-        }
-
-        lastParsedPoints = values
-    } catch (error) {
-        console.error('Error extracting field:', fieldName, error)
-        lastParsedPoints = new Int32Array(0)
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Theme Integration
 // ---------------------------------------------------------------------------
@@ -637,8 +627,12 @@ fetch('/config/webui/details')
             socketUrlFusion = config.FUSION_TOPIC
         }
         connectSocket()
+        probeTopicFields(socketUrlCluster)
+        probeTopicFields(socketUrlFusion)
     })
     .catch((err) => {
         console.warn('Could not load config — using defaults:', err)
         connectSocket()
+        probeTopicFields(socketUrlCluster)
+        probeTopicFields(socketUrlFusion)
     })

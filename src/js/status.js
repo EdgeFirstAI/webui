@@ -231,12 +231,6 @@ window.hideServiceStatus = function () {
         dialog.close();
     }
 
-    // Close WebSocket connection when dialog is closed
-    if (mcapSocket) {
-        mcapSocket.close();
-        mcapSocket = null;
-        window.mcapSocket = null;
-    }
 };
 
 async function updateQuickStatus() {
@@ -289,8 +283,13 @@ async function updateQuickStatus() {
     }
 }
 
-let mcapSocket = null;
-window.mcapSocket = mcapSocket;
+async function listMcapFiles() {
+    const response = await fetch('/mcap');
+    if (!response.ok) {
+        throw new Error(`HTTP error ${response.status}: ${await response.text()}`);
+    }
+    return response.json();
+}
 
 window.showMcapDialog = async function () {
     let dialog = document.getElementById('mcapDialog');
@@ -375,77 +374,60 @@ window.showMcapDialog = async function () {
         // Fallback to current global state
     }
 
-    // Close existing socket if any
-    if (mcapSocket) {
-        mcapSocket.close();
-        mcapSocket = null;
-        window.mcapSocket = null;
-    }
-
     try {
-        // Create WebSocket connection
-        mcapSocket = new WebSocket('/mcap/');
-        window.mcapSocket = mcapSocket;
+        const data = await listMcapFiles();
+        if (data.error) {
+            content.innerHTML = `<div class="text-red-600">Error: ${data.error}</div>`;
+            return;
+        }
+        const files = data.files || [];
+        const dirName = data.dir_name || '';
+        // Add a custom CSS rule to force no margin/padding above the directory label
+        if (!document.getElementById('mcap-dir-label-style')) {
+            const style = document.createElement('style');
+            style.id = 'mcap-dir-label-style';
+            style.innerHTML = `
+                .mcap-dir-label { margin-top: 0 !important; padding-top: 0 !important; margin-bottom: 0.25rem !important; font-size: 1.08rem !important; font-weight: 500 !important; }
+                #mcapDialogContent { margin-top: 0 !important; padding-top: 0 !important; }
+            `;
+            document.head.appendChild(style);
+        }
+        const header = dialog.querySelector('div[style*="border-bottom"]');
+        if (header) {
+            header.style.paddingBottom = '0';
+            header.style.marginBottom = '0';
+        }
+        content.style.marginTop = '0';
+        content.style.paddingTop = '0';
+        // Update directory path in header
+        const dirPathElement = document.querySelector('.mcap-dir-path');
+        if (dirPathElement && dirName) {
+            dirPathElement.textContent = dirName;
+        }
 
-        mcapSocket.onopen = () => {
-            mcapSocket.send(JSON.stringify({ action: 'list_files' }));
-        };
-
-        mcapSocket.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                if (data.error) {
-                    content.innerHTML = `<div class="text-red-600">Error: ${data.error}</div>`;
-                    return;
-                }
-                const files = data.files || [];
-                const dirName = data.dir_name || '';
-                // Add a custom CSS rule to force no margin/padding above the directory label
-                if (!document.getElementById('mcap-dir-label-style')) {
-                    const style = document.createElement('style');
-                    style.id = 'mcap-dir-label-style';
-                    style.innerHTML = `
-                        .mcap-dir-label { margin-top: 0 !important; padding-top: 0 !important; margin-bottom: 0.25rem !important; font-size: 1.08rem !important; font-weight: 500 !important; }
-                        #mcapDialogContent { margin-top: 0 !important; padding-top: 0 !important; }
-                    `;
-                    document.head.appendChild(style);
-                }
-                const header = dialog.querySelector('div[style*="border-bottom"]');
-                if (header) {
-                    header.style.paddingBottom = '0';
-                    header.style.marginBottom = '0';
-                }
-                content.style.marginTop = '0';
-                content.style.paddingTop = '0';
-                // Update directory path in header
-                const dirPathElement = document.querySelector('.mcap-dir-path');
-                if (dirPathElement && dirName) {
-                    dirPathElement.textContent = dirName;
-                }
-
-                // Setup directory copy button
-                const dirCopyBtn = document.querySelector('.mcap-dir-copy-btn');
-                if (dirCopyBtn && dirName) {
-                    dirCopyBtn.onclick = () => {
-                        navigator.clipboard.writeText(dirName);
-                        // Show brief feedback
-                        const originalText = dirCopyBtn.innerHTML;
-                        dirCopyBtn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>';
-                        setTimeout(() => {
-                            dirCopyBtn.innerHTML = originalText;
-                        }, 1000);
-                    };
-                }
-                let tableHTML = '';
-                const headerControls = document.getElementById('mcapHeaderControls');
-                if (files.length === 0) {
-                    tableHTML = `<div class=\"text-gray-600 text-center py-4\">No MCAP recordings found</div>`;
-                    if (headerControls) headerControls.innerHTML = '';
-                } else {
-                    files.sort((a, b) => new Date(b.created) - new Date(a.created));
-                    // Populate header controls
-                    if (headerControls) {
-                        headerControls.innerHTML = `
+        // Setup directory copy button
+        const dirCopyBtn = document.querySelector('.mcap-dir-copy-btn');
+        if (dirCopyBtn && dirName) {
+            dirCopyBtn.onclick = () => {
+                navigator.clipboard.writeText(dirName);
+                // Show brief feedback
+                const originalText = dirCopyBtn.innerHTML;
+                dirCopyBtn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>';
+                setTimeout(() => {
+                    dirCopyBtn.innerHTML = originalText;
+                }, 1000);
+            };
+        }
+        let tableHTML = '';
+        const headerControls = document.getElementById('mcapHeaderControls');
+        if (files.length === 0) {
+            tableHTML = `<div class="text-gray-600 text-center py-4">No MCAP recordings found</div>`;
+            if (headerControls) headerControls.innerHTML = '';
+        } else {
+            files.sort((a, b) => new Date(b.created) - new Date(a.created));
+            // Populate header controls
+            if (headerControls) {
+                headerControls.innerHTML = `
                             <div class="mcap-header-toolbar">
                                 <label class="mcap-checkbox-label">
                                     <input type="checkbox" id="mcap-select-all" class="mcap-checkbox">
@@ -534,18 +516,10 @@ window.showMcapDialog = async function () {
                         </table>
                     `;
                 }
-                content.innerHTML = tableHTML;
-                attachMcapTableListeners(dirName);
-            } catch (error) {
-                content.innerHTML = `<div class=\"text-red-600\">Error parsing server response</div>`;
-            }
-        };
-        mcapSocket.onerror = () => {
-            content.innerHTML = `<div class=\"text-red-600\">Error connecting to server</div>`;
-        };
-        mcapSocket.onclose = () => { mcapSocket = null; window.mcapSocket = null; };
+        content.innerHTML = tableHTML;
+        attachMcapTableListeners(dirName);
     } catch (error) {
-        content.innerHTML = `<div class=\"text-red-600\">Error connecting to server</div>`;
+        content.innerHTML = `<div class="text-red-600">Error connecting to server</div>`;
     }
 
     // --- Storage Info Bar Logic ---
@@ -798,12 +772,6 @@ window.hideMcapDialog = function () {
     if (dialog) {
         dialog.close();
     }
-    if (mcapSocket) {
-        mcapSocket.close();
-        mcapSocket = null;
-        window.mcapSocket = null;
-    }
-
     // Reset MCAP button tooltip
     const mcapButton = document.getElementById('mcapDialogBtn');
     if (mcapButton) {
@@ -2005,11 +1973,10 @@ function deleteFile(fileName, directory) {
             return response.text();
         }).then(text => {
             console.log('File deleted:', text);
-            if (window.mcapSocket && window.mcapSocket.readyState === WebSocket.OPEN) {
-                window.mcapSocket.send(JSON.stringify({ action: 'list_files' }));
+            if (typeof window.showMcapDialog === 'function') {
+                window.showMcapDialog();
             }
             if (typeof startPolling === 'function') startPolling();
-            if (typeof listMcapFiles === 'function') listMcapFiles();
         }).catch(error => {
             console.error('Error deleting file:', error);
             alert(`Error deleting file: ${error.message}`);
