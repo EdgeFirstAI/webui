@@ -312,7 +312,7 @@
         init();
         animate();
 
-        let socket = new WebSocket('/rt/imu/');
+        let socket = new WebSocket('/api/rt/imu/');
 
         socket.binaryType = 'arraybuffer'; // Receive data as ArrayBuffer
 
@@ -367,7 +367,7 @@
 
         async function checkRecorderStatus() {
             try {
-                const response = await fetch('/recorder-status');
+                const response = await fetch('/api/recorder-status');
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }

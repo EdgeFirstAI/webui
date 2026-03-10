@@ -11,7 +11,6 @@ import { project_points_onto_box } from './classify.js'
 import boxesstream from './boxes.js'
 import Stats, { fpsUpdate } from "./Stats.js"
 import droppedframes from './droppedframes.js'
-import { parseNumbersInObject } from './parseNumbersInObject.js';
 import { OrbitControls } from './OrbitControls.js'
 import { clearThree, color_points_class, color_points_field, mask_colors } from './utils.js'
 import { grid_set_radarpoints, init_grid } from './grid_render.js'
@@ -72,11 +71,11 @@ let CAMERA_PCD_LABEL = "disabled"
 let DRAW_BOX = false
 let DRAW_BOX_TEXT = true
 
-let socketUrlH264 = '/rt/camera/h264/'
-let socketUrlPcd = '/rt/radar/targets/'
-let socketUrlDetect = '/rt/detect/boxes2d/'
-let socketUrlMask = '/rt/detect/mask/'
-let socketUrlErrors = '/ws/dropped'
+let socketUrlH264 = '/api/rt/camera/h264/'
+let socketUrlPcd = '/api/rt/radar/targets/'
+let socketUrlDetect = '/api/rt/detect/boxes2d/'
+let socketUrlMask = '/api/rt/detect/mask/'
+let socketUrlErrors = '/api/ws/dropped'
 let RANGE_BIN_LIMITS = [0, 20]
 let show_stats = false
 
@@ -146,152 +145,80 @@ const orbitControls = new OrbitControls(camera_grid, gridCanvas);
 orbitControls.target = new THREE.Vector3(0, 0, 3.25);
 orbitControls.update();
 
-const loader = new THREE.FileLoader();
+init_grid(grid_scene, renderer_grid, camera_grid, {})
 
-loader.load(
-    // resource URL
-    '/config/webui/details',
-    function (data) {
-        const config = parseNumbersInObject(JSON.parse(data));
-        console.log(config)
+const quad = new THREE.PlaneGeometry(width / height * 500, 500);
+const cameraUpdate = fpsUpdate(cameraPanel)
+const videoManager = new SmartVideoManager();
 
-        init_config(config)
-        if (show_stats) {
-            stats.showPanel([3, 4, 5])
-        }
-        config.GRID_DRAW_PCD = config.COMBINED_GRID_DRAW_PCD
-        config.GRID_FLATTEN_PCD = config.COMBINED_GRID_FLATTEN_PCD
-        init_grid(grid_scene, renderer_grid, camera_grid, config)
+videoManager.init((timing) => {
+    cameraUpdate();
+    resetTimeout();
 
-        const quad = new THREE.PlaneGeometry(width / height * 500, 500);
-        const cameraUpdate = fpsUpdate(cameraPanel)
-        console.log('Initializing Smart Video Manager...');
-        const videoManager = new SmartVideoManager();
+    // Log mode once
+    if (timing.mode && !videoManager.loggedMode) {
+        console.log(`Video Mode: ${timing.mode === 'tiles' ? '4K Tiles' : 'H.264 Fallback'}`);
+        videoManager.loggedMode = true;
+    }
+}, h264Stream).then((tex) => {
+    texture_camera = tex;
+    material_proj = new ProjectedMaterial({
+        camera: camera, // the camera that acts as a projector
+        texture: texture_camera, // the texture being projected
+        color: '#000', // the color of the object if it's not projected on
+        transparent: true,
+    })
+    const mesh_cam = new THREE.Mesh(quad, material_proj);
+    mesh_cam.needsUpdate = true;
+    mesh_cam.position.z = 50;
+    mesh_cam.rotation.x = PI;
+    mesh_cam.renderOrder = 0; // Render video first
+    scene.add(mesh_cam);
+})
 
-        videoManager.init((timing) => {
-            cameraUpdate();
-            resetTimeout();
+const modelFPSUpdate = fpsUpdate(modelPanel)
 
-            // Log mode once
-            if (timing.mode && !videoManager.loggedMode) {
-                console.log(`✅ Video Mode: ${timing.mode === 'tiles' ? '4K Tiles' : 'H.264 Fallback'}`);
-                videoManager.loggedMode = true;
-            }
-        }, h264Stream).then((tex) => {
-            texture_camera = tex;
-            material_proj = new ProjectedMaterial({
-                camera: camera, // the camera that acts as a projector
-                texture: texture_camera, // the texture being projected
-                color: '#000', // the color of the object if it's not projected on
-                transparent: true,
-            })
-            const mesh_cam = new THREE.Mesh(quad, material_proj);
-            mesh_cam.needsUpdate = true;
-            mesh_cam.position.z = 50;
-            mesh_cam.rotation.x = PI;
-            mesh_cam.renderOrder = 0; // Render video first
-            scene.add(mesh_cam);
-
-            console.log('✅ Smart Video System initialized successfully');
+get_shape(socketUrlMask, (height, width, length, mask) => {
+    const classes = Math.round(mask.length / height / width)
+    segstream(socketUrlMask, height, width, classes, () => {
+        modelFPSUpdate();
+    }).then((texture_mask) => {
+        material_mask = new ProjectedMask({
+            camera: camera, // the camera that acts as a projector
+            texture: texture_mask, // the texture being projected
+            transparent: true,
+            colors: mask_colors,
         })
-
-
-
-        const modelFPSUpdate = fpsUpdate(modelPanel)
-
-        // const maskMSPanel = stats.addPanel(new Stats.Panel('mask decode ms', '#A2A', '#420'));
-        get_shape(socketUrlMask, (height, width, length, mask) => {
-            const classes = Math.round(mask.length / height / width)
-            segstream(socketUrlMask, height, width, classes, () => {
-                modelFPSUpdate();
-            }).then((texture_mask) => {
-                material_mask = new ProjectedMask({
-                    camera: camera, // the camera that acts as a projector
-                    texture: texture_mask, // the texture being projected
-                    transparent: true,
-                    colors: mask_colors,
-                })
-                const mesh_mask = new THREE.Mesh(quad, material_mask);
-                mesh_mask.needsUpdate = true;
-                mesh_mask.position.z = 50;
-                mesh_mask.rotation.x = PI;
-                mesh_mask.renderOrder = 1; // Render mask on top of video
-                mask_tex = texture_mask
-                scene.add(mesh_mask);
-            })
-        })
-        let boxes;
-        let drawBoxSettings = {
-            drawBox: DRAW_BOX,
-            drawBoxText: DRAW_BOX_TEXT,
-        }
-        boxesstream(socketUrlDetect, null, () => {
-            if (boxes && radar_points) {
-                drawBoxesSpeedDistance(boxCanvas, boxes.msg.boxes, radar_points.points, drawBoxSettings)
-            }
-        }).then((b) => {
-            boxes = b
-        })
-
-        let radarFpsFn = fpsUpdate(radarPanel);
-        pcdStream(socketUrlPcd, () => {
-            radarFpsFn();
-            radar_points.points = preprocessPoints(RANGE_BIN_LIMITS[0], RANGE_BIN_LIMITS[1], radar_points.points)
-        }).then((pcd) => {
-            radar_points = pcd;
-            grid_set_radarpoints(radar_points)
-        })
-    },
-    function () { },
-    function (err) {
-        console.error('An error happened', err);
-    }
-);
-
-function init_config(config) {
-    if (config.RANGE_BIN_LIMITS_MIN) {
-        RANGE_BIN_LIMITS[0] = config.RANGE_BIN_LIMITS_MIN
-    }
-    if (config.RANGE_BIN_LIMITS_MAX) {
-        RANGE_BIN_LIMITS[1] = config.RANGE_BIN_LIMITS_MAX
-    }
-
-    if (config.MASK_TOPIC) {
-        socketUrlMask = config.MASK_TOPIC
-    }
-
-    if (config.DETECT_TOPIC) {
-        socketUrlDetect = config.DETECT_TOPIC
-    }
-
-    if (config.PCD_TOPIC) {
-        socketUrlPcd = config.PCD_TOPIC
-    }
-
-    if (config.H264_TOPIC) {
-        socketUrlH264 = config.H264_TOPIC
-    }
-
-    if (config.COMBINED_CAMERA_DRAW_PCD) {
-        CAMERA_DRAW_PCD = config.COMBINED_CAMERA_DRAW_PCD
-    }
-    if (config.COMBINED_CAMERA_PCD_LABEL) {
-        CAMERA_PCD_LABEL = config.COMBINED_CAMERA_PCD_LABEL
-    }
-
-    if (typeof config.DRAW_BOX == "boolean") {
-        DRAW_BOX = config.DRAW_BOX
-    }
-
-    if (typeof config.DRAW_BOX_TEXT == "boolean") {
-        DRAW_BOX_TEXT = config.DRAW_BOX_TEXT
-    }
-
-    if (typeof config.SHOW_STATS == "boolean") {
-        show_stats = config.SHOW_STATS
-    }
-
+        const mesh_mask = new THREE.Mesh(quad, material_mask);
+        mesh_mask.needsUpdate = true;
+        mesh_mask.position.z = 50;
+        mesh_mask.rotation.x = PI;
+        mesh_mask.renderOrder = 1; // Render mask on top of video
+        mask_tex = texture_mask
+        scene.add(mesh_mask);
+    })
+})
+let boxes;
+let drawBoxSettings = {
+    drawBox: DRAW_BOX,
+    drawBoxText: DRAW_BOX_TEXT,
 }
+boxesstream(socketUrlDetect, null, () => {
+    if (boxes && radar_points) {
+        drawBoxesSpeedDistance(boxCanvas, boxes.msg.boxes, radar_points.points, drawBoxSettings)
+    }
+}).then((b) => {
+    boxes = b
+})
+
+let radarFpsFn = fpsUpdate(radarPanel);
+pcdStream(socketUrlPcd, () => {
+    radarFpsFn();
+    radar_points.points = preprocessPoints(RANGE_BIN_LIMITS[0], RANGE_BIN_LIMITS[1], radar_points.points)
+}).then((pcd) => {
+    radar_points = pcd;
+    grid_set_radarpoints(radar_points)
+})
 
 
 THREE.Cache.enabled = true;

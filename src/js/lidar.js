@@ -10,9 +10,9 @@ import { parsePointCloud2, extractFieldArray } from './pointcloud2.js'
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-const RAW_TOPIC = '/rt/lidar/points/'
-const CLUSTER_TOPIC = '/rt/lidar/clusters/'
-const FUSION_TOPIC = '/rt/fusion/lidar/'
+const RAW_TOPIC = '/api/rt/lidar/points/'
+const CLUSTER_TOPIC = '/api/rt/lidar/clusters/'
+const FUSION_TOPIC = '/api/rt/fusion/lidar/'
 const UNAVAILABLE_TIMEOUT_MS = 1000
 const FUSION_WARNING_DURATION_MS = 5000
 const RECONNECT_DELAY_MS = 3000
@@ -457,8 +457,9 @@ function getActiveTopic() {
  * Open (or re-open) the WebSocket connection for the active topic.
  */
 function connectSocket() {
-    // Close existing socket cleanly — null onclose to prevent auto-reconnect
+    // Close existing socket cleanly — null handlers to prevent late messages/reconnect
     if (socket) {
+        socket.onmessage = null
         socket.onclose = null
         socket.close()
         socket = null
@@ -502,14 +503,16 @@ function connectSocket() {
 function probeTopicFields(url) {
     const ws = new WebSocket(url)
     ws.binaryType = 'arraybuffer'
+    const probeTimeout = setTimeout(() => ws.close(), 5000)
     ws.onmessage = (event) => {
+        clearTimeout(probeTimeout)
         try {
             const parsed = parsePointCloud2(event.data)
             updateAvailableColorModes(parsed.fieldMap)
         } catch (_) { /* topic may not be available */ }
         ws.close()
     }
-    ws.onerror = () => {}
+    ws.onerror = () => { clearTimeout(probeTimeout) }
 }
 
 /**
@@ -582,6 +585,12 @@ function updatePointCloud(arrayBuffer) {
 
         // Replace old point cloud in the scene
         if (pointsGroup) {
+            pointsGroup.traverse((child) => {
+                if (child instanceof THREE.Points) {
+                    child.geometry.dispose()
+                    child.material.dispose()
+                }
+            })
             scene.remove(pointsGroup)
         }
         pointsGroup = group
@@ -612,27 +621,8 @@ document.addEventListener('themechange', (e) => {
 })
 
 // ---------------------------------------------------------------------------
-// Config Loading & Initialisation
+// Initialisation
 // ---------------------------------------------------------------------------
-fetch('/config/webui/details')
-    .then((res) => res.json())
-    .then((config) => {
-        if (config.LIDAR_TOPIC) {
-            socketUrlRaw = config.LIDAR_TOPIC
-        }
-        if (config.CLUSTER_TOPIC) {
-            socketUrlCluster = config.CLUSTER_TOPIC
-        }
-        if (config.FUSION_TOPIC) {
-            socketUrlFusion = config.FUSION_TOPIC
-        }
-        connectSocket()
-        probeTopicFields(socketUrlCluster)
-        probeTopicFields(socketUrlFusion)
-    })
-    .catch((err) => {
-        console.warn('Could not load config — using defaults:', err)
-        connectSocket()
-        probeTopicFields(socketUrlCluster)
-        probeTopicFields(socketUrlFusion)
-    })
+connectSocket()
+probeTopicFields(socketUrlCluster)
+probeTopicFields(socketUrlFusion)

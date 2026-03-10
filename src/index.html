@@ -286,28 +286,22 @@
                 return card;
             }
 
-            // Check if a service is enabled (configured) via the service cache
-            function isServiceEnabled(serviceName) {
-                const statuses = window.serviceCache?.serviceStatuses;
-                if (!Array.isArray(statuses)) return false;
-                const entry = statuses.find(s => s.service === serviceName);
-                return entry?.enabled === 'enabled';
-            }
-
             // Top row: sensor views
-            cardContainer.appendChild(createCard('/camera', 'Camera', ['Camera View']));
-            if (isServiceEnabled('lidarpub')) {
+            if (window.serviceCache.isServiceEnabled('camera')) {
+                cardContainer.appendChild(createCard('/camera', 'Camera', ['Camera View']));
+            }
+            if (window.serviceCache.isServiceEnabled('lidarpub')) {
                 cardContainer.appendChild(createCard('/lidar', 'LiDAR', ['3D Point Cloud']));
             }
-            if (isServiceEnabled('radarpub')) {
+            if (window.serviceCache.isServiceEnabled('radarpub')) {
                 cardContainer.appendChild(createCard('/grid', 'Radar', ['Occupancy Grid', '+', 'Radar Point Cloud']));
             }
 
             // Bottom row: auxiliary sensors
-            if (isServiceEnabled('imu')) {
+            if (window.serviceCache.isServiceEnabled('imu')) {
                 cardContainer.appendChild(createCard('/imu', 'IMU', ['IMU Visualization']));
             }
-            if (isServiceEnabled('navsat')) {
+            if (window.serviceCache.isServiceEnabled('navsat')) {
                 cardContainer.appendChild(createCard('/gps', 'GPS', ['Explore Location']));
             }
         }

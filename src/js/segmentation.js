@@ -9,7 +9,6 @@ import boxesstream from './boxes.js'
 import Stats, { fpsUpdate } from "./Stats.js"
 import droppedframes from './droppedframes.js'
 import { mask_colors } from './utils.js'
-import { parseNumbersInObject } from './parseNumbersInObject.js'
 const PI = Math.PI
 
 
@@ -42,115 +41,63 @@ boxCanvas.width = width;
 boxCanvas.height = height;
 
 
-let socketUrlH264 = '/rt/camera/h264/'
-let socketUrlDetect = '/rt/detect/boxes2d/'
-let socketUrlMask = '/rt/detect/mask/'
-let socketUrlErrors = '/ws/dropped'
+let socketUrlH264 = '/api/rt/camera/h264/'
+let socketUrlDetect = '/api/rt/detect/boxes2d/'
+let socketUrlMask = '/api/rt/detect/mask/'
+let socketUrlErrors = '/api/ws/dropped'
 let DRAW_BOX = false
 let DRAW_BOX_TEXT = true
 let show_stats = false
 
 droppedframes(socketUrlErrors, playerCanvas)
 
-function init_config(config) {
-    if (config.MASK_TOPIC) {
-        socketUrlMask = config.MASK_TOPIC;
-    }
-
-    if (config.DETECT_TOPIC) {
-        socketUrlDetect = config.DETECT_TOPIC;
-    }
-
-    if (config.H264_TOPIC) {
-        socketUrlH264 = config.H264_TOPIC;
-    }
-
-
-    if (typeof config.DRAW_BOX == "boolean") {
-        DRAW_BOX = config.DRAW_BOX
-    }
-
-    if (typeof config.DRAW_BOX_TEXT == "boolean") {
-        DRAW_BOX_TEXT = config.DRAW_BOX_TEXT
-    }
-
-    if (typeof config.SHOW_STATS == "boolean") {
-        show_stats = config.SHOW_STATS
-    }
-
-}
-
-const loader = new THREE.FileLoader();
-
-
-
-loader.load(
-    '/config/webui/details',
-    function (data) {
-        const config = parseNumbersInObject(JSON.parse(data));
-        console.log(config);
-        init_config(config)
-
-        if (show_stats) {
-            stats.showPanel([3, 4])
-        }
-
-
-        const quad = new THREE.PlaneGeometry(width / height * 500, 500);
-        const cameraUpdate = fpsUpdate(cameraPanel)
-        h264Stream(socketUrlH264, 1920, 1080, 30, () => {
-            cameraUpdate(), resetTimeout()
-        }).then((tex) => {
-            texture_camera = tex;
-            material_proj = new ProjectedMaterial({
-                camera: camera, // the camera that acts as a projector
-                texture: texture_camera, // the texture being projected
-                color: '#000', // the color of the object if it's not projected on
-                transparent: true,
-            })
-            const mesh_cam = new THREE.Mesh(quad, material_proj);
-            mesh_cam.needsUpdate = true;
-            mesh_cam.position.z = 50;
-            mesh_cam.rotation.x = PI;
-            mesh_cam.renderOrder = 0; // Render video first
-            scene.add(mesh_cam);
-        })
-
-
-        const modelFPSUpdate = fpsUpdate(modelPanel)
-
-        get_shape(socketUrlMask, (height, width, length, mask) => {
-            const classes = Math.round(mask.length / height / width)
-            segstream(socketUrlMask, height, width, classes, modelFPSUpdate).then((texture_mask) => {
-                material_mask = new ProjectedMask({
-                    camera: camera, // the camera that acts as a projector
-                    texture: texture_mask, // the texture being projected
-                    transparent: true,
-                    colors: mask_colors,
-                })
-                const mesh_mask = new THREE.Mesh(quad, material_mask);
-                mesh_mask.needsUpdate = true;
-                mesh_mask.position.z = 50;
-                mesh_mask.rotation.x = PI;
-                mesh_mask.renderOrder = 1; // Render mask on top of video
-                scene.add(mesh_mask);
-            })
-        })
-        let drawBoxSettings = {
-            canvas: boxCanvas,
-            drawBox: DRAW_BOX,
-            drawBoxText: DRAW_BOX_TEXT,
-        }
-        boxesstream(socketUrlDetect, drawBoxSettings).then()
-    },
-    function () {
-        // Progress callback if needed
-    },
-    function (err) {
-        console.error('An error happened', err);
-    }
-);
 THREE.Cache.enabled = true;
+
+const quad = new THREE.PlaneGeometry(width / height * 500, 500);
+const cameraUpdate = fpsUpdate(cameraPanel)
+h264Stream(socketUrlH264, 1920, 1080, 30, () => {
+    cameraUpdate(), resetTimeout()
+}).then((tex) => {
+    texture_camera = tex;
+    material_proj = new ProjectedMaterial({
+        camera: camera, // the camera that acts as a projector
+        texture: texture_camera, // the texture being projected
+        color: '#000', // the color of the object if it's not projected on
+        transparent: true,
+    })
+    const mesh_cam = new THREE.Mesh(quad, material_proj);
+    mesh_cam.needsUpdate = true;
+    mesh_cam.position.z = 50;
+    mesh_cam.rotation.x = PI;
+    mesh_cam.renderOrder = 0; // Render video first
+    scene.add(mesh_cam);
+})
+
+const modelFPSUpdate = fpsUpdate(modelPanel)
+
+get_shape(socketUrlMask, (height, width, length, mask) => {
+    const classes = Math.round(mask.length / height / width)
+    segstream(socketUrlMask, height, width, classes, modelFPSUpdate).then((texture_mask) => {
+        material_mask = new ProjectedMask({
+            camera: camera, // the camera that acts as a projector
+            texture: texture_mask, // the texture being projected
+            transparent: true,
+            colors: mask_colors,
+        })
+        const mesh_mask = new THREE.Mesh(quad, material_mask);
+        mesh_mask.needsUpdate = true;
+        mesh_mask.position.z = 50;
+        mesh_mask.rotation.x = PI;
+        mesh_mask.renderOrder = 1; // Render mask on top of video
+        scene.add(mesh_mask);
+    })
+})
+let drawBoxSettings = {
+    canvas: boxCanvas,
+    drawBox: DRAW_BOX,
+    drawBoxText: DRAW_BOX_TEXT,
+}
+boxesstream(socketUrlDetect, drawBoxSettings).then()
 
 
 renderer.setAnimationLoop(animate);

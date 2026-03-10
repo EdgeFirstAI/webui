@@ -364,7 +364,7 @@
             }
         });
 
-        let socket = new WebSocket('/rt/gps/');
+        let socket = new WebSocket('/api/rt/gps/');
 
         socket.onmessage = async function (event) {
             const arrayBuffer = await event.data.arrayBuffer();

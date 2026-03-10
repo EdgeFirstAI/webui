@@ -14,9 +14,9 @@
     <script src="../js/tailwind.js"></script>
     <script src="../js/theme.js"></script>
     <script src="../js/neuralMesh.js"></script>
+    <script src="../js/serviceCache.js"></script>
     <script src="../js/navbar.js"></script>
     <script src="../js/status.js"></script>
-    <script src="../js/serviceCache.js"></script>
     <style>
         * {
             box-sizing: border-box;
@@ -307,7 +307,7 @@
     </div>
     <script>
         document.addEventListener('DOMContentLoaded', function () {
-            fetch(`/config/model/details`, {
+            fetch('/api/config/model', {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json'
@@ -378,7 +378,7 @@
                 }
             });
 
-            fetch('/config/model', {
+            fetch('/api/config/model', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'

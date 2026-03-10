@@ -8,7 +8,6 @@ import modelstream from './model.js'
 import { mask_colors } from './utils.js'
 import { CdrReader } from './Cdr.js'
 import { parsePointCloud2, readField } from './pointcloud2.js'
-import { parseNumbersInObject } from './parseNumbersInObject.js'
 
 const PI = Math.PI
 const UNAVAILABLE_TIMEOUT_MS = 15000
@@ -17,15 +16,15 @@ const RECONNECT_MIN_MS = 1000
 const RECONNECT_MAX_MS = 8000
 
 // ---------------------------------------------------------------------------
-// Configurable topic URLs (overridden by /config/webui/details)
+// Default topic URLs
 // ---------------------------------------------------------------------------
-let socketUrlH264 = '/rt/camera/h264/'
-let socketUrlLidar = '/rt/lidar/points/'
-let socketUrlLidarCluster = '/rt/lidar/clusters/'
-let socketUrlFusion = '/rt/fusion/lidar/'
-let socketUrlModel = '/rt/model/output/'
-let socketUrlTfStatic = '/rt/tf_static/'
-let socketUrlCameraInfo = '/rt/camera/info/'
+let socketUrlH264 = '/api/rt/camera/h264/'
+let socketUrlLidar = '/api/rt/lidar/points/'
+let socketUrlLidarCluster = '/api/rt/lidar/clusters/'
+let socketUrlFusion = '/api/rt/fusion/lidar/'
+let socketUrlModel = '/api/rt/model/output/'
+let socketUrlTfStatic = '/api/rt/tf_static/'
+let socketUrlCameraInfo = '/api/rt/camera/info/'
 
 // ---------------------------------------------------------------------------
 // State
@@ -112,14 +111,6 @@ lidarCanvas.height = height
 // ---------------------------------------------------------------------------
 // Config Loading
 // ---------------------------------------------------------------------------
-function initConfig(config) {
-    if (config.H264_TOPIC) socketUrlH264 = config.H264_TOPIC
-    if (config.MODEL_TOPIC) socketUrlModel = config.MODEL_TOPIC
-    if (config.LIDAR_TOPIC) socketUrlLidar = config.LIDAR_TOPIC
-    if (config.CLUSTER_TOPIC) socketUrlLidarCluster = config.CLUSTER_TOPIC
-    if (config.FUSION_TOPIC) socketUrlFusion = config.FUSION_TOPIC
-    if (config.CAMERA_INFO_TOPIC) socketUrlCameraInfo = config.CAMERA_INFO_TOPIC
-}
 
 // ---------------------------------------------------------------------------
 // Video Stream
@@ -633,8 +624,6 @@ function computeLidarToCameraMatrix() {
 
     lidarToCameraMatrix = multiplyMatrices(T_cam_base, T_base_lidar)
 
-    // Log matrix in row-major for readability (col-major [0,4,8,12] = row 0)
-    const m = lidarToCameraMatrix
 }
 
 // ---------------------------------------------------------------------------
@@ -917,14 +906,16 @@ function startLidar() {
 function probeTopicFields(url) {
     const ws = new WebSocket(url)
     ws.binaryType = 'arraybuffer'
+    const probeTimeout = setTimeout(() => ws.close(), 5000)
     ws.onmessage = (event) => {
+        clearTimeout(probeTimeout)
         try {
             const p = parsePointCloud2(event.data)
             updateAvailableLidarColorModes(p.fieldMap)
         } catch (_) { /* topic may not be available */ }
         ws.close()
     }
-    ws.onerror = () => {}
+    ws.onerror = () => { clearTimeout(probeTimeout) }
 }
 
 function resetEnrichedColorModes() {
@@ -1196,14 +1187,4 @@ cameraUnavailable.style.display = 'flex'
 // ---------------------------------------------------------------------------
 // Boot
 // ---------------------------------------------------------------------------
-fetch('/config/webui/details')
-    .then((res) => res.json())
-    .then((config) => {
-        const parsed = parseNumbersInObject(config)
-        initConfig(parsed)
-        initVideoStream()
-    })
-    .catch((err) => {
-        console.warn('Could not load config — using defaults:', err)
-        initVideoStream()
-    })
+initVideoStream()

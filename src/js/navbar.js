@@ -77,7 +77,7 @@ function createNavbar(pageTitle) {
                         </svg>
                     </button>
                     <!-- Settings Button -->
-                    <a href="/settings" class="btn btn-ghost btn-circle">
+                    <a href="/config/settings" class="btn btn-ghost btn-circle">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
                             <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -691,7 +691,7 @@ window.wasRecording = false;
 window.lowDiskDialogShown = false;
 
 function checkRecordingStatus() {
-    fetch('/recorder-status')
+    fetch('/api/recorder/status')
         .then(response => {
             if (!response.ok) {
                 throw new Error(`HTTP error ${response.status}`);
@@ -702,7 +702,7 @@ function checkRecordingStatus() {
             const isRecording = statusText.trim() === "Recorder is running";
             if (isRecording) {
                 window.lowDiskDialogShown = false;
-                return fetch('/current-recording')
+                return fetch('/api/recorder/current')
                     .then(response => response.json())
                     .then(data => {
                         navbarRecordingFile = data.status === "recording" ? data.filename : null;
@@ -711,7 +711,7 @@ function checkRecordingStatus() {
                     });
             } else {
                 navbarRecordingFile = null;
-                fetch('/check-storage')
+                fetch('/api/storage')
                     .then(resp => resp.ok ? resp.json() : null)
                     .then(async info => {
                         let availValue = 0;
@@ -785,7 +785,7 @@ function showRecCheckmark() {
 }
 
 function startRecording() {
-    fetch('/start', {
+    fetch('/api/recorder/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({})
@@ -809,7 +809,7 @@ function startRecording() {
 }
 
 function stopRecording() {
-    fetch('/stop', {
+    fetch('/api/recorder/stop', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({})
@@ -849,13 +849,30 @@ function updateModeTooltipCustom() {
         tooltipContent.innerHTML = '<span>Loading services...</span>';
         return;
     }
-    if (Array.isArray(serviceStatuses)) {
-        const allRunning = serviceStatuses.every(s => (typeof s.status === 'string' ? s.status : s.status?.status) === 'running');
-        if (allRunning) {
-            tooltipContent.innerHTML = '<div class="flex items-center gap-2"><span style="color:#22c55e;font-size:1.2em;">●</span> <span class="text-green-700">All Services Running</span></div>';
+    if (!Array.isArray(serviceStatuses)) {
+        tooltipContent.textContent = 'Unknown status';
+        return;
+    }
+    const allRunning = serviceStatuses.every(s => (typeof s.status === 'string' ? s.status : s.status?.status) === 'running');
+    tooltipContent.replaceChildren();
+    if (allRunning) {
+        const row = document.createElement('div');
+        row.className = 'flex items-center gap-2';
+        const dot = document.createElement('span');
+        dot.style.cssText = 'color:#22c55e;font-size:1.2em;';
+        dot.textContent = '\u25CF';
+        const label = document.createElement('span');
+        label.className = 'text-green-700';
+        label.textContent = 'All Services Running';
+        row.appendChild(dot);
+        row.appendChild(label);
+        tooltipContent.appendChild(row);
+    } else {
+        const stopped = serviceStatuses.filter(s => (typeof s.status === 'string' ? s.status : s.status?.status) !== 'running');
+        if (stopped.length === 0) {
+            tooltipContent.textContent = 'Unknown status';
         } else {
-            let html = '';
-            serviceStatuses.filter(s => (typeof s.status === 'string' ? s.status : s.status?.status) !== 'running').forEach(s => {
+            stopped.forEach(s => {
                 const serviceName = (s.service || s.name || 'Unknown')
                     .replace('.service', '')
                     .split('-')
@@ -863,22 +880,18 @@ function updateModeTooltipCustom() {
                     .join(' ');
                 let statusStr = typeof s.status === 'string' ? s.status : (s.status?.status || JSON.stringify(s.status));
                 statusStr = statusStr.charAt(0).toUpperCase() + statusStr.slice(1);
-                html += `<div class="flex items-center gap-2"><span style=\"color:#ef4444;font-size:1.2em;\">●</span> <span class=\"text-red-700\">${serviceName}: ${statusStr}</span></div>`;
+                const row = document.createElement('div');
+                row.className = 'flex items-center gap-2';
+                const dot = document.createElement('span');
+                dot.style.cssText = 'color:#ef4444;font-size:1.2em;';
+                dot.textContent = '\u25CF';
+                const label = document.createElement('span');
+                label.className = 'text-red-700';
+                label.textContent = `${serviceName}: ${statusStr}`;
+                row.appendChild(dot);
+                row.appendChild(label);
+                tooltipContent.appendChild(row);
             });
-            tooltipContent.innerHTML = html || '<span>Unknown status</span>';
-        }
-    } else {
-        const allRunning = Object.values(serviceStatuses).every(s => s === 'running');
-        if (allRunning) {
-            tooltipContent.innerHTML = '<div class="flex items-center gap-2"><span style="color:#22c55e;font-size:1.2em;">●</span> <span class="text-green-700">All Services Running</span></div>';
-        } else {
-            let html = '';
-            for (const [service, status] of Object.entries(serviceStatuses)) {
-                if (status !== 'running') {
-                    html += `<div class=\"flex items-center gap-2\"><span style=\"color:#ef4444;font-size:1.2em;\">●</span> <span class=\"text-red-700\">${service}: ${status}</span></div>`;
-                }
-            }
-            tooltipContent.innerHTML = html || '<span>Unknown status</span>';
         }
     }
 }
@@ -886,7 +899,7 @@ function updateModeTooltipCustom() {
 // Function to check storage and update the recording button
 async function updateRecordingButtonForStorage() {
     try {
-        const response = await fetch('/check-storage');
+        const response = await fetch('/api/storage');
         const data = await response.json();
         const recordingButton = document.getElementById('recordingButton');
 

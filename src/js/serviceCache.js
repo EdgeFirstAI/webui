@@ -1,9 +1,15 @@
 // Copyright (C) 2025 Au-Zone Technologies Inc. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 // Service status cache implementation
-const CACHE_DURATION = 2000; // 2 seconds cache duration
 const BACKGROUND_UPDATE_INTERVAL = 5000; // 5 seconds between background updates
 const STORAGE_KEY = 'serviceCacheData';
+
+// Canonical list of all managed services — use window.serviceCache.ALL_SERVICES
+// instead of defining local copies in other files.
+const ALL_SERVICES = [
+    "camera", "imu", "navsat", "model", "lidarpub",
+    "radarpub", "fusion", "zenohd", "gpsd", "recorder"
+];
 
 // Initialize the cache object immediately
 window.serviceCache = {
@@ -59,20 +65,15 @@ function saveToStorage() {
 // Function to perform background updates
 async function performBackgroundUpdate() {
     try {
-        const allServices = [
-            "camera", "imu", "navsat", "model", "lidarpub",
-            "radarpub", "fusion", "zenohd", "gpsd", "recorder"
-        ];
-
-        const serviceResponse = await fetch('/config/service/status', {
+        const serviceResponse = await fetch('/api/services/status', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ services: allServices })
+            body: JSON.stringify({ services: ALL_SERVICES })
         });
         if (!serviceResponse.ok) throw new Error(`HTTP error! status: ${serviceResponse.status}`);
         const serviceStatuses = await serviceResponse.json();
 
-        const replayResponse = await fetch('/replay-status');
+        const replayResponse = await fetch('/api/replay/status');
         if (!replayResponse.ok) throw new Error(`HTTP error! status: ${replayResponse.status}`);
         const statusText = await replayResponse.text();
         const replayStatus = statusText.trim() === "Replay is running";
@@ -94,8 +95,10 @@ async function performBackgroundUpdate() {
 // Function to start background updates
 function startBackgroundUpdates() {
     if (!window.serviceCache.backgroundUpdateTimer) {
-        // Load cached data first
-        loadFromStorage();
+        // Load cached data first and notify listeners if data was available
+        if (loadFromStorage()) {
+            window.serviceCache.updateCallbacks.forEach(callback => callback());
+        }
 
         // Perform initial update immediately
         performBackgroundUpdate();
@@ -158,6 +161,7 @@ async function getReplayStatus() {
 
 // Function to clear cache and force refresh
 function clearCache() {
+    const existingCallbacks = window.serviceCache.updateCallbacks;
     stopBackgroundUpdates();
     window.serviceCache = {
         serviceStatuses: null,
@@ -165,14 +169,28 @@ function clearCache() {
         lastUpdate: 0,
         isInitialized: false,
         backgroundUpdateTimer: null,
-        updateCallbacks: new Set()
+        updateCallbacks: existingCallbacks || new Set()
     };
+    // Re-attach functions after resetting state
+    Object.assign(window.serviceCache, {
+        ALL_SERVICES,
+        getServiceStatuses,
+        getReplayStatus,
+        isServiceEnabled,
+        isServiceRunning,
+        clearCache,
+        startBackgroundUpdates,
+        stopBackgroundUpdates,
+        registerUpdateCallback,
+        unregisterUpdateCallback
+    });
     localStorage.removeItem(STORAGE_KEY);
     startBackgroundUpdates();
 }
 
 // Update the service cache object with the actual functions
 Object.assign(window.serviceCache, {
+    ALL_SERVICES,
     getServiceStatuses,
     getReplayStatus,
     isServiceEnabled,

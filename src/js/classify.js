@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import * as THREE from './three.js'
 import { dynamicSortMultiple } from './sort.js'
-import { parseNumbersInObject } from './parseNumbersInObject.js';
 
 function mode(a) {
     return Object.values(
@@ -21,22 +20,6 @@ function mode(a) {
 const PI = Math.PI
 
 let OCCLUSION_LIMIT_DEGREES = 10
-const loader = new THREE.FileLoader();
-loader.load(
-    // resource URL
-    '/config/webui/details',
-    function (data) {
-        const config = parseNumbersInObject(JSON.parse(data));
-        console.log(config);
-        if (config.OCCLUSION_LIMIT_DEGREES) {
-            OCCLUSION_LIMIT_DEGREES = config.OCCLUSION_LIMIT_DEGREES;
-        }
-    },
-    function () { },
-    function (err) {
-        console.error('An error happened', err);
-    }
-);
 THREE.Cache.enabled = true;
 
 export default function classify_points(points, mask_tex) {

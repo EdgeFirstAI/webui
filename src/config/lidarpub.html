@@ -879,7 +879,7 @@
         });
 
         document.addEventListener('DOMContentLoaded', function () {
-            fetch(`/config/lidarpub/details`, {
+            fetch('/api/config/lidarpub', {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json'
@@ -935,7 +935,7 @@
                     TF_QUAT: document.getElementById('tf_quat').value
                 };
 
-                fetch('/config/lidarpub', {
+                fetch('/api/config/lidarpub', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'

@@ -14,9 +14,9 @@
     <script src="../js/tailwind.js"></script>
     <script src="../js/theme.js"></script>
     <script src="../js/neuralMesh.js"></script>
+    <script src="../js/serviceCache.js"></script>
     <script src="../js/navbar.js"></script>
     <script src="../js/status.js"></script>
-    <script src="../js/serviceCache.js"></script>
     <style>
         body {
             font-family: 'Roboto', sans-serif;
@@ -526,7 +526,7 @@
                         </label>
                         <span>/radar/cube</span>
                         <div class="fps-slider">
-                            <input type="range" id="cube_fps" min="1" max=19" value="18" step="1" disabled
+                            <input type="range" id="cube_fps" min="1" max="19" value="18" step="1" disabled
                                 title="Enable radar cube topic to adjust FPS" oninput="updateFpsLabel(this.value)">
                             <span id="fps_value" class="fps-label">18 FPS</span>
                         </div>
@@ -712,6 +712,14 @@
                     fusionParent.style.display = window.serviceCache.isServiceEnabled('fusion') ? '' : 'none';
                 }
 
+                // Gate fusion lidar topic by lidarpub service
+                const fusionLidarCheckbox = document.getElementById('topic_fusion_lidar');
+                if (fusionLidarCheckbox) {
+                    const lidarAvailable = window.serviceCache.isServiceEnabled('lidarpub');
+                    fusionLidarCheckbox.disabled = !lidarAvailable;
+                    if (!lidarAvailable) fusionLidarCheckbox.checked = false;
+                }
+
                 // Update all-models parent when fusion is hidden
                 const allModelsParent = document.getElementById('topic_all_models_parent');
                 const modelParent = document.getElementById('topic_model_parent');
@@ -723,11 +731,12 @@
             }
 
             updateTopicVisibility();
+            window.serviceCache.registerUpdateCallback(updateTopicVisibility);
             fetchConfigDetails();
         });
 
         function fetchConfigDetails() {
-            fetch(`/config/recorder/details`, {
+            fetch('/api/config/recorder', {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json'
@@ -848,7 +857,7 @@
             // Combine all topics: manual topics, localization topics, and selected UI topics
             const allTopics = [...new Set([...manualTopics, ...localizationTopics, ...selectedTopics])].join(' ');
 
-            fetch('/config/recorder', {
+            fetch('/api/config/recorder', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -986,7 +995,8 @@
         document.getElementById('topic_fusion_parent').addEventListener('change', function () {
             const isChecked = this.checked;
             const fusionChildren = [
-                'topic_fusion_targets',
+                'topic_fusion_radar',
+                'topic_fusion_lidar',
                 'topic_fusion_occupancy'
             ];
 

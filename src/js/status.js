@@ -26,7 +26,6 @@ async function checkReplayStatus() {
             loadingSpinner.remove();
         }
         const allSensorsInactive = Object.values(statusMap).every(status => status !== 'running');
-        const allSensorActive = Object.values(statusMap).every(status => status === 'running');
         if (allSensorsInactive && !isReplay) {
             modeText.textContent = "Stopped";
             modeIndicator.className = "px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800 flex items-center gap-2";
@@ -45,7 +44,7 @@ async function checkReplayStatus() {
                 s.enabled === 'enabled' && s.status !== 'running'
             );
 
-            if (!allSensorActive) {
+            if (isDegraded) {
                 modeText.textContent = "Live Mode (Degraded)";
                 modeIndicator.className = "px-3 py-1 rounded-full text-sm font-medium bg-amber-100 text-amber-800 flex items-center gap-2";
             } else {
@@ -60,7 +59,7 @@ async function checkReplayStatus() {
 
 async function checkRecorderStatus() {
     try {
-        const response = await fetch('/recorder-status');
+        const response = await fetch('/api/recorder/status');
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -100,17 +99,12 @@ window.showServiceStatus = async function () {
     dialog.showModal();
 
     try {
-        const allServices = [
-            "camera", "imu", "navsat", "model", "lidarpub",
-            "radarpub", "fusion", "zenohd", "gpsd"
-        ];
-
-        const response = await fetch('/config/service/status', {
+        const response = await fetch('/api/services/status', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ services: allServices })
+            body: JSON.stringify({ services: window.serviceCache.ALL_SERVICES })
         });
 
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
@@ -145,6 +139,7 @@ window.showServiceStatus = async function () {
         // SVGs for enabled/disabled
         const enabledIcon = `<svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>`;
         const disabledIcon = `<svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>`;
+        let rowsHtml = '';
         serviceStatuses.forEach(({ service, status, enabled }, idx) => {
             const isRunning = status === 'running';
             const isEnabled = enabled === 'enabled';
@@ -158,13 +153,12 @@ window.showServiceStatus = async function () {
                 .join(' ');
             let settingsUrl = null;
             let hasSettings = false;
-            console.log(service)
             if (service !== "navsat" && service !== "imu") {
                 settingsUrl = `/config/${service}`;
                 hasSettings = true;
             }
             const gearIcon = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 fd-hom-settings-icon"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.01c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.01 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.01 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.01c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.572-1.01c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.01-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.01-2.572c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.01z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>`;
-            content.innerHTML += `
+            rowsHtml += `
                 <div class="fd-hom-service-row flex items-center px-3 py-3 bg-white rounded-2xl shadow-sm mb-3 border border-gray-100 group" style="min-height:56px;">
                     <div class="flex flex-col flex-grow min-w-0 justify-center">
                         <span class="text-base font-semibold text-gray-900">${serviceName}</span>
@@ -182,6 +176,7 @@ window.showServiceStatus = async function () {
                 </div>
             `;
         });
+        content.innerHTML += rowsHtml;
         // Add CSS for enabled/disabled badges
         if (!document.getElementById('fd-service-status-style-hom-enabled-badge')) {
             const style = document.createElement('style');
@@ -279,7 +274,7 @@ async function updateQuickStatus() {
 }
 
 async function listMcapFiles() {
-    const response = await fetch('/mcap');
+    const response = await fetch('/api/recordings');
     if (!response.ok) {
         throw new Error(`HTTP error ${response.status}: ${await response.text()}`);
     }
@@ -330,7 +325,7 @@ window.showMcapDialog = async function () {
 
     // Synchronize replay status with server and localStorage before showing content
     try {
-        const replayResponse = await fetch('/replay-status');
+        const replayResponse = await fetch('/api/replay/status');
         const statusText = await replayResponse.text();
         const isReplayRunning = statusText.trim() === "Replay is running";
 
@@ -372,7 +367,10 @@ window.showMcapDialog = async function () {
     try {
         const data = await listMcapFiles();
         if (data.error) {
-            content.innerHTML = `<div class="text-red-600">Error: ${data.error}</div>`;
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'text-red-600';
+            errorDiv.textContent = `Error: ${data.error}`;
+            content.replaceChildren(errorDiv);
             return;
         }
         const files = data.files || [];
@@ -493,7 +491,7 @@ window.showMcapDialog = async function () {
                                             <button class="mcap-action-btn mcap-info-btn mcap-btn-blue" title="Info" data-topics='${JSON.stringify(file.topics)}' data-fileinfo='${JSON.stringify({ name: file.name, size: file.size })}'>
                                                 <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" style="width: 1.15rem; height: 1.15rem;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
                                             </button>
-                                            <a class="mcap-action-btn mcap-btn-green" href="/download/${dirName}/${file.name}" title="Download">
+                                            <a class="mcap-action-btn mcap-btn-green" href="/api/recordings/download/${dirName}/${file.name}" title="Download">
                                                 <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" style="width: 1.25rem; height: 1.25rem;"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
                                             </a>
                                             <button class="mcap-action-btn mcap-upload-btn mcap-btn-purple" title="Upload to Studio" data-filename="${file.name}" data-dirname="${dirName}">
@@ -520,7 +518,7 @@ window.showMcapDialog = async function () {
     // --- Storage Info Bar Logic ---
     async function fetchStorageInfo() {
         try {
-            const response = await fetch(`/check-storage`);
+            const response = await fetch('/api/storage');
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const data = await response.json();
             return data;
@@ -914,7 +912,7 @@ window.startPlaybackFromModal = function () {
     if (modelIsLive) ignoreTopics.push("/model/*");
     config.IGNORE_TOPICS = ignoreTopics.join(" ");
 
-    fetch('/config/replay', {
+    fetch('/api/replay/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config)
@@ -924,7 +922,7 @@ window.startPlaybackFromModal = function () {
             return response.text();
         })
         .then(() => {
-            return fetch('/replay', {
+            return fetch('/api/replay/start', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1811,7 +1809,7 @@ window.togglePlayMcap = function (fileName, directory, options = null) {
         else if (typeof listMcapFiles === 'function') listMcapFiles();
     };
     if (window.isPlaying && window.currentPlayingFile === fileName) {
-        fetch('/config/replay', {
+        fetch('/api/replay/config', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ fileName: "replay", MCAP: "", IGNORE_TOPICS: "" })
@@ -1821,7 +1819,7 @@ window.togglePlayMcap = function (fileName, directory, options = null) {
                 return response.text();
             })
             .then(() => {
-                return fetch('/replay-end', {
+                return fetch('/api/replay/stop', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ file: fileName, directory: directory })
@@ -1864,8 +1862,8 @@ function deleteFile(fileName, directory) {
         file: fileName
     }
     if (confirmDelete) {
-        fetch('/delete', {
-            method: 'POST',
+        fetch('/api/recordings', {
+            method: 'DELETE',
             headers: {
                 'Content-Type': 'application/json'
             },
@@ -2018,7 +2016,7 @@ window.switchToLive = async function () {
     let deviceName = null;
     try {
         // Note: DEVICE field used here for systemd target name, not UI gating
-        const response = await fetch('/config/webui/details');
+        const response = await fetch('/api/config/webui');
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -2029,7 +2027,7 @@ window.switchToLive = async function () {
         }
 
         // Request live mode
-        const liveResp = await fetch('/live-run', {
+        const liveResp = await fetch('/api/replay/config', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ target: deviceName.toLowerCase() })
@@ -2047,7 +2045,7 @@ window.switchToLive = async function () {
         const pollInterval = 1000;
         let transitionCheck = setInterval(async () => {
             try {
-                const statusResponse = await fetch('/replay-status');
+                const statusResponse = await fetch('/api/replay/status');
                 const statusText = await statusResponse.text();
                 const isReplay = statusText.trim() === "Replay is running";
                 elapsed += pollInterval;
@@ -2628,7 +2626,7 @@ function connectUploadProgressWs(uploadId, dialog) {
     const wsHost = window.UPLOAD_WS_HOST || window.location.hostname;
     const wsPort = window.UPLOAD_WS_PORT ? String(window.UPLOAD_WS_PORT) : window.location.port;
     const portSegment = wsPort ? `:${wsPort}` : '';
-    const wsUrl = `${protocol}//${wsHost}${portSegment}/ws/uploads`;
+    const wsUrl = `${protocol}//${wsHost}${portSegment}/api/ws/uploads`;
     window.uploadProgressWs = new WebSocket(wsUrl);
 
     window.uploadProgressWs.onmessage = (event) => {

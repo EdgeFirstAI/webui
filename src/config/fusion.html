@@ -274,7 +274,7 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function () {
-            fetch(`/config/fusion/details`, {
+            fetch('/api/config/fusion', {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json'
@@ -325,7 +325,7 @@
                 bin_delay: document.getElementById('bin_delay').value
             };
 
-            fetch('/config/fusion', {
+            fetch('/api/config/fusion', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
