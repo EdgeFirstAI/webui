@@ -7,7 +7,6 @@ const STORAGE_KEY = 'serviceCacheData';
 
 // Initialize the cache object immediately
 window.serviceCache = {
-    deviceData: null,
     serviceStatuses: null,
     replayStatus: null,
     lastUpdate: 0,
@@ -15,9 +14,10 @@ window.serviceCache = {
     backgroundUpdateTimer: null,
     updateCallbacks: new Set(),
     // Add placeholder functions that will be replaced
-    getDeviceData: async () => null,
     getServiceStatuses: async () => null,
     getReplayStatus: async () => null,
+    isServiceEnabled: () => false,
+    isServiceRunning: () => false,
     clearCache: () => { },
     startBackgroundUpdates: () => { },
     stopBackgroundUpdates: () => { },
@@ -30,8 +30,7 @@ function loadFromStorage() {
     try {
         const cachedData = localStorage.getItem(STORAGE_KEY);
         if (cachedData) {
-            const { deviceData, serviceStatuses, replayStatus, lastUpdate } = JSON.parse(cachedData);
-            window.serviceCache.deviceData = deviceData;
+            const { serviceStatuses, replayStatus, lastUpdate } = JSON.parse(cachedData);
             window.serviceCache.serviceStatuses = serviceStatuses;
             window.serviceCache.replayStatus = replayStatus;
             window.serviceCache.lastUpdate = lastUpdate;
@@ -47,7 +46,6 @@ function loadFromStorage() {
 function saveToStorage() {
     try {
         const dataToStore = {
-            deviceData: window.serviceCache.deviceData,
             serviceStatuses: window.serviceCache.serviceStatuses,
             replayStatus: window.serviceCache.replayStatus,
             lastUpdate: window.serviceCache.lastUpdate
@@ -61,21 +59,15 @@ function saveToStorage() {
 // Function to perform background updates
 async function performBackgroundUpdate() {
     try {
-        const deviceResponse = await fetch('/config/webui/details');
-        if (!deviceResponse.ok) throw new Error(`HTTP error! status: ${deviceResponse.status}`);
-        const deviceData = await deviceResponse.json();
-
-        const isRaivin = deviceData.DEVICE?.toLowerCase().includes('raivin');
-        const baseServices = ["camera", "imu", "navsat", "model", "lidarpub"];
-        const raivinServices = ["radarpub", "fusion"];
-        const services = isRaivin ? [...baseServices, ...raivinServices] : baseServices;
+        const allServices = [
+            "camera", "imu", "navsat", "model", "lidarpub",
+            "radarpub", "fusion", "zenohd", "gpsd", "recorder"
+        ];
 
         const serviceResponse = await fetch('/config/service/status', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ services })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ services: allServices })
         });
         if (!serviceResponse.ok) throw new Error(`HTTP error! status: ${serviceResponse.status}`);
         const serviceStatuses = await serviceResponse.json();
@@ -85,20 +77,13 @@ async function performBackgroundUpdate() {
         const statusText = await replayResponse.text();
         const replayStatus = statusText.trim() === "Replay is running";
 
-        // Only update if data has changed
-        if (JSON.stringify(window.serviceCache.deviceData) !== JSON.stringify(deviceData) ||
-            JSON.stringify(window.serviceCache.serviceStatuses) !== JSON.stringify(serviceStatuses) ||
+        if (JSON.stringify(window.serviceCache.serviceStatuses) !== JSON.stringify(serviceStatuses) ||
             window.serviceCache.replayStatus !== replayStatus) {
 
-            window.serviceCache.deviceData = deviceData;
             window.serviceCache.serviceStatuses = serviceStatuses;
             window.serviceCache.replayStatus = replayStatus;
             window.serviceCache.lastUpdate = Date.now();
-
-            // Save to localStorage when data changes
             saveToStorage();
-
-            // Notify all registered callbacks
             window.serviceCache.updateCallbacks.forEach(callback => callback());
         }
     } catch (error) {
@@ -139,12 +124,20 @@ function unregisterUpdateCallback(callback) {
     window.serviceCache.updateCallbacks.delete(callback);
 }
 
-// Function to get device data
-async function getDeviceData() {
-    if (!window.serviceCache.isInitialized) {
-        await performBackgroundUpdate();
-    }
-    return window.serviceCache.deviceData;
+// Function to check if a service is enabled in systemd
+function isServiceEnabled(serviceName) {
+    const statuses = window.serviceCache.serviceStatuses;
+    if (!Array.isArray(statuses)) return false;
+    const entry = statuses.find(s => s.service === serviceName);
+    return entry?.enabled === 'enabled';
+}
+
+// Function to check if a service is currently running
+function isServiceRunning(serviceName) {
+    const statuses = window.serviceCache.serviceStatuses;
+    if (!Array.isArray(statuses)) return false;
+    const entry = statuses.find(s => s.service === serviceName);
+    return entry?.status === 'running';
 }
 
 // Function to get service statuses
@@ -167,7 +160,6 @@ async function getReplayStatus() {
 function clearCache() {
     stopBackgroundUpdates();
     window.serviceCache = {
-        deviceData: null,
         serviceStatuses: null,
         replayStatus: null,
         lastUpdate: 0,
@@ -181,9 +173,10 @@ function clearCache() {
 
 // Update the service cache object with the actual functions
 Object.assign(window.serviceCache, {
-    getDeviceData,
     getServiceStatuses,
     getReplayStatus,
+    isServiceEnabled,
+    isServiceRunning,
     clearCache,
     startBackgroundUpdates,
     stopBackgroundUpdates,
