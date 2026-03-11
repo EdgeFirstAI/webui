@@ -252,28 +252,8 @@
     </main>
 
     <script>
-        async function fetchConfigAndUpdateDeviceName() {
-            try {
-                const response = await fetch('/config/webui/details');
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const data = await response.json();
-                const deviceValue = data.DEVICE;
-
-                populateCardContainer(deviceValue);
-            } catch (error) {
-                console.error('Error fetching config details:', error);
-            }
-        }
-
-        // Track current device type for service-cache callback re-renders
-        let currentDeviceType = null;
-
-        function populateCardContainer(deviceType) {
-            currentDeviceType = deviceType;
+        function populateCardContainer() {
             const cardContainer = document.getElementById('card-container');
-            const isRaivin = deviceType.toLowerCase().includes('raivin');
 
             // Clear existing cards
             cardContainer.replaceChildren();
@@ -306,30 +286,23 @@
                 return card;
             }
 
-            // Check if a service is enabled (configured) via the service cache
-            function isServiceEnabled(serviceName) {
-                const statuses = window.serviceCache?.serviceStatuses;
-                if (!Array.isArray(statuses)) return false;
-                const entry = statuses.find(s => s.service === serviceName);
-                return entry?.enabled === 'enabled';
+            // Top row: sensor views
+            if (window.serviceCache.isServiceEnabled('camera')) {
+                cardContainer.appendChild(createCard('/camera', 'Camera', ['Camera View']));
             }
-
-            // Common cards for all devices
-            cardContainer.appendChild(createCard('/gps', 'GPS', ['Explore Location']));
-            cardContainer.appendChild(createCard('/imu', 'IMU', ['IMU Visualization']));
-
-            // LiDAR card shown when lidarpub is enabled (configured)
-            if (isServiceEnabled('lidarpub')) {
+            if (window.serviceCache.isServiceEnabled('lidarpub')) {
                 cardContainer.appendChild(createCard('/lidar', 'LiDAR', ['3D Point Cloud']));
             }
+            if (window.serviceCache.isServiceEnabled('radarpub')) {
+                cardContainer.appendChild(createCard('/grid', 'Radar', ['Occupancy Grid', '+', 'Radar Point Cloud']));
+            }
 
-            if (isRaivin) {
-                // Raivin-only cards
-                cardContainer.appendChild(createCard('/grid', 'Occupancy Grid', ['Occupancy Grid', '+', 'Radar Point Cloud']));
-                cardContainer.appendChild(createCard('/combined', 'Segmentation View', ['Segmentation', '+', 'Occupancy Grid']));
-            } else {
-                // Maivin-only cards
-                cardContainer.appendChild(createCard('/segmentation', 'Segmentation', ['Segmentation Mask']));
+            // Bottom row: auxiliary sensors
+            if (window.serviceCache.isServiceEnabled('imu')) {
+                cardContainer.appendChild(createCard('/imu', 'IMU', ['IMU Visualization']));
+            }
+            if (window.serviceCache.isServiceEnabled('navsat')) {
+                cardContainer.appendChild(createCard('/gps', 'GPS', ['Explore Location']));
             }
         }
 
@@ -340,15 +313,9 @@
             // Initialize neural mesh background (dark mode only)
             NeuralMesh.init();
 
-            // Re-populate cards when service statuses update (e.g. lidarpub enabled)
-            window.serviceCache.registerUpdateCallback(() => {
-                if (currentDeviceType) {
-                    populateCardContainer(currentDeviceType);
-                }
-            });
-
-            // Fetch config and populate cards
-            await fetchConfigAndUpdateDeviceName();
+            // Populate cards and re-populate when service statuses update
+            populateCardContainer();
+            window.serviceCache.registerUpdateCallback(() => populateCardContainer());
         });
     </script>
 </body>

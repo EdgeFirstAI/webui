@@ -341,7 +341,7 @@
             centerFrequency.addEventListener('change', updateDropdowns);
             frequencySweep.addEventListener('change', updateDropdowns);
 
-            fetch(`/config/radarpub/details`, {
+            fetch('/api/config/radarpub', {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json'
@@ -395,7 +395,7 @@
                     CLUSTERING_POINT_LIMIT: document.getElementById('clustering_point_limit').value
                 };
 
-                fetch('/config/radarpub', {
+                fetch('/api/config/radarpub', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'

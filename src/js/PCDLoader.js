@@ -1,9 +1,7 @@
 import {
     BufferGeometry,
-    Color,
     FileLoader,
     Float32BufferAttribute,
-    Int32BufferAttribute,
     Loader,
     Points,
     PointsMaterial,
@@ -14,8 +12,7 @@ import {
     Group,
     Vector3
 } from './three.js';
-import { preprocessPoints } from './pcd.js';
-import { CdrReader } from './Cdr.js';
+import { parsePointCloud2, readField } from './pointcloud2.js';
 
 class PCDLoader extends Loader {
 
@@ -85,127 +82,50 @@ class PCDLoader extends Loader {
     }
 
     parse(data) {
-        // Use pcd.js logic for flexible parsing
-        const dataView = new DataView(data);
-        const reader = new CdrReader(dataView);
+        const parsed = parsePointCloud2(data);
+        this.lastParsed = parsed;
+        const { totalPoints, fieldMap } = parsed;
 
-        // --- Begin pcd.js logic ---
-        function deserialize_pointfield(reader) {
-            const pointfield = {};
-            pointfield.name = reader.string();
-            pointfield.offset = reader.uint32();
-            pointfield.datatype = reader.uint8();
-            pointfield.count = reader.uint32();
-            return pointfield;
-        }
+        // Bail out if essential x/y fields are missing
+        const fx = fieldMap.x;
+        const fy = fieldMap.y;
+        if (!fx || !fy) return new Group();
 
-        function deserialize_pcd(reader) {
-            const data = {};
-            data.header_stamp_sec = reader.uint32();
-            data.header_stamp_nsec = reader.uint32();
-            data.header_frame_id = reader.string();
+        const fz = fieldMap.z; // may be undefined
 
-            data.height = reader.uint32();
-            data.width = reader.uint32();
+        const positions = new Float32Array(totalPoints * 3);
+        const colors = new Float32Array(totalPoints * 3);
 
-            const field_count = reader.sequenceLength();
-            data.fields = [];
-            for (let i = 0; i < field_count; i++) {
-                data.fields.push(deserialize_pointfield(reader));
-            }
-
-            data.is_bigendian = reader.int8() > 0;
-            data.point_step = reader.uint32();
-            data.row_step = reader.uint32();
-            data.data = reader.uint8Array();
-            data.is_dense = reader.int8() > 0;
-            return data;
-        }
-
-        function pcd_to_points(pcd) {
-            const points = [];
-            const view = new DataView(new ArrayBuffer(pcd.data.length));
-            pcd.data.forEach((b, i) => view.setUint8(i, b));
-            for (let i = 0; i < pcd.height; i++) {
-                for (let j = 0; j < pcd.width; j++) {
-                    const point = {};
-                    const point_start = (i * pcd.width + j) * pcd.point_step;
-                    for (const f of pcd.fields) {
-                        let val = 0;
-                        switch (f.datatype) {
-                            case 7: // float32
-                                val = view.getFloat32(point_start + f.offset, !pcd.is_bigendian);
-                                break;
-                            case 8: // float64
-                                val = view.getFloat64(point_start + f.offset, !pcd.is_bigendian);
-                                break;
-                            case 2: // uint8
-                                val = view.getUint8(point_start + f.offset);
-                                break;
-                            case 1: // int8
-                                val = view.getInt8(point_start + f.offset);
-                                break;
-                            case 3: // int16
-                                val = view.getInt16(point_start + f.offset, !pcd.is_bigendian);
-                                break;
-                            case 4: // uint16
-                                val = view.getUint16(point_start + f.offset, !pcd.is_bigendian);
-                                break;
-                            case 5: // int32
-                                val = view.getInt32(point_start + f.offset, !pcd.is_bigendian);
-                                break;
-                            case 6: // uint32
-                                val = view.getUint32(point_start + f.offset, !pcd.is_bigendian);
-                                break;
-                            default:
-                                console.warn("NotImplemented: PCD has unknown data type.", f.datatype);
-                        }
-                        point[f.name] = val;
-                    }
-                    points.push(point);
-                }
-            }
-            return points;
-        }
-        // --- End pcd.js logic ---
-
-        // Parse the PCD
-        const pcd = deserialize_pcd(reader);
-        const points = pcd_to_points(pcd);
-
-        // Now convert to Three.js geometry
-        const positions = new Float32Array(points.length * 3);
-        const colors = new Float32Array(points.length * 3);
-
-        // Find max distance for normalization
+        // First pass: read x/y, compute positions, and track max distance
         let maxDistance = 0;
-        for (let i = 0; i < points.length; i++) {
-            const pt = points[i];
-            const x = pt.x;
-            const y = pt.y;
+        for (let i = 0; i < totalPoints; i++) {
+            const x = readField(parsed, i, fx);
+            const y = readField(parsed, i, fy);
+            const z = fz ? readField(parsed, i, fz) : 0;
+
+            // Axis remap: x forward, z up, -y right
+            positions[i * 3]     = x;
+            positions[i * 3 + 1] = z;
+            positions[i * 3 + 2] = -y;
+
             const dist = Math.sqrt(x * x + y * y);
             if (dist > maxDistance) maxDistance = dist;
         }
         maxDistance = Math.max(maxDistance, 1e-3); // Avoid divide by zero
 
-        for (let i = 0; i < points.length; i++) {
-            const pt = points[i];
-            // Assume x, y, z fields exist
-            positions[i * 3] = pt.x;
-            positions[i * 3 + 1] = pt.z !== undefined ? pt.z : 0;
-            positions[i * 3 + 2] = pt.y;
-
-            // Rainbow color by distance
-            const x = pt.x;
-            const y = pt.y;
+        // Second pass: rainbow color by distance
+        for (let i = 0; i < totalPoints; i++) {
+            const x = positions[i * 3];
+            const y = -positions[i * 3 + 2]; // recover original y from -y
             const dist = Math.sqrt(x * x + y * y);
             const t = Math.min(dist / maxDistance, 1.0);
             const hue = (1.0 - t) * 240; // 0=red, 120=green, 240=blue
             const rgb = this.hsvToRgb(hue, 1.0, 1.0);
-            colors[i * 3] = rgb.r;
+            colors[i * 3]     = rgb.r;
             colors[i * 3 + 1] = rgb.g;
             colors[i * 3 + 2] = rgb.b;
         }
+
         // Create geometry
         const geometry = new BufferGeometry();
         geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));

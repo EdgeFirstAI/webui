@@ -45,11 +45,17 @@
             display: block;
         }
 
-        #color-mode {
+        #lidar-controls {
             position: absolute;
             top: 12px;
             right: 12px;
             z-index: 10;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        #color-mode {
             padding: 6px 12px;
             border-radius: 6px;
             border: 1px solid var(--color-border);
@@ -64,6 +70,31 @@
         #color-mode:focus {
             outline: 2px solid var(--brand-gold);
             outline-offset: 2px;
+        }
+
+        #cluster-filters {
+            display: none;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid var(--color-border);
+            background-color: var(--color-bg-surface);
+            color: var(--color-text-primary);
+            font-size: 13px;
+            box-shadow: 0 2px 4px var(--color-shadow);
+        }
+
+        #cluster-filters label {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        #cluster-filters input[type="checkbox"] {
+            accent-color: var(--brand-gold);
         }
 
         #fusion-warning {
@@ -109,12 +140,16 @@
     </script>
     <main id="container" class="bg-neural">
         <div id="lidar-viewport" data-testid="lidar-viewport">
-            <select id="color-mode" data-testid="lidar-color-mode">
-                <option value="fixed">Fixed</option>
-                <option value="distance" selected>Distance</option>
-                <option value="cluster">Cluster</option>
-                <option value="vision_class">Vision Class</option>
-            </select>
+            <div id="lidar-controls" data-testid="lidar-controls">
+                <select id="color-mode" data-testid="lidar-color-mode">
+                    <option value="fixed">Fixed</option>
+                    <option value="distance" selected>Distance</option>
+                </select>
+                <div id="cluster-filters" data-testid="lidar-cluster-filters">
+                    <label><input type="checkbox" id="show-noise" data-testid="lidar-show-noise" checked> Noise</label>
+                    <label><input type="checkbox" id="show-ground" data-testid="lidar-show-ground" checked> Ground</label>
+                </div>
+            </div>
             <div id="fusion-warning" data-testid="lidar-fusion-warning">Fusion data unavailable — showing distance colours</div>
             <div id="lidar-unavailable" data-testid="lidar-unavailable"><span>LiDAR Unavailable</span></div>
         </div>

@@ -357,49 +357,12 @@
     <script src="../js/navbar.js"></script>
     <script src="../js/status.js"></script>
     <script>
-        var allowedServices;
-
-        async function fetchConfigAndUpdateDeviceName() {
-            console.log("Fetching configuration...");
-            try {
-                const response = await fetch('/config/webui/details');
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const data = await response.json();
-                const deviceValue = data.DEVICE;
-
-                if (!deviceValue) {
-                    console.error('DEVICE property is missing in the response.');
-                    return;
-                }
-
-                const isRaivin = deviceValue.toLowerCase().includes('raivin');
-                const maivinServices = [
-                    'navsat', 'recorder', 'imu',
-                    'camera', 'model', 'zenohd', 'gpsd'
-                ];
-                const raivinServices = [
-                    'navsat', 'recorder', 'imu', 'radarpub',
-                    'camera', 'model', 'fusion', 'zenohd', 'gpsd'
-                ];
-                allowedServices = (isRaivin ? raivinServices : maivinServices);
-                console.log('Allowed Services:', allowedServices);
-            } catch (error) {
-                console.error('Error fetching config details:', error);
-            }
-        }
-
         async function fetchServices() {
             try {
-                console.log("In services", allowedServices);
-                const requestBody = JSON.stringify({ services: allowedServices });
-                const response = await fetch('/config/service/status', {
+                const response = await fetch('/api/services/status', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: requestBody
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ services: window.serviceCache.ALL_SERVICES })
                 });
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
@@ -412,13 +375,7 @@
             }
         }
 
-        async function initialize() {
-            await fetchConfigAndUpdateDeviceName();
-            console.log('Allowed Services outside the function:', allowedServices);
-            await fetchServices();
-        }
-
-        initialize();
+        fetchServices();
 
         function displayServices(services) {
             const serviceList = document.getElementById('service-list');
@@ -522,7 +479,7 @@
             loadingOverlay.style.display = 'block';
 
             try {
-                const response = await fetch('/config/services/update', {
+                const response = await fetch('/api/services/update', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -536,17 +493,11 @@
                 loadingOverlay.style.display = 'none';
 
                 if (response.ok) {
-                    let actionMessage;
-                    if (action === 'start') {
-                        actionMessage = 'started';
-                    } else if (action === 'stop') {
-                        actionMessage = 'stopped';
-                    } else if (action === 'enable') {
-                        actionMessage = 'enabled';
-                    } else {
-                        actionMessage = 'disabled';
+                    // Invalidate cache so other pages see the change
+                    if (window.serviceCache && window.serviceCache.clearCache) {
+                        window.serviceCache.clearCache();
                     }
-                    fetchServices();
+                    await fetchServices();
                 } else {
                     alert('Error updating service.');
                 }

@@ -5,14 +5,14 @@ import * as THREE from './three.js'
 import { OrbitControls } from './OrbitControls.js'
 import { PCDLoader } from './PCDLoader.js'
 import { mask_colors } from './utils.js'
-import { CdrReader } from './Cdr.js'
+import { parsePointCloud2, extractFieldArray } from './pointcloud2.js'
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-const RAW_TOPIC = '/rt/lidar/points/'
-const CLUSTER_TOPIC = '/rt/lidar/clusters/'
-const FUSION_TOPIC = '/rt/fusion/lidar/'
+const RAW_TOPIC = '/api/rt/lidar/points/'
+const CLUSTER_TOPIC = '/api/rt/lidar/clusters/'
+const FUSION_TOPIC = '/api/rt/fusion/lidar/'
 const UNAVAILABLE_TIMEOUT_MS = 1000
 const FUSION_WARNING_DURATION_MS = 5000
 const RECONNECT_DELAY_MS = 3000
@@ -29,6 +29,9 @@ let socketUrlCluster = CLUSTER_TOPIC
 let socketUrlFusion = FUSION_TOPIC
 let fusionWarningTimer = null
 let cachedIsDark = true   // cached theme state — updated on themechange
+let showNoise = true
+let showGround = true
+let lastPositions = null  // Float32Array of original XYZ positions
 
 // ---------------------------------------------------------------------------
 // DOM references
@@ -37,6 +40,9 @@ const viewport = document.getElementById('lidar-viewport')
 const colorModeSelect = document.getElementById('color-mode')
 const fusionWarning = document.getElementById('fusion-warning')
 const lidarUnavailable = document.getElementById('lidar-unavailable')
+const clusterFilters = document.getElementById('cluster-filters')
+const showNoiseCheckbox = document.getElementById('show-noise')
+const showGroundCheckbox = document.getElementById('show-ground')
 let unavailableTimer = null
 
 // ---------------------------------------------------------------------------
@@ -77,6 +83,46 @@ function animate() {
     renderer.render(scene, camera)
 }
 animate()
+
+// ---------------------------------------------------------------------------
+// Dynamic Colour Mode Detection
+// ---------------------------------------------------------------------------
+
+// Enriched field names → dropdown option value and label
+const ENRICHED_COLOR_MODES = [
+    { value: 'cluster',      label: 'Cluster',      field: 'cluster_id' },
+    { value: 'vision_class', label: 'Vision Class',  field: 'vision_class' },
+    { value: 'track_id',     label: 'Track ID',      field: 'track_id' },
+    { value: 'instance_id',  label: 'Instance ID',   field: 'instance_id' },
+]
+
+/**
+ * Update the colour-mode dropdown to show only modes whose fields exist in
+ * the current PointCloud2 data. fixed/distance are always present.
+ */
+function updateAvailableColorModes(fieldMap) {
+    for (const mode of ENRICHED_COLOR_MODES) {
+        if (!fieldMap[mode.field]) continue
+        let option = colorModeSelect.querySelector(`option[value="${mode.value}"]`)
+        if (!option) {
+            option = document.createElement('option')
+            option.value = mode.value
+            option.textContent = mode.label
+            colorModeSelect.appendChild(option)
+        }
+    }
+}
+
+/**
+ * Remove all enriched colour-mode options (called on topic switch so that
+ * newly detected fields from the new topic populate the dropdown fresh).
+ */
+function resetEnrichedColorModes() {
+    for (const mode of ENRICHED_COLOR_MODES) {
+        const option = colorModeSelect.querySelector(`option[value="${mode.value}"]`)
+        if (option) option.remove()
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Part B: Colour Mode Logic
@@ -248,29 +294,66 @@ function applyColorMode(group) {
                 colors[i * 3 + 2] = c.b
             }
         } else if (currentColorMode === 'vision_class') {
-            const hasVisionClass = lastParsedPoints.length > 0
+            const hasData = lastParsedPoints.length > 0
+            if (!hasData) showFusionWarning()
 
-            if (!hasVisionClass) {
-                showFusionWarning()
-            }
-
-            // Generic colour for class 0 / fallback
+            const gr = cachedIsDark ? 0.35 : 0.7
             const generic = getFixedColor()
-            const gr = generic.r, gg = generic.g, gb = generic.b
-
             for (let i = 0; i < count; i++) {
-                const cls = (hasVisionClass && i < lastParsedPoints.length)
+                const cls = (hasData && i < lastParsedPoints.length)
                     ? lastParsedPoints[i] : 0
 
-                if (cls > 0 && cls < mask_colors.length) {
+                if (cls <= 0) {
+                    colors[i * 3] = gr
+                    colors[i * 3 + 1] = gr
+                    colors[i * 3 + 2] = gr
+                } else if (cls < mask_colors.length) {
                     const mc = mask_colors[cls]
                     colors[i * 3] = mc.r
                     colors[i * 3 + 1] = mc.g
                     colors[i * 3 + 2] = mc.b
                 } else {
+                    colors[i * 3] = generic.r
+                    colors[i * 3 + 1] = generic.g
+                    colors[i * 3 + 2] = generic.b
+                }
+            }
+        } else if (currentColorMode === 'track_id') {
+            const hasData = lastParsedPoints.length > 0
+            if (!hasData) showFusionWarning()
+
+            const gr = cachedIsDark ? 0.35 : 0.7
+            for (let i = 0; i < count; i++) {
+                const tid = (hasData && i < lastParsedPoints.length)
+                    ? lastParsedPoints[i] : 0
+                if (tid === 0) {
                     colors[i * 3] = gr
-                    colors[i * 3 + 1] = gg
-                    colors[i * 3 + 2] = gb
+                    colors[i * 3 + 1] = gr
+                    colors[i * 3 + 2] = gr
+                } else {
+                    const c = clusterColor(tid)
+                    colors[i * 3] = c.r
+                    colors[i * 3 + 1] = c.g
+                    colors[i * 3 + 2] = c.b
+                }
+            }
+        } else if (currentColorMode === 'instance_id') {
+            const hasData = lastParsedPoints.length > 0
+            if (!hasData) showFusionWarning()
+
+            const gr = cachedIsDark ? 0.35 : 0.7
+            for (let i = 0; i < count; i++) {
+                const iid = (hasData && i < lastParsedPoints.length)
+                    ? lastParsedPoints[i] : 0
+                if (iid === 0) {
+                    colors[i * 3] = gr
+                    colors[i * 3 + 1] = gr
+                    colors[i * 3 + 2] = gr
+                } else {
+                    const c = clusterColor(iid)
+                    colors[i * 3] = c.r
+                    colors[i * 3 + 1] = c.g
+                    colors[i * 3 + 2] = c.b
                 }
             }
         }
@@ -278,6 +361,36 @@ function applyColorMode(group) {
         child.geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3))
         child.material.vertexColors = true
         child.material.needsUpdate = true
+    })
+}
+
+/**
+ * Hide noise/ground points by setting their positions to NaN (GPU discards them).
+ * Restores original positions first so toggling back on works correctly.
+ */
+function filterClusterPoints(group) {
+    if (currentColorMode !== 'cluster') return
+    if (!lastPositions) return
+
+    group.traverse((child) => {
+        if (!(child instanceof THREE.Points)) return
+        const posAttr = child.geometry.attributes.position
+        if (!posAttr) return
+
+        // Restore original positions first (undo previous NaN filtering)
+        posAttr.array.set(lastPositions)
+
+        const count = posAttr.count
+        const hasData = lastParsedPoints.length > 0
+
+        for (let i = 0; i < count; i++) {
+            const id = (hasData && i < lastParsedPoints.length)
+                ? lastParsedPoints[i] : 0
+            if ((id === 0 && !showNoise) || (id === 1 && !showGround)) {
+                posAttr.setXYZ(i, NaN, NaN, NaN)
+            }
+        }
+        posAttr.needsUpdate = true
     })
 }
 
@@ -296,13 +409,34 @@ function showFusionWarning() {
 // Colour mode selector
 colorModeSelect.addEventListener('change', () => {
     currentColorMode = colorModeSelect.value
+    updateClusterFiltersVisibility()
     switchTopic()
 
     // When switching to a mode that needs a different topic, wait for the first
     // frame from that topic rather than recolouring stale data.
-    const needsNewTopic = currentColorMode === 'vision_class' || currentColorMode === 'cluster'
+    const needsNewTopic = ['vision_class', 'cluster', 'track_id', 'instance_id'].includes(currentColorMode)
     if (!needsNewTopic && pointsGroup) {
         applyColorMode(pointsGroup)
+    }
+})
+
+function updateClusterFiltersVisibility() {
+    clusterFilters.style.display = currentColorMode === 'cluster' ? 'flex' : 'none'
+}
+
+showNoiseCheckbox.addEventListener('change', () => {
+    showNoise = showNoiseCheckbox.checked
+    if (pointsGroup) {
+        applyColorMode(pointsGroup)
+        filterClusterPoints(pointsGroup)
+    }
+})
+
+showGroundCheckbox.addEventListener('change', () => {
+    showGround = showGroundCheckbox.checked
+    if (pointsGroup) {
+        applyColorMode(pointsGroup)
+        filterClusterPoints(pointsGroup)
     }
 })
 
@@ -314,7 +448,7 @@ colorModeSelect.addEventListener('change', () => {
  * Return the active WebSocket topic based on current colour mode.
  */
 function getActiveTopic() {
-    if (currentColorMode === 'vision_class') return socketUrlFusion
+    if (['vision_class', 'track_id', 'instance_id'].includes(currentColorMode)) return socketUrlFusion
     if (currentColorMode === 'cluster') return socketUrlCluster
     return socketUrlRaw
 }
@@ -323,8 +457,9 @@ function getActiveTopic() {
  * Open (or re-open) the WebSocket connection for the active topic.
  */
 function connectSocket() {
-    // Close existing socket cleanly — null onclose to prevent auto-reconnect
+    // Close existing socket cleanly — null handlers to prevent late messages/reconnect
     if (socket) {
+        socket.onmessage = null
         socket.onclose = null
         socket.close()
         socket = null
@@ -350,7 +485,7 @@ function connectSocket() {
 
     socket.onerror = (error) => {
         console.error('LiDAR WebSocket error:', error)
-        if (currentColorMode === 'vision_class' || currentColorMode === 'cluster') {
+        if (['vision_class', 'cluster', 'track_id', 'instance_id'].includes(currentColorMode)) {
             showFusionWarning()
         }
     }
@@ -359,6 +494,25 @@ function connectSocket() {
         console.log('LiDAR WebSocket connection closed — reconnecting in 3 s')
         setTimeout(connectSocket, RECONNECT_DELAY_MS)
     }
+}
+
+/**
+ * Open a temporary WebSocket to discover which PointCloud2 fields a topic
+ * provides, then close the socket. Populates the colour-mode dropdown.
+ */
+function probeTopicFields(url) {
+    const ws = new WebSocket(url)
+    ws.binaryType = 'arraybuffer'
+    const probeTimeout = setTimeout(() => ws.close(), 5000)
+    ws.onmessage = (event) => {
+        clearTimeout(probeTimeout)
+        try {
+            const parsed = parsePointCloud2(event.data)
+            updateAvailableColorModes(parsed.fieldMap)
+        } catch (_) { /* topic may not be available */ }
+        ws.close()
+    }
+    ws.onerror = () => { clearTimeout(probeTimeout) }
 }
 
 /**
@@ -375,18 +529,44 @@ function updatePointCloud(arrayBuffer) {
     try {
         const group = pcdLoader.parse(arrayBuffer)
 
+        // Reuse the parsed result from PCDLoader (avoids double-parsing)
+        const parsed = pcdLoader.lastParsed
+
+        // Update available colour modes based on detected fields
+        updateAvailableColorModes(parsed.fieldMap)
+
         // Extract per-point field for modes that need it
-        if (currentColorMode === 'vision_class') {
-            extractField(arrayBuffer, 'vision_class')
-        } else if (currentColorMode === 'cluster') {
-            extractField(arrayBuffer, 'cluster_id')
+        const fieldForMode = {
+            vision_class: 'vision_class',
+            cluster: 'cluster_id',
+            track_id: 'track_id',
+            instance_id: 'instance_id',
+        }
+        const targetField = fieldForMode[currentColorMode]
+        if (targetField) {
+            lastParsedPoints = extractFieldArray(parsed, targetField)
         }
 
         // Orient the cloud
         group.rotation.set(0, Math.PI / 2, 0)
 
+        // Save original positions before applyColorMode (which may NaN-hide
+        // points) — must happen first so the array sizes always match the
+        // current frame, even when the topic changes and point count differs.
+        group.traverse((child) => {
+            if (child instanceof THREE.Points) {
+                const posAttr = child.geometry.attributes.position
+                if (posAttr) lastPositions = new Float32Array(posAttr.array)
+                // Pre-compute bounding sphere from clean positions so that
+                // NaN-hidden points don't trigger a recomputation later —
+                // THREE.js skips computeBoundingSphere when it's already set.
+                child.geometry.computeBoundingSphere()
+            }
+        })
+
         // Apply colour
         applyColorMode(group)
+        filterClusterPoints(group)
 
         // Set point material properties — larger in light mode for visibility
         const ptSize = cachedIsDark ? 3 : 4
@@ -397,91 +577,26 @@ function updatePointCloud(arrayBuffer) {
                 child.material.transparent = false
                 child.material.blending = THREE.NormalBlending
                 child.material.needsUpdate = true
+                // NaN-hidden points break computeBoundingSphere — skip frustum
+                // culling since the point cloud is always in view.
+                child.frustumCulled = false
             }
         })
 
         // Replace old point cloud in the scene
         if (pointsGroup) {
+            pointsGroup.traverse((child) => {
+                if (child instanceof THREE.Points) {
+                    child.geometry.dispose()
+                    child.material.dispose()
+                }
+            })
             scene.remove(pointsGroup)
         }
         pointsGroup = group
         scene.add(pointsGroup)
     } catch (error) {
         console.error('Error updating point cloud:', error)
-    }
-}
-
-/**
- * Re-parse CDR binary data to extract a single named field for each point.
- * Populates `lastParsedPoints` as a flat Int32Array (one entry per point).
- */
-function extractField(arrayBuffer, fieldName) {
-    try {
-        const dataView = new DataView(arrayBuffer)
-        const reader = new CdrReader(dataView)
-
-        // Deserialize PointCloud2 header
-        reader.uint32() // header.stamp.sec
-        reader.uint32() // header.stamp.nsec
-        reader.string() // header.frame_id
-
-        const height = reader.uint32()
-        const width = reader.uint32()
-
-        // Fields — find target field offset and datatype
-        const fieldCount = reader.sequenceLength()
-        let fieldOffset = -1
-        let fieldDatatype = 0
-        for (let i = 0; i < fieldCount; i++) {
-            const name = reader.string()
-            const offset = reader.uint32()
-            const datatype = reader.uint8()
-            reader.uint32() // count
-            if (name === fieldName) {
-                fieldOffset = offset
-                fieldDatatype = datatype
-            }
-        }
-
-        const is_bigendian = reader.int8() > 0
-        const point_step = reader.uint32()
-        reader.uint32() // row_step
-        const rawData = reader.uint8Array()
-
-        const totalPoints = height * width
-
-        if (fieldOffset < 0) {
-            lastParsedPoints = new Int32Array(0)
-            return
-        }
-
-        // Zero-copy: wrap the underlying buffer directly
-        const rawBuf = rawData.buffer
-        const rawBase = rawData.byteOffset
-        const view = new DataView(rawBuf, rawBase, rawData.length)
-        const le = !is_bigendian
-
-        const values = new Int32Array(totalPoints)
-
-        for (let i = 0; i < totalPoints; i++) {
-            const o = i * point_step + fieldOffset
-            switch (fieldDatatype) {
-                case 1: values[i] = view.getInt8(o); break
-                case 2: values[i] = view.getUint8(o); break
-                case 3: values[i] = view.getInt16(o, le); break
-                case 4: values[i] = view.getUint16(o, le); break
-                case 5: values[i] = view.getInt32(o, le); break
-                case 6: values[i] = view.getUint32(o, le); break
-                case 7: values[i] = view.getFloat32(o, le); break
-                case 8: values[i] = view.getFloat64(o, le); break
-                default: values[i] = 0
-            }
-        }
-
-        lastParsedPoints = values
-    } catch (error) {
-        console.error('Error extracting field:', fieldName, error)
-        lastParsedPoints = new Int32Array(0)
     }
 }
 
@@ -506,23 +621,8 @@ document.addEventListener('themechange', (e) => {
 })
 
 // ---------------------------------------------------------------------------
-// Config Loading & Initialisation
+// Initialisation
 // ---------------------------------------------------------------------------
-fetch('/config/webui/details')
-    .then((res) => res.json())
-    .then((config) => {
-        if (config.LIDAR_TOPIC) {
-            socketUrlRaw = config.LIDAR_TOPIC
-        }
-        if (config.CLUSTER_TOPIC) {
-            socketUrlCluster = config.CLUSTER_TOPIC
-        }
-        if (config.FUSION_TOPIC) {
-            socketUrlFusion = config.FUSION_TOPIC
-        }
-        connectSocket()
-    })
-    .catch((err) => {
-        console.warn('Could not load config — using defaults:', err)
-        connectSocket()
-    })
+connectSocket()
+probeTopicFields(socketUrlCluster)
+probeTopicFields(socketUrlFusion)

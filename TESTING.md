@@ -130,13 +130,22 @@ Accept the self-signed certificate when prompted.
 
 1. Navigate to Camera view (`/camera`)
 2. Verify H.264 video stream displays
-3. Check detection overlays appear on detected objects
-4. Verify FPS counter shows reasonable values (15-30 fps)
+3. Toggle each overlay on/off via the control panel:
+   - **Segmentation**: Toggle on, verify mask overlay appears
+   - **Bounding Boxes**: Toggle on, verify boxes with labels/confidence
+   - **LiDAR Points**: Toggle on, verify projected points appear
+4. Test LiDAR overlay color modes (Distance, Cluster, Vision Class, etc.)
+5. In Cluster mode, test Noise/Ground filter checkboxes
+6. Verify tile upgrade: if 4K tiles are available, video should upgrade automatically
 
 **Expected behavior:**
 - Video renders smoothly without artifacts
+- Overlay toggles show/hide each layer independently
 - Bounding boxes track objects correctly
 - Labels show class names and confidence
+- LiDAR points in cluster mode: noise (id=0) renders grey, not a hue color
+- In non-cluster modes, noise/ground points are NOT filtered even if checkboxes were unchecked
+- If tiles are available, video upgrades to 4K and the old fallback texture is disposed
 
 ### Combined View Testing
 
@@ -158,6 +167,9 @@ Accept the self-signed certificate when prompted.
 4. Verify point cloud renders with colour mapping
 5. Test colour mode selector: Fixed, Distance, Cluster, Vision Class
 6. Check fusion warning appears when Vision Class or Cluster selected but service unavailable
+7. Test cluster filter toggles: uncheck Noise to hide noise points, uncheck Ground to hide ground points
+8. Verify toggles only appear in Cluster colour mode
+9. Verify toggle state is preserved when switching modes
 
 **Expected behavior:**
 - LiDAR card only appears on home page when `lidarpub` is enabled
@@ -306,21 +318,87 @@ data-testid="<page>-<element>-<name>"
 - `index-card-gps`
 - `index-card-imu`
 
+**Camera Page (`camera.html`):**
+- `camera-viewport` - Main viewport container
+- `camera-player` - Video canvas
+- `camera-boxes` - Bounding box overlay canvas
+- `camera-lidar-overlay` - LiDAR projection overlay canvas
+- `camera-controls` - Overlay control panel
+- `camera-controls-header` - Control panel header
+- `camera-overlay-segmentation` - Segmentation section
+- `camera-toggle-segmentation` - Segmentation toggle checkbox
+- `camera-overlay-box2d` - Bounding boxes section
+- `camera-toggle-box2d` - Bounding boxes toggle checkbox
+- `camera-options-box2d` - Bounding box sub-options
+- `camera-box2d-labels` - Show labels checkbox
+- `camera-box2d-confidence` - Show confidence checkbox
+- `camera-overlay-lidar` - LiDAR overlay section
+- `camera-toggle-lidar` - LiDAR toggle checkbox
+- `camera-options-lidar` - LiDAR sub-options
+- `camera-lidar-color-mode` - LiDAR colour mode selector
+- `camera-lidar-cluster-filters` - Cluster filter container
+- `camera-lidar-noise` - Noise filter checkbox
+- `camera-lidar-ground` - Ground filter checkbox
+- `camera-unavailable` - Camera unavailable overlay
+
 **LiDAR Page (`lidar.html`):**
 - `lidar-viewport` - 3D viewport container
+- `lidar-controls` - Controls container (dropdown + cluster filters)
 - `lidar-color-mode` - Colour mode selector (Fixed, Distance, Cluster, Vision Class)
+- `lidar-cluster-filters` - Noise/Ground filter checkboxes (visible in Cluster mode)
+- `lidar-show-noise` - Noise filter checkbox
+- `lidar-show-ground` - Ground filter checkbox
 - `lidar-fusion-warning` - Warning banner when fusion data unavailable
 - `lidar-unavailable` - Overlay when LiDAR data is not being received
+
+**Segmentation Page (`segmentation.html`):**
+- `segmentation-container` - Main container
+- `segmentation-viewport` - Viewport wrapper
+- `segmentation-player-div` - Player container
+- `segmentation-player` - Video canvas
+- `segmentation-boxes` - Overlay canvas
+
+**Combined Page (`combined.html`):**
+- `combined-container` - Main container
+- `combined-viewport` - Viewport wrapper
+- `combined-player-div` - Player container
+- `combined-player` - Video canvas
+- `combined-boxes` - Overlay canvas
+- `combined-grid-div` - Grid container
+- `combined-grid` - Grid canvas
+
+**GPS Page (`gps.html`):**
+- `gps-data` - Data overlay container
+- `gps-timeout` - Timeout status indicator
+- `gps-latitude` - Latitude display
+- `gps-longitude` - Longitude display
+- `gps-btn-refresh` - Refresh button
+- `gps-map` - Map container
+
+**IMU Page (`imu.html`):**
+- `imu-data` - Data overlay container
+- `imu-timeout` - Timeout status indicator
+- `imu-roll` - Roll display
+- `imu-pitch` - Pitch display
+- `imu-yaw` - Yaw display
+- `imu-btn-reset` - Reset orientation button
+
+**JPEG Page (`jpeg.html`):**
+- `jpeg-timeout` - Timeout status indicator
+- `jpeg-image-container` - Image container
+- `jpeg-image` - JPEG image element
+
+**Grid Page (`grid.html`):**
+- `grid-main-container` - Main container
 
 **Settings Page (`config/settings.html`):**
 - `settings-card-recorder`
 - `settings-card-camera`
-- `settings-card-webui`
 - `settings-card-model`
+- `settings-card-lidar` (visible when `lidarpub` enabled)
+- `settings-card-radar` (visible when `radarpub` enabled)
+- `settings-card-fusion` (visible when `fusion` enabled)
 - `settings-card-services`
-- `settings-card-lidar`
-- `settings-card-radar` (Raivin only)
-- `settings-card-fusion` (Raivin only)
 - `settings-card-studio`
 
 ### Selenium Example

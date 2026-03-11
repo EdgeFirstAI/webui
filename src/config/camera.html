@@ -15,9 +15,9 @@
     <script src="../js/tailwind.js"></script>
     <script src="../js/theme.js"></script>
     <script src="../js/neuralMesh.js"></script>
+    <script src="../js/serviceCache.js"></script>
     <script src="../js/navbar.js"></script>
     <script src="../js/status.js"></script>
-    <script src="../js/serviceCache.js"></script>
     <style>
         body {
             font-family: 'Roboto', sans-serif;
@@ -269,7 +269,7 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function () {
-            fetch(`/config/camera/details`, {
+            fetch('/api/config/camera', {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json'
@@ -303,7 +303,7 @@
             const h264 = document.getElementById('h264').checked ? 'true' : 'false';
             const jpeg = document.getElementById('jpeg').checked ? 'true' : 'false';
 
-            fetch('/config/camera', {
+            fetch('/api/config/camera', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'

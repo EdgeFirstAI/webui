@@ -6,12 +6,12 @@ import h264Stream from './stream.js';
 class SmartVideoManager {
     constructor() {
         this.tileUrls = [
-            '/rt/camera/h264/tl',
-            '/rt/camera/h264/tr',
-            '/rt/camera/h264/bl',
-            '/rt/camera/h264/br'
+            '/api/rt/camera/h264/tl?compress=false',
+            '/api/rt/camera/h264/tr?compress=false',
+            '/api/rt/camera/h264/bl?compress=false',
+            '/api/rt/camera/h264/br?compress=false'
         ];
-        this.fallbackUrl = '/rt/camera/h264';
+        this.fallbackUrl = '/api/rt/camera/h264?compress=false';
 
         this.mode = null; // 'tiles' or 'fallback'
         this.currentTexture = null;
@@ -19,106 +19,108 @@ class SmartVideoManager {
         this.mergedCanvas = null;
         this.mergedContext = null;
 
-        this.detectionTimeout = 5000; // 5 seconds to detect tiles
+        this.tileProbeTimeout = 5000; // 5 seconds to detect tiles
 
         // Aggressive frame synchronization system (15fps, requires ALL tiles)
         this.syncEnabled = true;
-        this.frameReadyMap = new Map(); // Track when each tile has a frame ready
+        this.frameReadyMap = new Map();
         this.lastUpdateTime = 0;
-        this.updateThrottle = 67; // Update at most every 67ms (15fps)
-        this.maxWaitForSync = 500; // Maximum 500ms wait for ALL tiles (much longer)
+        this.updateThrottle = 67; // 15fps max
+        this.maxWaitForSync = 500;
         this.pendingUpdate = false;
-        this.requiredTiles = 4; // MUST have all 4 tiles
+        this.requiredTiles = 4;
+
     }
 
     async init(onFrameUpdate, h264StreamFunc = null) {
-        // Use passed function or imported one
         this.h264StreamFunc = h264StreamFunc || h264Stream;
-        try {
-            const tilesAvailable = await this.detectTiles();
+        this.onFrameUpdate = onFrameUpdate;
 
-            if (tilesAvailable) {
-                try {
-                    return await this.initTileMode(onFrameUpdate);
-                } catch (tileError) {
-                    console.error('❌ Tile initialization failed:', tileError);
-                    return await this.initFallbackMode(onFrameUpdate);
-                }
-            } else {
-                return await this.initFallbackMode(onFrameUpdate);
-            }
-        } catch (error) {
-            console.error('Detection error:', error);
-            return await this.initFallbackMode(onFrameUpdate);
-        }
+        // Start the single stream immediately — no waiting
+        const fallbackTexture = await this.initFallbackMode(onFrameUpdate);
+
+        // Race tile probes in the background — upgrade if tiles respond
+        this.probeTilesInBackground(onFrameUpdate);
+
+        return fallbackTexture;
     }
 
-    async detectTiles() {
-        console.log('SmartVideoManager: Testing tile connections...');
+    /**
+     * Probe tile endpoints in the background. If enough tiles respond with
+     * data within the timeout, upgrade from fallback to tile mode.
+     */
+    probeTilesInBackground(onFrameUpdate) {
+        let dataReceivedCount = 0;
+        const connections = [];
+        const dataReceivedFrom = new Set();
+        let resolved = false;
 
-        return new Promise((resolve) => {
-            let connectCount = 0;
-            let dataReceivedCount = 0;
-            const connections = [];
-            const connectionStatus = {};
-            const dataReceivedFrom = new Set();
+        const cleanup = () => {
+            if (resolved) return;
+            resolved = true;
+            connections.forEach(ws => {
+                if (ws.readyState === WebSocket.OPEN ||
+                    ws.readyState === WebSocket.CONNECTING) {
+                    ws.close();
+                }
+            });
+        };
 
-            const timeout = setTimeout(() => {
-                connections.forEach(ws => {
-                    if (ws.readyState === WebSocket.OPEN) {
-                        ws.close();
-                    }
-                });
+        const timeout = setTimeout(() => {
+            // Timed out — stay on fallback (already running)
+            cleanup();
+        }, this.tileProbeTimeout);
 
-                // Only use tiles if we have at least 2 tiles with actual data
-                const tilesAvailable = dataReceivedCount >= 2;
-                resolve(tilesAvailable);
-            }, this.detectionTimeout);
+        this.tileUrls.forEach((url) => {
+            const ws = new WebSocket(url);
+            ws.binaryType = 'arraybuffer';
+            connections.push(ws);
 
-            this.tileUrls.forEach((url, index) => {
-                const ws = new WebSocket(url);
-                ws.binaryType = 'arraybuffer';
-                connections.push(ws);
-                connectionStatus[url] = 'connecting';
+            ws.onmessage = (event) => {
+                if (resolved) return;
+                if (event.data instanceof ArrayBuffer && event.data.byteLength > 0) {
+                    if (!dataReceivedFrom.has(url)) {
+                        dataReceivedFrom.add(url);
+                        dataReceivedCount++;
 
-                ws.onopen = () => {
-                    connectCount++;
-                    connectionStatus[url] = 'connected';
-                };
-
-                ws.onmessage = (event) => {
-                    connectionStatus[url] = 'streaming';
-                    if (event.data instanceof ArrayBuffer && event.data.byteLength > 0) {
-                        if (!dataReceivedFrom.has(url)) {
-                            dataReceivedFrom.add(url);
-                            dataReceivedCount++;
-
-                            // If we have enough tiles with data, resolve immediately
-                            if (dataReceivedCount >= 2) {
-                                clearTimeout(timeout);
-                                // Clean up connections
-                                connections.forEach(socket => {
-                                    if (socket.readyState === WebSocket.OPEN) {
-                                        socket.close();
-                                    }
-                                });
-                                resolve(true);
-                            }
+                        if (dataReceivedCount >= 2) {
+                            clearTimeout(timeout);
+                            cleanup();
+                            console.log('SmartVideoManager: Tiles detected — upgrading to 4K tile mode');
+                            this.upgradeToTileMode(onFrameUpdate);
                         }
                     }
-                };
+                }
+            };
 
-                ws.onerror = (error) => {
-                    connectionStatus[url] = 'error';
-                };
-
-                ws.onclose = () => {
-                    if (connectionStatus[url] === 'connecting') {
-                        connectionStatus[url] = 'failed';
-                    }
-                };
-            });
+            ws.onerror = () => {};
+            ws.onclose = () => {};
         });
+    }
+
+    /**
+     * Upgrade from fallback to tile mode. Disposes the fallback texture
+     * and switches this.currentTexture to the merged tile canvas.
+     */
+    async upgradeToTileMode(onFrameUpdate) {
+        try {
+            // Save fallback reference before initTileMode overwrites this.currentTexture
+            const fallbackTexture = this.currentTexture;
+
+            const tileTexture = await this.initTileMode(onFrameUpdate);
+
+            // Stop the fallback stream
+            if (fallbackTexture && fallbackTexture._stopReconnect) {
+                fallbackTexture._stopReconnect();
+            }
+
+            this.mode = 'tiles';
+            if (this.onUpgrade) {
+                this.onUpgrade(tileTexture);
+            }
+        } catch (error) {
+            console.error('SmartVideoManager: Tile upgrade failed, staying on fallback:', error);
+        }
     }
 
     async initTileMode(onFrameUpdate) {
@@ -137,26 +139,24 @@ class SmartVideoManager {
         });
 
         // Create merged texture
-        this.currentTexture = new THREE.CanvasTexture(this.mergedCanvas);
-        this.currentTexture.generateMipmaps = false;
-        this.currentTexture.minFilter = THREE.LinearFilter;
-        this.currentTexture.magFilter = THREE.LinearFilter;
+        const mergedTexture = new THREE.CanvasTexture(this.mergedCanvas);
+        mergedTexture.generateMipmaps = false;
+        mergedTexture.minFilter = THREE.LinearFilter;
+        mergedTexture.magFilter = THREE.LinearFilter;
 
         // Initialize tile streams
         const tilePromises = this.tileUrls.map(async (url, index) => {
             const tileName = ['topLeft', 'topRight', 'bottomLeft', 'bottomRight'][index];
             const position = [
-                { x: 0, y: 0 },     // topLeft
-                { x: 1920, y: 0 },  // topRight  
-                { x: 0, y: 1080 },  // bottomLeft
-                { x: 1920, y: 1080 } // bottomRight
+                { x: 0, y: 0 },
+                { x: 1920, y: 0 },
+                { x: 0, y: 1080 },
+                { x: 1920, y: 1080 }
             ][index];
 
             try {
                 const texture = await this.h264StreamFunc(url, 1920, 1080, 30, (timing) => {
-                    // Store frame timing for synchronization
                     this.onTileFrame(tileName, timing);
-
                     if (onFrameUpdate) {
                         onFrameUpdate({ ...timing, tileName, mode: 'tiles' });
                     }
@@ -170,32 +170,25 @@ class SmartVideoManager {
 
                 return texture;
             } catch (error) {
-                console.error(`SmartVideoManager: ❌ Failed to initialize tile ${tileName}:`, error);
+                console.error(`SmartVideoManager: Failed to initialize tile ${tileName}:`, error);
                 return null;
             }
         });
 
         const results = await Promise.allSettled(tilePromises);
-        const successfulTiles = results.filter(result => result.status === 'fulfilled' && result.value !== null).length;
-        const failures = results.filter(result => result.status === 'rejected');
-
-        if (failures.length > 0) {
-            failures.forEach((failure, index) => {
-                console.error(`SmartVideoManager: Tile ${index} failed:`, failure.reason);
-            });
-        }
+        const successfulTiles = results.filter(
+            result => result.status === 'fulfilled' && result.value !== null
+        ).length;
 
         if (successfulTiles === 0) {
             throw new Error('No tiles could be initialized successfully');
         }
 
-
         this.frameReadyMap.clear();
-
-        // Start merge updates
         this.updateMergedCanvas();
 
-        return this.currentTexture;
+        this.currentTexture = mergedTexture;
+        return mergedTexture;
     }
 
     async initFallbackMode(onFrameUpdate) {
@@ -227,32 +220,25 @@ class SmartVideoManager {
             return;
         }
 
-        // Mark this tile as having a fresh frame
         this.frameReadyMap.set(tileName, now);
-
-        const readyTiles = Array.from(this.frameReadyMap.keys());
-
         this.tryUpdateWithSync();
     }
 
     tryUpdateWithSync() {
-        if (this.pendingUpdate) return; // Already waiting for sync
+        if (this.pendingUpdate) return;
 
         const now = performance.now();
         const connectedTileNames = Object.keys(this.tileCanvases);
 
         if (connectedTileNames.length === 0) return;
 
-        // Check how many tiles have fresh frames
         const tilesWithFreshFrames = connectedTileNames.filter(tileName => {
             const lastFrameTime = this.frameReadyMap.get(tileName);
             return lastFrameTime && (now - lastFrameTime) < this.maxWaitForSync;
         });
 
-        // Throttle updates to 15fps max for stability
         const timeSinceLastUpdate = now - this.lastUpdateTime;
         if (timeSinceLastUpdate < this.updateThrottle) {
-            // Too soon for next update - wait
             if (!this.pendingUpdate) {
                 this.pendingUpdate = true;
                 const remainingTime = this.updateThrottle - timeSinceLastUpdate;
@@ -264,31 +250,22 @@ class SmartVideoManager {
             return;
         }
 
-        // ONLY update if we have ALL 4 tiles ready (strict requirement)
         if (tilesWithFreshFrames.length >= this.requiredTiles) {
             this.updateMergedCanvas();
             this.lastUpdateTime = now;
-
-            // Clear frame ready flags for tiles that were used
             tilesWithFreshFrames.forEach(tileName => {
                 this.frameReadyMap.delete(tileName);
             });
-
         } else if (tilesWithFreshFrames.length > 0 && timeSinceLastUpdate > this.maxWaitForSync) {
-            // Emergency fallback - only if we've waited too long
-            console.warn(`⚠️ TIMEOUT: Only ${tilesWithFreshFrames.length}/${this.requiredTiles} tiles ready after ${this.maxWaitForSync}ms - forcing update`);
             this.updateMergedCanvas();
             this.lastUpdateTime = now;
-
-            // Clear frame ready flags for tiles that were used
             tilesWithFreshFrames.forEach(tileName => {
                 this.frameReadyMap.delete(tileName);
             });
         } else {
-            // Wait for more tiles - be patient for ALL 4 tiles
             if (!this.pendingUpdate) {
                 this.pendingUpdate = true;
-                const waitTime = tilesWithFreshFrames.length > 0 ? 50 : 16; // Wait longer if we have some tiles
+                const waitTime = tilesWithFreshFrames.length > 0 ? 50 : 16;
                 setTimeout(() => {
                     this.pendingUpdate = false;
                     this.tryUpdateWithSync();
@@ -300,10 +277,8 @@ class SmartVideoManager {
     updateMergedCanvas() {
         if (!this.mergedContext || this.mode !== 'tiles') return;
 
-        // Clear canvas
         this.mergedContext.clearRect(0, 0, 3840, 2160);
 
-        // Draw each tile
         Object.values(this.tileCanvases).forEach(tile => {
             if (tile.canvas) {
                 this.mergedContext.drawImage(
@@ -314,7 +289,6 @@ class SmartVideoManager {
             }
         });
 
-        // Update texture
         if (this.currentTexture) {
             this.currentTexture.needsUpdate = true;
         }
@@ -329,7 +303,6 @@ class SmartVideoManager {
     }
 
     dispose() {
-
         if (this.currentTexture) {
             this.currentTexture.dispose();
         }
@@ -343,7 +316,6 @@ class SmartVideoManager {
         this.tileCanvases = {};
         this.currentTexture = null;
         this.frameReadyMap.clear();
-
     }
 }
 

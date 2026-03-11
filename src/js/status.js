@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 async function checkReplayStatus() {
     try {
-        const deviceData = await window.serviceCache.getDeviceData();
         const serviceStatuses = await window.serviceCache.getServiceStatuses();
-        const isRaivin = deviceData.DEVICE?.toLowerCase().includes('raivin');
 
         // Check critical services
         const statusMap = serviceStatuses.reduce((acc, { service, status }) => {
@@ -28,7 +26,6 @@ async function checkReplayStatus() {
             loadingSpinner.remove();
         }
         const allSensorsInactive = Object.values(statusMap).every(status => status !== 'running');
-        const allSensorActive = Object.values(statusMap).every(status => status === 'running');
         if (allSensorsInactive && !isReplay) {
             modeText.textContent = "Stopped";
             modeIndicator.className = "px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800 flex items-center gap-2";
@@ -42,11 +39,13 @@ async function checkReplayStatus() {
                 modeIndicator.className = "px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 flex items-center gap-2";
             }
         } else {
-            const isradarpubDown = !statusMap['radarpub'] || statusMap['radarpub'] !== 'running';
-            const isCameraDown = !statusMap['camera'] || statusMap['camera'] !== 'running';
-            const isDegraded = (isRaivin && isradarpubDown) || isCameraDown;
+            // Degraded = any enabled service is not running
+            const isDegraded = serviceStatuses.some(s => {
+                const status = typeof s.status === 'string' ? s.status : s.status?.status;
+                return s.enabled === 'enabled' && status !== 'running';
+            });
 
-            if (!allSensorActive) {
+            if (isDegraded) {
                 modeText.textContent = "Live Mode (Degraded)";
                 modeIndicator.className = "px-3 py-1 rounded-full text-sm font-medium bg-amber-100 text-amber-800 flex items-center gap-2";
             } else {
@@ -61,7 +60,7 @@ async function checkReplayStatus() {
 
 async function checkRecorderStatus() {
     try {
-        const response = await fetch('/recorder-status');
+        const response = await fetch('/api/recorder/status');
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -101,21 +100,12 @@ window.showServiceStatus = async function () {
     dialog.showModal();
 
     try {
-        // First get device type
-        const deviceResponse = await fetch('/config/webui/details');
-        if (!deviceResponse.ok) throw new Error(`HTTP error! status: ${deviceResponse.status}`);
-        const deviceData = await deviceResponse.json();
-        const isRaivin = deviceData.DEVICE?.toLowerCase().includes('raivin');
-        const baseServices = ["camera", "imu", "navsat", "model"];
-        const raivinServices = ["radarpub", "fusion"];
-        const services = isRaivin ? [...baseServices, ...raivinServices] : baseServices;
-
-        const response = await fetch('/config/service/status', {
+        const response = await fetch('/api/services/status', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ services })
+            body: JSON.stringify({ services: window.serviceCache.ALL_SERVICES })
         });
 
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
@@ -150,6 +140,7 @@ window.showServiceStatus = async function () {
         // SVGs for enabled/disabled
         const enabledIcon = `<svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>`;
         const disabledIcon = `<svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>`;
+        let rowsHtml = '';
         serviceStatuses.forEach(({ service, status, enabled }, idx) => {
             const isRunning = status === 'running';
             const isEnabled = enabled === 'enabled';
@@ -163,13 +154,12 @@ window.showServiceStatus = async function () {
                 .join(' ');
             let settingsUrl = null;
             let hasSettings = false;
-            console.log(service)
             if (service !== "navsat" && service !== "imu") {
                 settingsUrl = `/config/${service}`;
                 hasSettings = true;
             }
             const gearIcon = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 fd-hom-settings-icon"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.01c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.01 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.01 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.01c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.572-1.01c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.01-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.01-2.572c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.01z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>`;
-            content.innerHTML += `
+            rowsHtml += `
                 <div class="fd-hom-service-row flex items-center px-3 py-3 bg-white rounded-2xl shadow-sm mb-3 border border-gray-100 group" style="min-height:56px;">
                     <div class="flex flex-col flex-grow min-w-0 justify-center">
                         <span class="text-base font-semibold text-gray-900">${serviceName}</span>
@@ -187,6 +177,7 @@ window.showServiceStatus = async function () {
                 </div>
             `;
         });
+        content.innerHTML += rowsHtml;
         // Add CSS for enabled/disabled badges
         if (!document.getElementById('fd-service-status-style-hom-enabled-badge')) {
             const style = document.createElement('style');
@@ -231,12 +222,6 @@ window.hideServiceStatus = function () {
         dialog.close();
     }
 
-    // Close WebSocket connection when dialog is closed
-    if (mcapSocket) {
-        mcapSocket.close();
-        mcapSocket = null;
-        window.mcapSocket = null;
-    }
 };
 
 async function updateQuickStatus() {
@@ -289,8 +274,13 @@ async function updateQuickStatus() {
     }
 }
 
-let mcapSocket = null;
-window.mcapSocket = mcapSocket;
+async function listMcapFiles() {
+    const response = await fetch('/api/recordings');
+    if (!response.ok) {
+        throw new Error(`HTTP error ${response.status}: ${await response.text()}`);
+    }
+    return response.json();
+}
 
 window.showMcapDialog = async function () {
     let dialog = document.getElementById('mcapDialog');
@@ -336,7 +326,7 @@ window.showMcapDialog = async function () {
 
     // Synchronize replay status with server and localStorage before showing content
     try {
-        const replayResponse = await fetch('/replay-status');
+        const replayResponse = await fetch('/api/replay/status');
         const statusText = await replayResponse.text();
         const isReplayRunning = statusText.trim() === "Replay is running";
 
@@ -375,77 +365,63 @@ window.showMcapDialog = async function () {
         // Fallback to current global state
     }
 
-    // Close existing socket if any
-    if (mcapSocket) {
-        mcapSocket.close();
-        mcapSocket = null;
-        window.mcapSocket = null;
-    }
-
     try {
-        // Create WebSocket connection
-        mcapSocket = new WebSocket('/mcap/');
-        window.mcapSocket = mcapSocket;
+        const data = await listMcapFiles();
+        if (data.error) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'text-red-600';
+            errorDiv.textContent = `Error: ${data.error}`;
+            content.replaceChildren(errorDiv);
+            return;
+        }
+        const files = data.files || [];
+        const dirName = data.dir_name || '';
+        // Add a custom CSS rule to force no margin/padding above the directory label
+        if (!document.getElementById('mcap-dir-label-style')) {
+            const style = document.createElement('style');
+            style.id = 'mcap-dir-label-style';
+            style.innerHTML = `
+                .mcap-dir-label { margin-top: 0 !important; padding-top: 0 !important; margin-bottom: 0.25rem !important; font-size: 1.08rem !important; font-weight: 500 !important; }
+                #mcapDialogContent { margin-top: 0 !important; padding-top: 0 !important; }
+            `;
+            document.head.appendChild(style);
+        }
+        const header = dialog.querySelector('div[style*="border-bottom"]');
+        if (header) {
+            header.style.paddingBottom = '0';
+            header.style.marginBottom = '0';
+        }
+        content.style.marginTop = '0';
+        content.style.paddingTop = '0';
+        // Update directory path in header
+        const dirPathElement = document.querySelector('.mcap-dir-path');
+        if (dirPathElement && dirName) {
+            dirPathElement.textContent = dirName;
+        }
 
-        mcapSocket.onopen = () => {
-            mcapSocket.send(JSON.stringify({ action: 'list_files' }));
-        };
-
-        mcapSocket.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                if (data.error) {
-                    content.innerHTML = `<div class="text-red-600">Error: ${data.error}</div>`;
-                    return;
-                }
-                const files = data.files || [];
-                const dirName = data.dir_name || '';
-                // Add a custom CSS rule to force no margin/padding above the directory label
-                if (!document.getElementById('mcap-dir-label-style')) {
-                    const style = document.createElement('style');
-                    style.id = 'mcap-dir-label-style';
-                    style.innerHTML = `
-                        .mcap-dir-label { margin-top: 0 !important; padding-top: 0 !important; margin-bottom: 0.25rem !important; font-size: 1.08rem !important; font-weight: 500 !important; }
-                        #mcapDialogContent { margin-top: 0 !important; padding-top: 0 !important; }
-                    `;
-                    document.head.appendChild(style);
-                }
-                const header = dialog.querySelector('div[style*="border-bottom"]');
-                if (header) {
-                    header.style.paddingBottom = '0';
-                    header.style.marginBottom = '0';
-                }
-                content.style.marginTop = '0';
-                content.style.paddingTop = '0';
-                // Update directory path in header
-                const dirPathElement = document.querySelector('.mcap-dir-path');
-                if (dirPathElement && dirName) {
-                    dirPathElement.textContent = dirName;
-                }
-
-                // Setup directory copy button
-                const dirCopyBtn = document.querySelector('.mcap-dir-copy-btn');
-                if (dirCopyBtn && dirName) {
-                    dirCopyBtn.onclick = () => {
-                        navigator.clipboard.writeText(dirName);
-                        // Show brief feedback
-                        const originalText = dirCopyBtn.innerHTML;
-                        dirCopyBtn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>';
-                        setTimeout(() => {
-                            dirCopyBtn.innerHTML = originalText;
-                        }, 1000);
-                    };
-                }
-                let tableHTML = '';
-                const headerControls = document.getElementById('mcapHeaderControls');
-                if (files.length === 0) {
-                    tableHTML = `<div class=\"text-gray-600 text-center py-4\">No MCAP recordings found</div>`;
-                    if (headerControls) headerControls.innerHTML = '';
-                } else {
-                    files.sort((a, b) => new Date(b.created) - new Date(a.created));
-                    // Populate header controls
-                    if (headerControls) {
-                        headerControls.innerHTML = `
+        // Setup directory copy button
+        const dirCopyBtn = document.querySelector('.mcap-dir-copy-btn');
+        if (dirCopyBtn && dirName) {
+            dirCopyBtn.onclick = () => {
+                navigator.clipboard.writeText(dirName);
+                // Show brief feedback
+                const originalText = dirCopyBtn.innerHTML;
+                dirCopyBtn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>';
+                setTimeout(() => {
+                    dirCopyBtn.innerHTML = originalText;
+                }, 1000);
+            };
+        }
+        let tableHTML = '';
+        const headerControls = document.getElementById('mcapHeaderControls');
+        if (files.length === 0) {
+            tableHTML = `<div class="text-gray-600 text-center py-4">No MCAP recordings found</div>`;
+            if (headerControls) headerControls.innerHTML = '';
+        } else {
+            files.sort((a, b) => new Date(b.created) - new Date(a.created));
+            // Populate header controls
+            if (headerControls) {
+                headerControls.innerHTML = `
                             <div class="mcap-header-toolbar">
                                 <label class="mcap-checkbox-label">
                                     <input type="checkbox" id="mcap-select-all" class="mcap-checkbox">
@@ -516,7 +492,7 @@ window.showMcapDialog = async function () {
                                             <button class="mcap-action-btn mcap-info-btn mcap-btn-blue" title="Info" data-topics='${JSON.stringify(file.topics)}' data-fileinfo='${JSON.stringify({ name: file.name, size: file.size })}'>
                                                 <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" style="width: 1.15rem; height: 1.15rem;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
                                             </button>
-                                            <a class="mcap-action-btn mcap-btn-green" href="/download/${dirName}/${file.name}" title="Download">
+                                            <a class="mcap-action-btn mcap-btn-green" href="/api/recordings/download/${dirName}/${file.name}" title="Download">
                                                 <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" style="width: 1.25rem; height: 1.25rem;"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
                                             </a>
                                             <button class="mcap-action-btn mcap-upload-btn mcap-btn-purple" title="Upload to Studio" data-filename="${file.name}" data-dirname="${dirName}">
@@ -534,24 +510,16 @@ window.showMcapDialog = async function () {
                         </table>
                     `;
                 }
-                content.innerHTML = tableHTML;
-                attachMcapTableListeners(dirName);
-            } catch (error) {
-                content.innerHTML = `<div class=\"text-red-600\">Error parsing server response</div>`;
-            }
-        };
-        mcapSocket.onerror = () => {
-            content.innerHTML = `<div class=\"text-red-600\">Error connecting to server</div>`;
-        };
-        mcapSocket.onclose = () => { mcapSocket = null; window.mcapSocket = null; };
+        content.innerHTML = tableHTML;
+        attachMcapTableListeners(dirName);
     } catch (error) {
-        content.innerHTML = `<div class=\"text-red-600\">Error connecting to server</div>`;
+        content.innerHTML = `<div class="text-red-600">Error connecting to server</div>`;
     }
 
     // --- Storage Info Bar Logic ---
     async function fetchStorageInfo() {
         try {
-            const response = await fetch(`/check-storage`);
+            const response = await fetch('/api/storage');
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const data = await response.json();
             return data;
@@ -798,12 +766,6 @@ window.hideMcapDialog = function () {
     if (dialog) {
         dialog.close();
     }
-    if (mcapSocket) {
-        mcapSocket.close();
-        mcapSocket = null;
-        window.mcapSocket = null;
-    }
-
     // Reset MCAP button tooltip
     const mcapButton = document.getElementById('mcapDialogBtn');
     if (mcapButton) {
@@ -825,181 +787,103 @@ window.showPlayOptionsModal = function (fileName, directory) {
         document.body.appendChild(modal);
     }
 
-    // Get device name to determine if it's Maivin
-    fetch('/config/webui/details')
-        .then(response => response.json())
-        .then(deviceData => {
-            const isMaivin = deviceData.DEVICE?.toLowerCase().includes('maivin');
+    // Use cached service state — no fetch needed
+    const fusionEnabled = window.serviceCache.isServiceEnabled('fusion');
 
-            modal.innerHTML = `
-                <div class="bg-white p-8 rounded-xl max-w-md w-full">
-                    <div class="flex items-center justify-between mb-6">
-                        <h2 class="text-2xl font-semibold text-gray-800">Play Options</h2>
-                        <button onclick="closePlayOptionsModal()" class="text-gray-400 hover:text-gray-600">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                        </button>
+    modal.innerHTML = `
+        <div class="bg-white p-8 rounded-xl max-w-md w-full">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-2xl font-semibold text-gray-800">Play Options</h2>
+                <button onclick="closePlayOptionsModal()" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="bg-gray-50 rounded-lg p-4 mb-6">
+                <div class="space-y-2">
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-500">File Name:</span>
+                        <span class="text-sm font-medium text-gray-900 truncate ml-4 max-w-[200px]">${fileName}</span>
                     </div>
-                    
-                    <div class="bg-gray-50 rounded-lg p-4 mb-6">
+                </div>
+
+                <div class="space-y-6">
+                    ${fusionEnabled ? `
                         <div class="space-y-2">
-                            <div class="flex justify-between items-center">
-                                <span class="text-sm text-gray-500">File Name:</span>
-                                <span class="text-sm font-medium text-gray-900 truncate ml-4 max-w-[200px]">${fileName}</span>
+                            <label class="text-sm font-medium text-gray-700">Fusion</label>
+                            <div class="inline-flex w-full rounded-lg shadow-sm" role="group">
+                                <button type="button"
+                                    class="fusion-btn flex-1 px-4 py-2.5 text-sm font-medium text-white bg-[#4285f4] rounded-l-lg active hover:bg-blue-600"
+                                    data-value="live">
+                                    Live
+                                </button>
+                                <button type="button"
+                                    class="fusion-btn flex-1 px-4 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-r-lg hover:bg-gray-200 transition-colors"
+                                    data-value="mcap">
+                                    MCAP
+                                </button>
                             </div>
                         </div>
+                    ` : ''}
 
-                        <div class="space-y-6">
-                            ${!isMaivin ? `
-                                <div class="space-y-2">
-                                    <label class="text-sm font-medium text-gray-700">Fusion</label>
-                                    <div class="inline-flex w-full rounded-lg shadow-sm" role="group">
-                                        <button type="button" 
-                                            class="fusion-btn flex-1 px-4 py-2.5 text-sm font-medium text-white bg-[#4285f4] rounded-l-lg active hover:bg-blue-600" 
-                                            data-value="live">
-                                            Live
-                                        </button>
-                                        <button type="button" 
-                                            class="fusion-btn flex-1 px-4 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-r-lg hover:bg-gray-200 transition-colors" 
-                                            data-value="mcap">
-                                            MCAP
-                                        </button>
-                                    </div>
-                                </div>
-                            ` : ''}
-
-                            <div class="space-y-2">
-                                <label class="text-sm font-medium text-gray-700">Model</label>
-                                <div class="inline-flex w-full rounded-lg shadow-sm" role="group">
-                                    <button type="button" 
-                                        class="model-btn flex-1 px-4 py-2.5 text-sm font-medium text-white bg-[#4285f4] rounded-l-lg active hover:bg-blue-600" 
-                                        data-value="live">
-                                        Live
-                                    </button>
-                                    <button type="button" 
-                                        class="model-btn flex-1 px-4 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-r-lg hover:bg-gray-200 transition-colors" 
-                                        data-value="mcap">
-                                        MCAP
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="mt-8 flex justify-end space-x-3">
-                            <button onclick="closePlayOptionsModal()" 
-                                class="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
-                                Cancel
+                    <div class="space-y-2">
+                        <label class="text-sm font-medium text-gray-700">Model</label>
+                        <div class="inline-flex w-full rounded-lg shadow-sm" role="group">
+                            <button type="button"
+                                class="model-btn flex-1 px-4 py-2.5 text-sm font-medium text-white bg-[#4285f4] rounded-l-lg active hover:bg-blue-600"
+                                data-value="live">
+                                Live
                             </button>
-                            <button onclick="startPlaybackFromModal()" 
-                                class="px-4 py-2 text-sm font-medium text-white bg-[#4285f4] rounded-lg hover:bg-blue-600 transition-colors">
-                                Start
+                            <button type="button"
+                                class="model-btn flex-1 px-4 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-r-lg hover:bg-gray-200 transition-colors"
+                                data-value="mcap">
+                                MCAP
                             </button>
                         </div>
                     </div>
                 </div>
-            `;
 
-            // Setup button groups
-            const fusionBtns = modal.querySelectorAll('.fusion-btn');
-            const modelBtns = modal.querySelectorAll('.model-btn');
-
-            function setupButtonGroup(buttons) {
-                buttons.forEach(btn => {
-                    btn.addEventListener('click', function () {
-                        buttons.forEach(b => {
-                            b.classList.remove('active', 'bg-[#4285f4]', 'text-white');
-                            b.classList.add('bg-gray-100', 'text-gray-600');
-                        });
-                        this.classList.remove('bg-gray-100', 'text-gray-600');
-                        this.classList.add('active', 'bg-[#4285f4]', 'text-white');
-                    });
-                });
-            }
-
-            setupButtonGroup(fusionBtns);
-            setupButtonGroup(modelBtns);
-
-            // Store file info for later use
-            modal.dataset.fileName = fileName;
-            modal.dataset.directory = directory;
-
-            modal.showModal();
-        })
-        .catch(error => {
-            console.error('Error fetching device info:', error);
-            // Fallback to showing modal without device-specific options
-            modal.innerHTML = `
-                <div class="bg-white p-8 rounded-xl max-w-md w-full">
-                    <div class="flex items-center justify-between mb-6">
-                        <h2 class="text-2xl font-semibold text-gray-800">Play Options</h2>
-                        <button onclick="closePlayOptionsModal()" class="text-gray-400 hover:text-gray-600">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                        </button>
-                    </div>
-                    
-                    <div class="bg-gray-50 rounded-lg p-4 mb-6">
-                        <div class="space-y-2">
-                            <div class="flex justify-between items-center">
-                                <span class="text-sm text-gray-500">File Name:</span>
-                                <span class="text-sm font-medium text-gray-900 truncate ml-4 max-w-[200px]">${fileName}</span>
-                            </div>
-                        </div>
-
-                        <div class="space-y-6">
-                            <div class="space-y-2">
-                                <label class="text-sm font-medium text-gray-700">Model</label>
-                                <div class="inline-flex w-full rounded-lg shadow-sm" role="group">
-                                    <button type="button" 
-                                        class="model-btn flex-1 px-4 py-2.5 text-sm font-medium text-white bg-[#4285f4] rounded-l-lg active hover:bg-blue-600" 
-                                        data-value="live">
-                                        Live
-                                    </button>
-                                    <button type="button" 
-                                        class="model-btn flex-1 px-4 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-r-lg hover:bg-gray-200 transition-colors" 
-                                        data-value="mcap">
-                                        MCAP
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="mt-8 flex justify-end space-x-3">
-                            <button onclick="closePlayOptionsModal()" 
-                                class="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
-                                Cancel
-                            </button>
-                            <button onclick="startPlaybackFromModal()" 
-                                class="px-4 py-2 text-sm font-medium text-white bg-[#4285f4] rounded-lg hover:bg-blue-600 transition-colors">
-                                Start
-                            </button>
-                        </div>
-                    </div>
+                <div class="mt-8 flex justify-end space-x-3">
+                    <button onclick="closePlayOptionsModal()"
+                        class="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
+                        Cancel
+                    </button>
+                    <button onclick="startPlaybackFromModal()"
+                        class="px-4 py-2 text-sm font-medium text-white bg-[#4285f4] rounded-lg hover:bg-blue-600 transition-colors">
+                        Start
+                    </button>
                 </div>
-            `;
+            </div>
+        </div>
+    `;
 
-            const modelBtns = modal.querySelectorAll('.model-btn');
-            function setupButtonGroup(buttons) {
-                buttons.forEach(btn => {
-                    btn.addEventListener('click', function () {
-                        buttons.forEach(b => {
-                            b.classList.remove('active', 'bg-[#4285f4]', 'text-white');
-                            b.classList.add('bg-gray-100', 'text-gray-600');
-                        });
-                        this.classList.remove('bg-gray-100', 'text-gray-600');
-                        this.classList.add('active', 'bg-[#4285f4]', 'text-white');
-                    });
+    // Setup button groups
+    const fusionBtns = modal.querySelectorAll('.fusion-btn');
+    const modelBtns = modal.querySelectorAll('.model-btn');
+
+    function setupButtonGroup(buttons) {
+        buttons.forEach(btn => {
+            btn.addEventListener('click', function () {
+                buttons.forEach(b => {
+                    b.classList.remove('active', 'bg-[#4285f4]', 'text-white');
+                    b.classList.add('bg-gray-100', 'text-gray-600');
                 });
-            }
-            setupButtonGroup(modelBtns);
-
-            modal.dataset.fileName = fileName;
-            modal.dataset.directory = directory;
-
-            modal.showModal();
+                this.classList.remove('bg-gray-100', 'text-gray-600');
+                this.classList.add('active', 'bg-[#4285f4]', 'text-white');
+            });
         });
+    }
+
+    setupButtonGroup(fusionBtns);
+    setupButtonGroup(modelBtns);
+
+    // Store file info for later use
+    modal.dataset.fileName = fileName;
+    modal.dataset.directory = directory;
+
+    modal.showModal();
 };
 
 window.closePlayOptionsModal = function () {
@@ -1014,73 +898,62 @@ window.startPlaybackFromModal = function () {
     const fileName = modal.dataset.fileName;
     const directory = modal.dataset.directory;
 
-    // Get device name to determine if it's Maivin
-    fetch('/config/webui/details')
-        .then(response => response.json())
-        .then(deviceData => {
-            const isMaivin = deviceData.DEVICE?.toLowerCase().includes('maivin');
+    const fusionEnabled = window.serviceCache.isServiceEnabled('fusion');
+    const fusionIsLive = !fusionEnabled ? true : modal.querySelector('.fusion-btn[data-value="live"]')?.classList.contains('active') || false;
+    const modelIsLive = modal.querySelector('.model-btn[data-value="live"]')?.classList.contains('active') || false;
 
-            // Get selected options
-            const fusionIsLive = isMaivin ? true : modal.querySelector('.fusion-btn[data-value="live"]')?.classList.contains('active') || false;
-            const modelIsLive = modal.querySelector('.model-btn[data-value="live"]')?.classList.contains('active') || false;
+    const config = {
+        fileName: "replay",
+        MCAP: `${directory}/${fileName}`,
+        IGNORE_TOPICS: ""
+    };
 
-            const config = {
-                fileName: "replay",
-                MCAP: `${directory}/${fileName}`,
-                IGNORE_TOPICS: ""
-            };
+    let ignoreTopics = [];
+    if (fusionIsLive) ignoreTopics.push("/fusion/*");
+    if (modelIsLive) ignoreTopics.push("/model/*");
+    config.IGNORE_TOPICS = ignoreTopics.join(" ");
 
-            let ignoreTopics = [];
-            if (fusionIsLive) ignoreTopics.push("/fusion/*");
-            if (modelIsLive) ignoreTopics.push("/model/*");
-            config.IGNORE_TOPICS = ignoreTopics.join(" ");
-
-            fetch('/config/replay', {
+    fetch('/api/replay/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config)
+    })
+        .then(response => {
+            if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+            return response.text();
+        })
+        .then(() => {
+            return fetch('/api/replay/start', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(config)
-            })
-                .then(response => {
-                    if (!response.ok) throw new Error(`HTTP error ${response.status}`);
-                    return response.text();
+                body: JSON.stringify({
+                    file: fileName,
+                    directory: directory,
+                    dataSource: fusionIsLive ? 'live' : 'mcap',
+                    model: modelIsLive ? 'live' : 'mcap'
                 })
-                .then(() => {
-                    return fetch('/replay', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            file: fileName,
-                            directory: directory,
-                            dataSource: fusionIsLive ? 'live' : 'mcap',
-                            model: modelIsLive ? 'live' : 'mcap'
-                        })
-                    });
-                })
-                .then(response => {
-                    if (!response.ok) throw new Error(`HTTP error ${response.status}`);
-                    return response.text();
-                })
-                .then(() => {
-                    window.isPlaying = true;
-                    window.currentPlayingFile = fileName;
-                    // Save state to localStorage
-                    localStorage.setItem('mcapReplayState', JSON.stringify({
-                        isPlaying: true,
-                        currentPlayingFile: fileName
-                    }));
-                    modal.close();
-                    // Refresh the table
-                    if (typeof showMcapDialog === 'function') showMcapDialog();
-                    else if (typeof listMcapFiles === 'function') listMcapFiles();
-                })
-                .catch(error => {
-                    console.error('Error starting playback:', error);
-                    alert(`Error starting playback: ${error.message}`);
-                });
+            });
+        })
+        .then(response => {
+            if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+            return response.text();
+        })
+        .then(() => {
+            window.isPlaying = true;
+            window.currentPlayingFile = fileName;
+            // Save state to localStorage
+            localStorage.setItem('mcapReplayState', JSON.stringify({
+                isPlaying: true,
+                currentPlayingFile: fileName
+            }));
+            modal.close();
+            // Refresh the table
+            if (typeof showMcapDialog === 'function') showMcapDialog();
+            else if (typeof listMcapFiles === 'function') listMcapFiles();
         })
         .catch(error => {
-            console.error('Error fetching device info:', error);
-            alert('Error starting playback: Could not determine device type');
+            console.error('Error starting playback:', error);
+            alert(`Error starting playback: ${error.message}`);
         });
 };
 
@@ -1937,7 +1810,7 @@ window.togglePlayMcap = function (fileName, directory, options = null) {
         else if (typeof listMcapFiles === 'function') listMcapFiles();
     };
     if (window.isPlaying && window.currentPlayingFile === fileName) {
-        fetch('/config/replay', {
+        fetch('/api/replay/config', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ fileName: "replay", MCAP: "", IGNORE_TOPICS: "" })
@@ -1947,7 +1820,7 @@ window.togglePlayMcap = function (fileName, directory, options = null) {
                 return response.text();
             })
             .then(() => {
-                return fetch('/replay-end', {
+                return fetch('/api/replay/stop', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ file: fileName, directory: directory })
@@ -1990,8 +1863,8 @@ function deleteFile(fileName, directory) {
         file: fileName
     }
     if (confirmDelete) {
-        fetch('/delete', {
-            method: 'POST',
+        fetch('/api/recordings', {
+            method: 'DELETE',
             headers: {
                 'Content-Type': 'application/json'
             },
@@ -2005,11 +1878,10 @@ function deleteFile(fileName, directory) {
             return response.text();
         }).then(text => {
             console.log('File deleted:', text);
-            if (window.mcapSocket && window.mcapSocket.readyState === WebSocket.OPEN) {
-                window.mcapSocket.send(JSON.stringify({ action: 'list_files' }));
+            if (typeof window.showMcapDialog === 'function') {
+                window.showMcapDialog();
             }
             if (typeof startPolling === 'function') startPolling();
-            if (typeof listMcapFiles === 'function') listMcapFiles();
         }).catch(error => {
             console.error('Error deleting file:', error);
             alert(`Error deleting file: ${error.message}`);
@@ -2144,8 +2016,8 @@ window.switchToLive = async function () {
 
     let deviceName = null;
     try {
-        // Fetch device name
-        const response = await fetch('/config/webui/details');
+        // Note: DEVICE field used here for systemd target name, not UI gating
+        const response = await fetch('/api/config/webui');
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -2156,7 +2028,7 @@ window.switchToLive = async function () {
         }
 
         // Request live mode
-        const liveResp = await fetch('/live-run', {
+        const liveResp = await fetch('/api/replay/config', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ target: deviceName.toLowerCase() })
@@ -2174,7 +2046,7 @@ window.switchToLive = async function () {
         const pollInterval = 1000;
         let transitionCheck = setInterval(async () => {
             try {
-                const statusResponse = await fetch('/replay-status');
+                const statusResponse = await fetch('/api/replay/status');
                 const statusText = await statusResponse.text();
                 const isReplay = statusText.trim() === "Replay is running";
                 elapsed += pollInterval;
@@ -2755,7 +2627,7 @@ function connectUploadProgressWs(uploadId, dialog) {
     const wsHost = window.UPLOAD_WS_HOST || window.location.hostname;
     const wsPort = window.UPLOAD_WS_PORT ? String(window.UPLOAD_WS_PORT) : window.location.port;
     const portSegment = wsPort ? `:${wsPort}` : '';
-    const wsUrl = `${protocol}//${wsHost}${portSegment}/ws/uploads`;
+    const wsUrl = `${protocol}//${wsHost}${portSegment}/api/ws/uploads`;
     window.uploadProgressWs = new WebSocket(wsUrl);
 
     window.uploadProgressWs.onmessage = (event) => {
