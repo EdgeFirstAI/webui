@@ -141,7 +141,19 @@ export default class ProjectedMask extends THREE.ShaderMaterial {
                         max_ind = i*4 + max_ind_;
                     }
                     max_ind = clamp(max_ind, 0, ${colors.length-1});
+
+                    // Mask data is sigmoid probabilities quantized to uint8
+                    // (0 = background, 255 = foreground). Discard below 0.5
+                    // sigmoid and fade to full opacity by 0.65 for anti-aliased
+                    // mask edges without background bleed.
+                    float edge = smoothstep(0.5, 0.65, max_all);
+                    if (edge <= 0.0) {
+                        pc_fragColor = vec4(0.0, 0.0, 0.0, 0.0);
+                        return;
+                    }
+
                     pc_fragColor = colors[max_ind];
+                    pc_fragColor.a *= edge;
                 }`,
             glslVersion: THREE.GLSL3,
         })

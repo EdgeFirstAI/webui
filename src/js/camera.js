@@ -223,9 +223,14 @@ const SEG_FRAGMENT_SHADER = `
                 // mask's subregion within the shared texture atlas
                 vec2 maskUV = (uv - bb.xy) / bb.zw * maskScales[i];
                 float sig = texture(masks, vec3(maskUV, float(i))).r;
-                // Normalize from uint8 [0,255] → [0,1] sigmoid
-                float sigNorm = sig;
-                float a = sigNorm * colors[i].a;
+                // Confidence threshold to eliminate background within the ROI.
+                // Instance masks are low-res protos (~96px) upscaled ~12× via
+                // bilinear filtering, so boundary gradients are wide. The lower
+                // edge (0.5) matches HAL's sigmoid threshold; the upper edge
+                // (0.65) ensures only confident foreground is fully opaque.
+                float edge = smoothstep(0.5, 0.65, sig);
+                if (edge <= 0.0) continue;
+                float a = edge * colors[i].a;
                 // Source-over composite (premultiplied)
                 result.rgb = colors[i].rgb * a + result.rgb * (1.0 - a);
                 result.a = a + result.a * (1.0 - a);
@@ -240,11 +245,13 @@ const SEG_FRAGMENT_SHADER = `
                 float val = texture(masks, vec3(uv, float(i))).r;
                 if (val > maxVal) { maxVal = val; maxIdx = i; }
             }
-            // Show only if above threshold (sigmoid > 0.5 ≈ normalized 0.5)
-            if (maxVal > 0.5) {
-                pc_fragColor = vec4(colors[maxIdx].rgb, colors[maxIdx].a);
-            } else {
+            // Mask data is sigmoid probabilities — discard below 0.5,
+            // fade to full opacity by 0.65 for anti-aliased edges
+            float edge = smoothstep(0.5, 0.65, maxVal);
+            if (edge <= 0.0) {
                 pc_fragColor = vec4(0.0);
+            } else {
+                pc_fragColor = vec4(colors[maxIdx].rgb, colors[maxIdx].a * edge);
             }
         }
     }
