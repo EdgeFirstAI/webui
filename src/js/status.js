@@ -40,9 +40,10 @@ async function checkReplayStatus() {
             }
         } else {
             // Degraded = any enabled service is not running
-            const isDegraded = serviceStatuses.some(s =>
-                s.enabled === 'enabled' && s.status !== 'running'
-            );
+            const isDegraded = serviceStatuses.some(s => {
+                const status = typeof s.status === 'string' ? s.status : s.status?.status;
+                return s.enabled === 'enabled' && status !== 'running';
+            });
 
             if (isDegraded) {
                 modeText.textContent = "Live Mode (Degraded)";

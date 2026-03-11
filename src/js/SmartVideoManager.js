@@ -104,11 +104,14 @@ class SmartVideoManager {
      */
     async upgradeToTileMode(onFrameUpdate) {
         try {
+            // Save fallback reference before initTileMode overwrites this.currentTexture
+            const fallbackTexture = this.currentTexture;
+
             const tileTexture = await this.initTileMode(onFrameUpdate);
 
-            // Stop the fallback stream before switching
-            if (this.currentTexture && this.currentTexture._stopReconnect) {
-                this.currentTexture._stopReconnect();
+            // Stop the fallback stream
+            if (fallbackTexture && fallbackTexture._stopReconnect) {
+                fallbackTexture._stopReconnect();
             }
 
             this.mode = 'tiles';
