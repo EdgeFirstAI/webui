@@ -64,13 +64,14 @@ export default async function h264stream(socketUrl, width, height, fps, onMessag
     let stopped = false;
     let reconnectDelay = RECONNECT_MIN_MS;
     let reconnectTimer = null;
+    let socket = null;
 
     function connect() {
         if (stopped) return;
 
         // H.264 is already compressed; skip permessage-deflate to save CPU
         const wsUrl = socketUrl.includes('compress=') ? socketUrl : socketUrl + (socketUrl.includes('?') ? '&' : '?') + 'compress=false';
-        const socket = new WebSocket(wsUrl);
+        socket = new WebSocket(wsUrl);
         socket.binaryType = "arraybuffer";
 
         socket.onopen = function (event) {
@@ -138,10 +139,13 @@ export default async function h264stream(socketUrl, width, height, fps, onMessag
 
     connect();
 
-    // Attach cleanup method to texture so callers can stop reconnection
+    // Attach cleanup method to texture so callers can stop the stream
     texture_canvas._stopReconnect = () => {
         stopped = true;
         clearTimeout(reconnectTimer);
+        if (socket && socket.readyState <= WebSocket.OPEN) {
+            socket.close();
+        }
     };
     return texture_canvas;
 }

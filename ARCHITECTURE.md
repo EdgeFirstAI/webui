@@ -2,7 +2,7 @@
 
 **Version:** 2.0
 **Author:** Sébastien Taylor <sebastien@au-zone.com>
-**Last Updated:** 2026-02-05
+**Last Updated:** 2026-03-11
 
 ## Overview
 
@@ -97,13 +97,18 @@ sequenceDiagram
 - `/rt/camera/h264/{tl,tr,bl,br}` - Tiled 4K video quadrants
 
 **AI Outputs:**
-- `/rt/detect/boxes2d` - 2D detection bounding boxes
-- `/rt/detect/mask_compressed` - Segmentation masks (zstd)
+- `/rt/model/output` - Unified model output (detection boxes + segmentation masks)
+
+**LiDAR & Fusion:**
+- `/rt/lidar/points` - Raw LiDAR point cloud (PointCloud2)
+- `/rt/lidar/clusters` - Enriched LiDAR with cluster/class IDs
+- `/rt/fusion/lidar` - Fused lidar data
+- `/rt/tf_static` - Static transforms (LiDAR→camera extrinsics)
+- `/rt/camera/info` - Camera intrinsics (focal length, principal point)
 
 **Sensors:**
 - `/rt/radar/targets` - Radar point cloud
 - `/rt/fusion/radar` - Fused radar data
-- `/rt/fusion/lidar` - Fused lidar data
 - `/rt/gps/*` - GPS position
 - `/rt/imu/*` - IMU orientation
 
@@ -144,6 +149,7 @@ The SmartVideoManager handles tile detection and synchronization:
 - Minimum 2 tiles required for tile mode
 - Falls back to single stream if unavailable
 - Frame sync at 15fps minimum with 500ms max wait
+- Callback-based upgrade: `onUpgrade(tileTexture)` swaps the material texture and disposes the fallback
 
 ## Visualization Pages
 
@@ -152,11 +158,12 @@ The SmartVideoManager handles tile detection and synchronization:
 | Page | Description |
 |------|-------------|
 | `index.html` | Home page with visualization selector |
-| `camera.html` | Camera stream with detection overlays |
+| `camera.html` | Camera stream with segmentation, bounding box, and LiDAR overlays |
+| `lidar.html` | 3D LiDAR point cloud with colour modes and cluster filtering |
 | `combined.html` | Split view: video, segmentation, radar grid |
-| `combined_lidar.html` | 3D view with lidar point cloud |
 | `grid.html` | Occupancy grid visualization |
 | `segmentation.html` | Segmentation mask only |
+| `jpeg.html` | JPEG camera viewer |
 | `gps.html` | GPS map tracking |
 | `imu.html` | IMU orientation display |
 
@@ -168,8 +175,11 @@ Located under `/config/`:
 |------|---------|
 | `recorder.html` | MCAP recording and Studio upload |
 | `camera.html` | Camera device settings |
-| `detect.html` | Detection model configuration |
-| `segment.html` | Segmentation model configuration |
+| `model.html` | Model configuration |
+| `lidarpub.html` | LiDAR publisher settings |
+| `radarpub.html` | Radar publisher settings |
+| `fusion.html` | Sensor fusion settings |
+| `gpsd.html` | GPS daemon settings |
 | `services.html` | Service status and control |
 | `settings.html` | General settings hub |
 
@@ -181,20 +191,20 @@ flowchart TB
         H264[H.264 Video]
         MASK[Segmentation Mask]
         BOXES[Detection Boxes]
-        RADAR[Radar Points]
+        LIDAR[LiDAR Points]
     end
 
-    subgraph Rendering["Render Layers (bottom to top)"]
-        L1[1. Video Texture]
-        L2[2. Segmentation Overlay]
-        L3[3. Bounding Boxes]
-        L4[4. Point Cloud]
+    subgraph Rendering["Camera Page Render Layers (bottom to top)"]
+        L1[1. Video Texture - WebGL ProjectedMaterial]
+        L2[2. Segmentation Overlay - WebGL Shader]
+        L3[3. Bounding Boxes - Canvas 2D]
+        L4[4. LiDAR Points - Canvas 2D]
     end
 
     H264 --> L1
     MASK --> L2
     BOXES --> L3
-    RADAR --> L4
+    LIDAR --> L4
 ```
 
 Each layer streams independently with proper z-ordering for composited visualization.

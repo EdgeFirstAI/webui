@@ -18,7 +18,6 @@ const RECONNECT_MAX_MS = 8000
 // ---------------------------------------------------------------------------
 // Default topic URLs
 // ---------------------------------------------------------------------------
-let socketUrlH264 = '/api/rt/camera/h264/'
 let socketUrlLidar = '/api/rt/lidar/points/'
 let socketUrlLidarCluster = '/api/rt/lidar/clusters/'
 let socketUrlFusion = '/api/rt/fusion/lidar/'
@@ -56,6 +55,10 @@ let cameraIntrinsics = null // { fx, fy, cx, cy }
 
 // Computed LiDAR→camera 4x4 matrix (Float64Array[16], column-major)
 let lidarToCameraMatrix = null
+
+// PointCloud2 parse cache — avoid re-parsing the same buffer every frame
+let cachedLidarRawRef = null
+let cachedLidarParsed = null
 
 // ---------------------------------------------------------------------------
 // DOM references
@@ -119,6 +122,20 @@ function initVideoStream() {
     const quad = new THREE.PlaneGeometry(width / height * 500, 500)
 
     const videoManager = new SmartVideoManager()
+    let material = null
+
+    // Register upgrade handler before init() so it's available when tile
+    // probes resolve — even if that happens before the fallback .then() fires.
+    videoManager.onUpgrade = (tileTexture) => {
+        const oldTexture = texture_camera
+        texture_camera = tileTexture
+        if (material) {
+            material.uniforms.tex.value = tileTexture
+            material.needsUpdate = true
+        }
+        if (oldTexture) oldTexture.dispose()
+    }
+
     videoManager.init((timing) => {
         resetTimeout()
         if (timing.mode && !videoManager.loggedMode) {
@@ -127,7 +144,7 @@ function initVideoStream() {
         }
     }, h264Stream).then((tex) => {
         texture_camera = tex
-        const material = new ProjectedMaterial({
+        material = new ProjectedMaterial({
             camera: camera,
             texture: texture_camera,
             color: '#000',
@@ -671,7 +688,7 @@ function turboColormap(t) {
 }
 
 function clusterColor(id) {
-    if (id < 0) return { r: 0.5, g: 0.5, b: 0.55 }
+    if (id <= 0) return { r: 0.5, g: 0.5, b: 0.55 }
 
     const hue = (id * 137.508) % 360
     const sat = 0.85
@@ -717,11 +734,17 @@ function renderLidarOverlay() {
     const rawData = useEnriched ? lidarEnrichedPoints : lidarPoints
 
     let parsed
-    try {
-        parsed = parsePointCloud2(rawData)
-    } catch (e) {
-        console.warn('LiDAR parse error:', e)
-        return
+    if (rawData === cachedLidarRawRef) {
+        parsed = cachedLidarParsed
+    } else {
+        try {
+            parsed = parsePointCloud2(rawData)
+        } catch (e) {
+            console.warn('LiDAR parse error:', e)
+            return
+        }
+        cachedLidarRawRef = rawData
+        cachedLidarParsed = parsed
     }
 
     const { totalPoints, fieldMap } = parsed
@@ -748,7 +771,7 @@ function renderLidarOverlay() {
         if (!isFinite(lx) || !isFinite(ly) || !isFinite(lz)) continue
 
         // Filter noise/ground by cluster_id when using enriched data
-        if (hasClusterId && needsEnriched) {
+        if (hasClusterId && lidarColorMode === 'cluster') {
             const cid = readField(parsed, i, hasClusterId)
             if (cid === 0 && !lidarShowNoise) continue
             if (cid === 1 && !lidarShowGround) continue
@@ -985,6 +1008,8 @@ function stopLidar() {
     cameraTransform = null
     lidarToCameraMatrix = null
     cameraIntrinsics = null
+    cachedLidarRawRef = null
+    cachedLidarParsed = null
     // Clear overlay canvas
     lidarCtx.clearRect(0, 0, width, height)
 }

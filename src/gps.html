@@ -198,24 +198,24 @@
         });
     </script>
     <main class="bg-neural">
-        <div id="gps-data">
+        <div id="gps-data" data-testid="gps-data">
             <div class="stats shadow">
-                <div id="timeout" class="stat hidden">
+                <div id="timeout" data-testid="gps-timeout" class="stat hidden">
                     <div class="stat-title text-error">Timeout</div>
                     <div id="timeout-val" class="stat-desc text-error">Verify if GPS service is running</div>
                 </div>
                 <div class="stat">
                     <div class="stat-title">Latitude</div>
-                    <div id="latitude" class="stat-value text-xl">0</div>
+                    <div id="latitude" data-testid="gps-latitude" class="stat-value text-xl">0</div>
                 </div>
                 <div class="stat">
                     <div class="stat-title">Longitude</div>
-                    <div id="longitude" class="stat-value text-xl">0</div>
+                    <div id="longitude" data-testid="gps-longitude" class="stat-value text-xl">0</div>
                 </div>
-                <button id="gps-btn-refresh" class="refresh-button" onclick="location.reload()">Refresh</button>
+                <button id="gps-btn-refresh" data-testid="gps-btn-refresh" class="refresh-button" onclick="location.reload()">Refresh</button>
             </div>
         </div>
-        <div id="map"></div>
+        <div id="map" data-testid="gps-map"></div>
     </main>
     <script type="module">
         import { CdrReader } from './js/Cdr.js';

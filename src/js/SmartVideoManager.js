@@ -30,8 +30,6 @@ class SmartVideoManager {
         this.pendingUpdate = false;
         this.requiredTiles = 4;
 
-        // Fallback stream handle for cleanup if we upgrade to tiles
-        this.fallbackSocket = null;
     }
 
     async init(onFrameUpdate, h264StreamFunc = null) {
@@ -108,11 +106,15 @@ class SmartVideoManager {
         try {
             const tileTexture = await this.initTileMode(onFrameUpdate);
 
-            // Swap the texture — callers hold a reference to this.currentTexture
-            // but the THREE.js material references the texture object directly,
-            // so we need the caller to handle the swap. We signal via a property.
-            this.upgradedTexture = tileTexture;
+            // Stop the fallback stream before switching
+            if (this.currentTexture && this.currentTexture._stopReconnect) {
+                this.currentTexture._stopReconnect();
+            }
+
             this.mode = 'tiles';
+            if (this.onUpgrade) {
+                this.onUpgrade(tileTexture);
+            }
         } catch (error) {
             console.error('SmartVideoManager: Tile upgrade failed, staying on fallback:', error);
         }

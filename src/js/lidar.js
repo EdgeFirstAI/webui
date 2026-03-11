@@ -196,7 +196,7 @@ function distanceColor(t) {
  * Returns { r, g, b } each in [0, 1].
  */
 function clusterColor(id) {
-    if (id < 0) return cachedIsDark ? { r: 0.3, g: 0.3, b: 0.35 } : { r: 0.6, g: 0.6, b: 0.65 }
+    if (id <= 0) return cachedIsDark ? { r: 0.3, g: 0.3, b: 0.35 } : { r: 0.6, g: 0.6, b: 0.65 }
 
     // Golden angle gives good hue separation between adjacent IDs
     const hue = (id * 137.508) % 360

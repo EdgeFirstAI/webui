@@ -97,26 +97,26 @@
         });
     </script>
     <main class="bg-neural">
-        <div id="imu-data">
+        <div id="imu-data" data-testid="imu-data">
             <div class="stats shadow">
-                <div id="timeout" class="stat hidden">
+                <div id="timeout" data-testid="imu-timeout" class="stat hidden">
                     <div class="stat-title text-error">Timeout</div>
                     <div id="timeout-val" class="stat-desc text-error">Verify if IMU service is running</div>
                 </div>
                 <div class="stat">
                     <div class="stat-title">Roll</div>
-                    <div id="roll" class="stat-value text-xl">0</div>
+                    <div id="roll" data-testid="imu-roll" class="stat-value text-xl">0</div>
                 </div>
                 <div class="stat">
                     <div class="stat-title">Pitch</div>
-                    <div id="pitch" class="stat-value text-xl">0</div>
+                    <div id="pitch" data-testid="imu-pitch" class="stat-value text-xl">0</div>
                 </div>
                 <div class="stat">
                     <div class="stat-title">Yaw</div>
-                    <div id="yaw" class="stat-value text-xl">0</div>
+                    <div id="yaw" data-testid="imu-yaw" class="stat-value text-xl">0</div>
                 </div>
             </div>
-            <button id="imu-btn-reset-orientation" onclick="resetIMU()" class="btn btn-primary mt-4 w-full">Reset Orientation</button>
+            <button id="imu-btn-reset-orientation" data-testid="imu-btn-reset" onclick="resetIMU()" class="btn btn-primary mt-4 w-full">Reset Orientation</button>
         </div>
     </main>
 
@@ -364,30 +364,6 @@
             lastServiceStatuses = null;
             lastReplayStatus = null;
         });
-
-        async function checkRecorderStatus() {
-            try {
-                const response = await fetch('/api/recorder-status');
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const statusText = await response.text();
-                const isRecording = statusText.trim() === "Recorder is running";
-
-                const recorderIndicator = document.getElementById('recorderIndicator');
-
-                if (isRecording) {
-                    recorderIndicator.classList.remove('hidden');
-                    recorderIndicator.className = "text-red-600 animate-pulse relative group";
-                } else {
-                    recorderIndicator.classList.add('hidden');
-                }
-            } catch (error) {
-                console.error('Error checking recorder status:', error);
-                const recorderIndicator = document.getElementById('recorderIndicator');
-                recorderIndicator.classList.add('hidden');
-            }
-        }
     </script>
 </body>
 

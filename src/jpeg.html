@@ -41,9 +41,9 @@
         });
     </script>
     <main class="bg-neural">
-        <p id="timeout" style="color: red;"></p>
-        <div id="image-container">
-            <img id="jpeg-image" src="" alt="JPEG Image">
+        <p id="timeout" data-testid="jpeg-timeout" style="color: red;"></p>
+        <div id="image-container" data-testid="jpeg-image-container">
+            <img id="jpeg-image" data-testid="jpeg-image" src="" alt="JPEG Image">
         </div>
     </main>
     <script type="module" src="./js/jpeg.js"></script>
