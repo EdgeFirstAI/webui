@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.0] - 2026-03-11
+
+### Added
+
+- Camera page overlay controls for segmentation, bounding boxes, and LiDAR projection
+- Model output CDR parser for bounding boxes and instance segmentation masks
+- LiDAR cluster noise/ground filter toggles
+- Track ID and instance ID colour modes for LiDAR point clouds
+- Shared PointCloud2 parser with fusion topic support and dynamic colour modes
+- Camera card on home page with missing device config handling
+- GitHub Actions release workflow for automated archive and release notes
+- Copilot instructions with architecture overview and Playwright testing guide
+
+### Changed
+
+- **Breaking:** Replaced MAIVIN/RAIVIN device-type checks with dynamic service-enabled gating across dashboard, settings, recorder, and status pages
+- Unified segmentation into single shader-based toggle
+- Smoothstep confidence threshold (0.50–0.65) for segmentation mask anti-aliasing
+- Video stream starts immediately without tile probe delay
+
+### Removed
+
+- **Breaking:** Obsolete config pages (detect, segment, webui, vpkui)
+- Device-type based service filtering — all services now shown regardless of platform
+
+### Fixed
+
+- Left-right mirroring in 3D LiDAR point cloud view
+- Rendering frustum culling issues on camera page
+- Correct `rt/model/` topic paths for bounding boxes and segmentation masks
+- Vision class colour mode bugs in LiDAR viewer
+
 ## [3.8.0] - 2026-02-26
 
 ### Added
