@@ -1,5 +1,12 @@
 // Copyright (C) 2025 Au-Zone Technologies Inc. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
+
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
 async function checkReplayStatus() {
     try {
         const serviceStatuses = await window.serviceCache.getServiceStatuses();
@@ -472,11 +479,16 @@ window.showMcapDialog = async function () {
                         const dateStr = date ? date.toLocaleDateString() : '--';
                         const timeStr = date ? date.toLocaleTimeString() : '';
                         const isCurrentlyPlaying = window.currentPlayingFile === file.name && window.isPlaying;
+                        const safeName = escapeHtml(file.name);
+                        const safeDir = escapeHtml(dirName);
+                        const safeTopics = escapeHtml(JSON.stringify(file.topics));
+                        const safeFileinfo = escapeHtml(JSON.stringify({ name: file.name, size: file.size }));
+                        const downloadHref = `/api/recordings/download/${encodeURIComponent(dirName)}/${encodeURIComponent(file.name)}`;
                         return `
-                                <tr class="mcap-row-card" data-filename="${file.name}">
-                                    <td style="text-align:center; width:2.5rem;"><input type="checkbox" class="mcap-select-checkbox" data-filename="${file.name}"></td>
+                                <tr class="mcap-row-card" data-filename="${safeName}">
+                                    <td style="text-align:center; width:2.5rem;"><input type="checkbox" class="mcap-select-checkbox" data-filename="${safeName}"></td>
                                     <td style="text-align:center; width:3.5rem;">
-                                        <button class="mcap-action-btn mcap-play-btn ${isCurrentlyPlaying ? 'mcap-btn-red' : 'mcap-btn-blue'}" title="${isCurrentlyPlaying ? 'Stop' : 'Play'}" data-filename="${file.name}" data-dirname="${dirName}">
+                                        <button class="mcap-action-btn mcap-play-btn ${isCurrentlyPlaying ? 'mcap-btn-red' : 'mcap-btn-blue'}" title="${isCurrentlyPlaying ? 'Stop' : 'Play'}" data-filename="${safeName}" data-dirname="${safeDir}">
                                             <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" style="width: 1.25rem; height: 1.25rem;">
                                                 ${isCurrentlyPlaying
                                 ? '<rect x="7" y="7" width="10" height="10" rx="2"/>'
@@ -484,21 +496,21 @@ window.showMcapDialog = async function () {
                                             </svg>
                                         </button>
                                     </td>
-                                    <td style="max-width:320px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#222; font-weight:600;">${file.name}</td>
-                                    <td style="color:#555;">${file.size} MB</td>
-                                    <td style="color:#555;">${dateStr} <span style='color:#888;'>${timeStr}</span></td>
+                                    <td style="max-width:320px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#222; font-weight:600;">${safeName}</td>
+                                    <td style="color:#555;">${escapeHtml(String(file.size))} MB</td>
+                                    <td style="color:#555;">${escapeHtml(dateStr)} <span style='color:#888;'>${escapeHtml(timeStr)}</span></td>
                                     <td style="text-align:center;">
                                         <div style="display:flex; gap:0.5rem; justify-content:center; align-items:center;">
-                                            <button class="mcap-action-btn mcap-info-btn mcap-btn-blue" title="Info" data-topics='${JSON.stringify(file.topics)}' data-fileinfo='${JSON.stringify({ name: file.name, size: file.size })}'>
+                                            <button class="mcap-action-btn mcap-info-btn mcap-btn-blue" title="Info" data-topics='${safeTopics}' data-fileinfo='${safeFileinfo}'>
                                                 <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" style="width: 1.15rem; height: 1.15rem;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
                                             </button>
-                                            <a class="mcap-action-btn mcap-btn-green" href="/api/recordings/download/${dirName}/${file.name}" title="Download">
+                                            <a class="mcap-action-btn mcap-btn-green" href="${downloadHref}" title="Download">
                                                 <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" style="width: 1.25rem; height: 1.25rem;"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
                                             </a>
-                                            <button class="mcap-action-btn mcap-upload-btn mcap-btn-purple" title="Upload to Studio" data-filename="${file.name}" data-dirname="${dirName}">
+                                            <button class="mcap-action-btn mcap-upload-btn mcap-btn-purple" title="Upload to Studio" data-filename="${safeName}" data-dirname="${safeDir}">
                                                 <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" style="width: 1.25rem; height: 1.25rem;"><path d="M9 16h6v-6h4l-7-7-7 7h4v6zm-4 2h14v2H5v-2z"/></svg>
                                             </button>
-                                            <button class="mcap-action-btn mcap-delete-btn mcap-btn-red" title="Delete" data-filename="${file.name}" data-dirname="${dirName}">
+                                            <button class="mcap-action-btn mcap-delete-btn mcap-btn-red" title="Delete" data-filename="${safeName}" data-dirname="${safeDir}">
                                                 <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" style="width: 1.25rem; height: 1.25rem;"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
                                             </button>
                                         </div>

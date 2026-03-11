@@ -140,7 +140,8 @@ function isServiceRunning(serviceName) {
     const statuses = window.serviceCache.serviceStatuses;
     if (!Array.isArray(statuses)) return false;
     const entry = statuses.find(s => s.service === serviceName);
-    return entry?.status === 'running';
+    const status = typeof entry?.status === 'string' ? entry.status : entry?.status?.status;
+    return status === 'running';
 }
 
 // Function to get service statuses

@@ -512,7 +512,12 @@ function probeTopicFields(url) {
         } catch (_) { /* topic may not be available */ }
         ws.close()
     }
-    ws.onerror = () => { clearTimeout(probeTimeout) }
+    ws.onerror = () => {
+        clearTimeout(probeTimeout)
+        ws.onmessage = null
+        ws.onerror = null
+        ws.close()
+    }
 }
 
 /**
