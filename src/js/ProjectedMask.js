@@ -15,7 +15,7 @@ export default class ProjectedMask extends THREE.ShaderMaterial {
 
         if (!colors || colors.length == 0) {
             colors = [
-                new THREE.Color(0.0, 0.0, 0.0), // this color doesn't matter, it's always set to be alpha = 0
+                new THREE.Color(0.0, 0.0, 0.0),
                 new THREE.Color(0.25882353, 0.15294118, 0.13333333),
                 new THREE.Color(0., 1., 0.),
                 new THREE.Color(0.8, 0.76470588, 0.78039216),
@@ -38,7 +38,6 @@ export default class ProjectedMask extends THREE.ShaderMaterial {
 
         if (!alphas || alphas.length != colors.length) {
             alphas = Array(colors.length).fill(default_alpha);
-            alphas[0] = 0.0;
         }
 
         // zip colors and alphas together

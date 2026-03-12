@@ -5,6 +5,7 @@ import ProjectedMaterial from './ProjectedMaterial.js'
 import h264Stream from './stream.js'
 import SmartVideoManager from './SmartVideoManager.js'
 import modelstream from './model.js'
+import ModelInfo from './modelInfo.js'
 import { mask_colors } from './utils.js'
 import { CdrReader } from './Cdr.js'
 import { parsePointCloud2, readField } from './pointcloud2.js'
@@ -22,6 +23,7 @@ let socketUrlLidar = '/api/rt/lidar/points/'
 let socketUrlLidarCluster = '/api/rt/lidar/clusters/'
 let socketUrlFusion = '/api/rt/fusion/lidar/'
 let socketUrlModel = '/api/rt/model/output/'
+let socketUrlModelInfo = '/api/rt/model/info/'
 let socketUrlTfStatic = '/api/rt/tf_static/'
 let socketUrlCameraInfo = '/api/rt/camera/info/'
 
@@ -39,6 +41,7 @@ let showLabels = true
 let showConfidence = true
 let lidarShowNoise = true
 let lidarShowGround = true
+let drawBackground = false
 
 // Overlay scene objects (for cleanup)
 let segMesh = null
@@ -73,6 +76,9 @@ const cameraUnavailable = document.getElementById('camera-unavailable')
 // Overlay controls
 const overlaySegToggle = document.getElementById('overlay-segmentation')
 const overlaySegSection = overlaySegToggle.closest('.camera-controls__section')
+const segOptions = document.getElementById('seg-options')
+const segDrawBgCheckbox = document.getElementById('seg-draw-background')
+const segDrawBgLabel = document.getElementById('seg-draw-bg-label')
 
 const overlayBoxToggle = document.getElementById('overlay-box2d')
 const overlayBoxSection = overlayBoxToggle.closest('.camera-controls__section')
@@ -403,13 +409,15 @@ function renderSegmentation() {
                 bboxesArr[base + 3] = 1
             }
         } else {
-            // Semantic color from mask_colors
+            // Semantic color from mask_colors — all classes are valid unless
+            // ModelInfo identifies them as background
+            const isBg = ModelInfo.isBackground(i)
             const cls = Math.min(i, mask_colors.length - 1)
             const mc = mask_colors[cls]
             colorsArr[base] = mc.r
             colorsArr[base + 1] = mc.g
             colorsArr[base + 2] = mc.b
-            colorsArr[base + 3] = i === 0 ? 0.0 : 0.7  // class 0 is background → transparent
+            colorsArr[base + 3] = (isBg && !drawBackground) ? 0.0 : 0.7
 
             // Full-frame for semantic
             bboxesArr[base] = 0
@@ -809,7 +817,7 @@ function renderLidarOverlay() {
             color = clusterColor(readField(parsed, i, hasClusterId))
         } else if (lidarColorMode === 'vision_class' && hasVisionClass) {
             const cls = readField(parsed, i, hasVisionClass)
-            if (cls <= 0) continue
+            if (ModelInfo.isBackground(cls) && !drawBackground) continue
             color = cls < mask_colors.length
                 ? { r: mask_colors[cls].r, g: mask_colors[cls].g, b: mask_colors[cls].b }
                 : { r: 0.5, g: 0.5, b: 0.5 }
@@ -1157,8 +1165,13 @@ function wireToggle(checkbox, section, options, onToggle) {
 overlaySegToggle.addEventListener('change', () => {
     segEnabled = overlaySegToggle.checked
     overlaySegSection.setAttribute('data-active', segEnabled)
+    segOptions.setAttribute('data-visible', segEnabled)
     if (segEnabled) startSegmentation()
     else stopSegmentation()
+})
+
+segDrawBgCheckbox.addEventListener('change', () => {
+    drawBackground = segDrawBgCheckbox.checked
 })
 
 wireToggle(overlayBoxToggle, overlayBoxSection, boxOptions, (on) => {
@@ -1220,6 +1233,14 @@ function resetTimeout() {
 
 // Show unavailable initially until first frame arrives
 cameraUnavailable.style.display = 'flex'
+
+// ---------------------------------------------------------------------------
+// ModelInfo — show/hide "Draw Background" toggle when background is detected
+// ---------------------------------------------------------------------------
+ModelInfo.onChange(() => {
+    segDrawBgLabel.style.display = ModelInfo.hasBackground ? '' : 'none'
+})
+ModelInfo.connect(socketUrlModelInfo)
 
 // ---------------------------------------------------------------------------
 // Boot

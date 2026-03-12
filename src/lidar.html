@@ -93,8 +93,30 @@
             white-space: nowrap;
         }
 
-        #cluster-filters input[type="checkbox"] {
+        #cluster-filters input[type="checkbox"],
+        #bg-filter input[type="checkbox"] {
             accent-color: var(--brand-gold);
+        }
+
+        #bg-filter {
+            display: none;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid var(--color-border);
+            background-color: var(--color-bg-surface);
+            color: var(--color-text-primary);
+            font-size: 13px;
+            box-shadow: 0 2px 4px var(--color-shadow);
+        }
+
+        #bg-filter label {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+            white-space: nowrap;
         }
 
         #fusion-warning {
@@ -148,6 +170,9 @@
                 <div id="cluster-filters" data-testid="lidar-cluster-filters">
                     <label><input type="checkbox" id="show-noise" data-testid="lidar-show-noise" checked> Noise</label>
                     <label><input type="checkbox" id="show-ground" data-testid="lidar-show-ground" checked> Ground</label>
+                </div>
+                <div id="bg-filter" style="display:none" data-testid="lidar-bg-filter">
+                    <label><input type="checkbox" id="show-background" data-testid="lidar-show-background"> Draw Background</label>
                 </div>
             </div>
             <div id="fusion-warning" data-testid="lidar-fusion-warning">Fusion data unavailable — showing distance colours</div>
