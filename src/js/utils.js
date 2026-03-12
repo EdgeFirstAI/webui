@@ -80,8 +80,9 @@ export function color_points_class(points, field, scene, rendered_points, height
     points.forEach((point) => {
         let point_rad = 0.075
         let color = new THREE.Color(0xFFFFFF)
-        if (point[field] > 0) {
-            color = mask_colors[point[field]]
+        const cls = point[field]
+        if (cls >= 0 && cls < mask_colors.length) {
+            color = mask_colors[cls]
             point_rad = 0.15
         }
 
@@ -130,7 +131,7 @@ function combined_classes(points) {
 }
 
 export const mask_colors = [
-    new THREE.Color(0.0, 0.0, 0.0), // this color doesn't matter, it's always set to be alpha = 0
+    new THREE.Color(0.0, 0.0, 0.0),
     new THREE.Color(0., 1., 0.),
     new THREE.Color(0.50980392, 0.50980392, 0.72941176),
     new THREE.Color(0.00784314, 0.18823529, 0.29411765),

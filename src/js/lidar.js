@@ -4,6 +4,7 @@
 import * as THREE from './three.js'
 import { OrbitControls } from './OrbitControls.js'
 import { PCDLoader } from './PCDLoader.js'
+import ModelInfo from './modelInfo.js'
 import { mask_colors } from './utils.js'
 import { parsePointCloud2, extractFieldArray } from './pointcloud2.js'
 
@@ -31,6 +32,7 @@ let fusionWarningTimer = null
 let cachedIsDark = true   // cached theme state — updated on themechange
 let showNoise = true
 let showGround = true
+let drawBackground = false
 let lastPositions = null  // Float32Array of original XYZ positions
 
 // ---------------------------------------------------------------------------
@@ -43,6 +45,8 @@ const lidarUnavailable = document.getElementById('lidar-unavailable')
 const clusterFilters = document.getElementById('cluster-filters')
 const showNoiseCheckbox = document.getElementById('show-noise')
 const showGroundCheckbox = document.getElementById('show-ground')
+const bgFilter = document.getElementById('bg-filter')
+const showBgCheckbox = document.getElementById('show-background')
 let unavailableTimer = null
 
 // ---------------------------------------------------------------------------
@@ -303,7 +307,7 @@ function applyColorMode(group) {
                 const cls = (hasData && i < lastParsedPoints.length)
                     ? lastParsedPoints[i] : 0
 
-                if (cls <= 0) {
+                if (ModelInfo.isBackground(cls) && !drawBackground) {
                     colors[i * 3] = gr
                     colors[i * 3 + 1] = gr
                     colors[i * 3 + 2] = gr
@@ -410,6 +414,7 @@ function showFusionWarning() {
 colorModeSelect.addEventListener('change', () => {
     currentColorMode = colorModeSelect.value
     updateClusterFiltersVisibility()
+    updateBgFilterVisibility()
     switchTopic()
 
     // When switching to a mode that needs a different topic, wait for the first
@@ -439,6 +444,16 @@ showGroundCheckbox.addEventListener('change', () => {
         filterClusterPoints(pointsGroup)
     }
 })
+
+showBgCheckbox.addEventListener('change', () => {
+    drawBackground = showBgCheckbox.checked
+    if (pointsGroup) applyColorMode(pointsGroup)
+})
+
+function updateBgFilterVisibility() {
+    bgFilter.style.display = (currentColorMode === 'vision_class' && ModelInfo.hasBackground)
+        ? 'flex' : 'none'
+}
 
 // ---------------------------------------------------------------------------
 // Part C: WebSocket & Point Cloud Rendering
@@ -624,6 +639,15 @@ document.addEventListener('themechange', (e) => {
         })
     }
 })
+
+// ---------------------------------------------------------------------------
+// ModelInfo — show/hide "Draw Background" toggle when background is detected
+// ---------------------------------------------------------------------------
+ModelInfo.onChange(() => {
+    updateBgFilterVisibility()
+    if (pointsGroup) applyColorMode(pointsGroup)
+})
+ModelInfo.connect('/api/rt/model/info/')
 
 // ---------------------------------------------------------------------------
 // Initialisation
