@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.1] - 2026-03-12
+
+### Fixed
+
+- Replaced hardcoded class 0 = background with dynamic detection via ModelInfo `/model/info/` topic
+- Segmentation mask class indices now align 1:1 with bounding box labels (no off-by-one offset)
+- LiDAR vision_class mode no longer skips or grays out class 0 unconditionally
+
+### Added
+
+- "Draw Background" toggle on camera and LiDAR pages (hidden by default, shown when background detected)
+- ModelInfo singleton subscribes to `/api/rt/model/info/` for label-aware background detection
+- Implicit background detection via output_shape class dimension exceeding label count
+
 ## [4.0.0] - 2026-03-11
 
 ### Added
