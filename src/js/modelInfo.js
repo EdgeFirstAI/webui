@@ -110,18 +110,18 @@ const ModelInfo = {
         reader.uint32() // stamp.nanosec
         reader.string() // frame_id
 
-        const input_shape = reader.uint32Array()
-        const input_type = reader.uint8()
-        const output_shape = reader.uint32Array()
-        const output_type = reader.uint8()
+        this.inputShape = reader.uint32Array()
+        this.inputType = reader.uint8()
+        this.outputShape = reader.uint32Array()
+        this.outputType = reader.uint8()
 
         const labels = reader.stringArray()
 
-        const model_type = reader.string()
-        const model_format = reader.string()
-        const model_name = reader.string()
+        this.modelType = reader.string()
+        this.modelFormat = reader.string()
+        this.modelName = reader.string()
 
-        // Detect background labels
+        // Detect background labels (explicit match on label text)
         const bgIndices = new Set()
         for (let i = 0; i < labels.length; i++) {
             if (BG_PATTERN.test(labels[i].trim())) {
@@ -129,10 +129,17 @@ const ModelInfo = {
             }
         }
 
+        // Detect implicit background: output_shape's class dimension may
+        // exceed the label count when the model includes an unlabelled
+        // background class (typically the last output channel)
+        const outputClasses = this.outputShape.length > 0
+            ? this.outputShape[this.outputShape.length - 1] : 0
+        const hasImplicitBg = outputClasses > labels.length
+
         this.labels = labels
         this.numClasses = labels.length
         this._bgIndices = bgIndices
-        this.hasBackground = bgIndices.size > 0
+        this.hasBackground = bgIndices.size > 0 || hasImplicitBg
 
         // Notify listeners
         for (const cb of this._listeners) {

@@ -93,6 +93,8 @@ const lidarColorSelect = document.getElementById('lidar-color-mode')
 const lidarClusterFilters = document.getElementById('lidar-cluster-filters')
 const lidarNoiseCheckbox = document.getElementById('lidar-show-noise')
 const lidarGroundCheckbox = document.getElementById('lidar-show-ground')
+const lidarDrawBgCheckbox = document.getElementById('lidar-draw-background')
+const lidarDrawBgLabel = document.getElementById('lidar-draw-bg-label')
 
 // ---------------------------------------------------------------------------
 // THREE.js Scene
@@ -1172,7 +1174,9 @@ overlaySegToggle.addEventListener('change', () => {
 
 segDrawBgCheckbox.addEventListener('change', () => {
     drawBackground = segDrawBgCheckbox.checked
+    lidarDrawBgCheckbox.checked = drawBackground
 })
+
 
 wireToggle(overlayBoxToggle, overlayBoxSection, boxOptions, (on) => {
     boxEnabled = on
@@ -1189,6 +1193,7 @@ wireToggle(overlayLidarToggle, overlayLidarSection, lidarOptions, (on) => {
 lidarColorSelect.addEventListener('change', () => {
     lidarColorMode = lidarColorSelect.value
     lidarClusterFilters.setAttribute('data-visible', lidarColorMode === 'cluster')
+    updateLidarBgVisibility()
     if (lidarEnabled) connectEnrichedSocket()
 })
 
@@ -1196,6 +1201,15 @@ boxLabelsCheckbox.addEventListener('change', () => { showLabels = boxLabelsCheck
 boxConfidenceCheckbox.addEventListener('change', () => { showConfidence = boxConfidenceCheckbox.checked })
 lidarNoiseCheckbox.addEventListener('change', () => { lidarShowNoise = lidarNoiseCheckbox.checked })
 lidarGroundCheckbox.addEventListener('change', () => { lidarShowGround = lidarGroundCheckbox.checked })
+lidarDrawBgCheckbox.addEventListener('change', () => {
+    drawBackground = lidarDrawBgCheckbox.checked
+    segDrawBgCheckbox.checked = drawBackground
+})
+
+function updateLidarBgVisibility() {
+    lidarDrawBgLabel.style.display =
+        (lidarColorMode === 'vision_class' && ModelInfo.hasBackground) ? '' : 'none'
+}
 
 // ---------------------------------------------------------------------------
 // Animation Loop
@@ -1239,6 +1253,7 @@ cameraUnavailable.style.display = 'flex'
 // ---------------------------------------------------------------------------
 ModelInfo.onChange(() => {
     segDrawBgLabel.style.display = ModelInfo.hasBackground ? '' : 'none'
+    updateLidarBgVisibility()
 })
 ModelInfo.connect(socketUrlModelInfo)
 
