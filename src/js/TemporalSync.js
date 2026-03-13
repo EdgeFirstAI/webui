@@ -48,6 +48,8 @@ export default class TemporalSync {
         if (!this.calibrated) {
             if (this.releaseCallback) {
                 this.releaseCallback(bitmap)
+            } else {
+                bitmap.close()
             }
             return
         }
@@ -134,6 +136,8 @@ export default class TemporalSync {
                     // Most recent eligible frame — release for display
                     if (this.releaseCallback) {
                         this.releaseCallback(frame.bitmap)
+                    } else {
+                        frame.bitmap.close()
                     }
                 }
             }

@@ -197,7 +197,7 @@ function initVideoStream() {
             console.log(`Video Mode: ${timing.mode === 'tiles' ? '4K Tiles' : 'H.264 Fallback'}`)
             videoManager.loggedMode = true
         }
-    }, h264StreamCapture).then((tex) => {
+    }, h264Stream, h264StreamCapture).then((tex) => {
         texture_camera = tex
         material = new ProjectedMaterial({
             camera: camera,

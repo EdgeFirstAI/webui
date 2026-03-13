@@ -41,8 +41,9 @@ class SmartVideoManager {
 
     }
 
-    async init(onFrameUpdate, h264StreamFunc = null) {
+    async init(onFrameUpdate, h264StreamFunc = null, fallbackH264StreamFunc = null) {
         this.h264StreamFunc = h264StreamFunc || h264Stream;
+        this.fallbackH264StreamFunc = fallbackH264StreamFunc || this.h264StreamFunc;
         this.onFrameUpdate = onFrameUpdate;
 
         // Start the single stream immediately — no waiting
@@ -204,7 +205,7 @@ class SmartVideoManager {
         this.mode = 'fallback';
 
         try {
-            this.currentTexture = await this.h264StreamFunc(
+            this.currentTexture = await this.fallbackH264StreamFunc(
                 this.fallbackUrl,
                 1920, 1080, 30,
                 (timing) => {
