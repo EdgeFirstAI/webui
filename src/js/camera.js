@@ -9,6 +9,7 @@ import ModelInfo from './modelInfo.js'
 import { mask_colors } from './utils.js'
 import { CdrReader } from './Cdr.js'
 import { parsePointCloud2, readField } from './pointcloud2.js'
+import TemporalSync from './TemporalSync.js'
 
 const PI = Math.PI
 const UNAVAILABLE_TIMEOUT_MS = 15000
@@ -72,6 +73,7 @@ const boxCanvas = document.getElementById('boxes')
 const lidarCanvas = document.getElementById('lidar-overlay')
 const lidarCtx = lidarCanvas.getContext('2d')
 const cameraUnavailable = document.getElementById('camera-unavailable')
+const syncStatsEl = document.getElementById('sync-stats')
 
 // Overlay controls
 const overlaySegToggle = document.getElementById('overlay-segmentation')
@@ -95,6 +97,38 @@ const lidarNoiseCheckbox = document.getElementById('lidar-show-noise')
 const lidarGroundCheckbox = document.getElementById('lidar-show-ground')
 const lidarDrawBgCheckbox = document.getElementById('lidar-draw-background')
 const lidarDrawBgLabel = document.getElementById('lidar-draw-bg-label')
+
+// ---------------------------------------------------------------------------
+// Temporal Sync
+// ---------------------------------------------------------------------------
+let syncCanvasCtx = null
+let lastStatsUpdate = 0
+const sync = new TemporalSync({
+    onRelease: (bitmap) => {
+        if (!texture_camera) {
+            bitmap.close()
+            return
+        }
+        const canvas = texture_camera.image
+        if (!syncCanvasCtx) {
+            syncCanvasCtx = canvas.getContext('2d')
+        }
+        if (canvas.width !== bitmap.width || canvas.height !== bitmap.height) {
+            canvas.width = bitmap.width
+            canvas.height = bitmap.height
+        }
+        syncCanvasCtx.drawImage(bitmap, 0, 0)
+        bitmap.close()
+        texture_camera.needsUpdate = true
+    },
+    onStats: (stats) => {
+        const now = performance.now()
+        if (now - lastStatsUpdate < 1000) return
+        lastStatsUpdate = now
+        syncStatsEl.style.display = 'block'
+        syncStatsEl.textContent = `Latency: ${stats.latencyMs.toFixed(0)}ms\nModel:  ${stats.throughputFps.toFixed(1)} fps\nBuffer: ${stats.bufferDepth}/${stats.bufferCapacity}`
+    },
+})
 
 // ---------------------------------------------------------------------------
 // THREE.js Scene
@@ -135,6 +169,8 @@ function initVideoStream() {
     // Register upgrade handler before init() so it's available when tile
     // probes resolve — even if that happens before the fallback .then() fires.
     videoManager.onUpgrade = (tileTexture) => {
+        sync.reset()
+        syncCanvasCtx = null
         const oldTexture = texture_camera
         texture_camera = tileTexture
         if (material) {
@@ -144,13 +180,24 @@ function initVideoStream() {
         if (oldTexture) oldTexture.dispose()
     }
 
+    videoManager.onMergedFrame = (rosTimeSec, rosTimeNsec, bitmap) => {
+        sync.pushFrame(rosTimeSec, rosTimeNsec, bitmap)
+    }
+
+    const h264StreamCapture = (url, w, h, fps, cb) => h264Stream(url, w, h, fps, cb, true)
+
     videoManager.init((timing) => {
         resetTimeout()
+        if (timing.bitmap && videoManager.mode !== 'tiles') {
+            sync.pushFrame(timing.rosTimeSec, timing.rosTimeNsec, timing.bitmap)
+        } else if (timing.bitmap) {
+            timing.bitmap.close()
+        }
         if (timing.mode && !videoManager.loggedMode) {
             console.log(`Video Mode: ${timing.mode === 'tiles' ? '4K Tiles' : 'H.264 Fallback'}`)
             videoManager.loggedMode = true
         }
-    }, h264Stream).then((tex) => {
+    }, h264StreamCapture).then((tex) => {
         texture_camera = tex
         material = new ProjectedMaterial({
             camera: camera,
@@ -457,6 +504,7 @@ function ensureModelSocket() {
     if (modelSocket) return
     modelSocket = modelstream(socketUrlModel, (msg) => {
         modelData = msg
+        sync.onModelOutput(msg.header.time)
     })
 }
 
@@ -467,6 +515,8 @@ function maybeCloseModelSocket() {
         modelSocket = null
     }
     modelData = null
+    sync.reset()
+    syncStatsEl.style.display = 'none'
 }
 
 // ---------------------------------------------------------------------------
@@ -1215,7 +1265,7 @@ function updateLidarBgVisibility() {
 // Animation Loop
 // ---------------------------------------------------------------------------
 renderer.setAnimationLoop(() => {
-    if (texture_camera) texture_camera.needsUpdate = true
+    sync.release()
 
     // Update segmentation uniforms before render (shader runs on GPU)
     if (segEnabled) {
