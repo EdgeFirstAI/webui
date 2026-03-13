@@ -220,6 +220,22 @@
             display: flex;
         }
 
+        /* Temporal sync stats HUD */
+        .sync-stats {
+            position: absolute;
+            bottom: 8px;
+            left: 8px;
+            font: 12px/1.4 monospace;
+            color: #fff;
+            background: rgba(0, 0, 0, 0.55);
+            padding: 4px 8px;
+            border-radius: 4px;
+            pointer-events: none;
+            z-index: 10;
+            display: none;
+            white-space: pre;
+        }
+
         /* Camera unavailable overlay */
         #camera-unavailable {
             position: absolute;
@@ -352,6 +368,8 @@
                     </div>
                 </div>
             </div>
+
+            <div id="sync-stats" class="sync-stats" data-testid="camera-sync-stats"></div>
 
             <div id="camera-unavailable" data-testid="camera-unavailable">
                 <span>Camera Unavailable</span>
