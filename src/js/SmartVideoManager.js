@@ -30,6 +30,15 @@ class SmartVideoManager {
         this.pendingUpdate = false;
         this.requiredTiles = 4;
 
+        // Temporal sync: track latest tile ROS timestamp
+        this.latestRosTimeSec = 0;
+        this.latestRosTimeNsec = 0;
+
+        // Optional callback for temporal sync consumers (e.g., TemporalSyncManager).
+        // When set, updateMergedCanvas() produces an ImageBitmap instead of updating
+        // the texture directly, letting the consumer control display timing.
+        this.onMergedFrame = null;
+
     }
 
     async init(onFrameUpdate, h264StreamFunc = null) {
@@ -215,6 +224,9 @@ class SmartVideoManager {
     onTileFrame(tileName, timing) {
         const now = performance.now();
 
+        this.latestRosTimeSec = timing.rosTimeSec;
+        this.latestRosTimeNsec = timing.rosTimeNsec;
+
         if (!this.syncEnabled) {
             this.updateMergedCanvas();
             return;
@@ -289,7 +301,17 @@ class SmartVideoManager {
             }
         });
 
-        if (this.currentTexture) {
+        if (this.onMergedFrame) {
+            createImageBitmap(this.mergedCanvas).then((bitmap) => {
+                if (this.onMergedFrame) {
+                    this.onMergedFrame(this.latestRosTimeSec, this.latestRosTimeNsec, bitmap)
+                } else {
+                    bitmap.close()
+                }
+            }).catch((err) => {
+                console.warn('SmartVideoManager: Failed to create merged ImageBitmap:', err)
+            })
+        } else if (this.currentTexture) {
             this.currentTexture.needsUpdate = true;
         }
     }
@@ -316,6 +338,9 @@ class SmartVideoManager {
         this.tileCanvases = {};
         this.currentTexture = null;
         this.frameReadyMap.clear();
+        this.onMergedFrame = null;
+        this.latestRosTimeSec = 0;
+        this.latestRosTimeNsec = 0;
     }
 }
 
