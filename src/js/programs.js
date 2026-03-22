@@ -55,6 +55,7 @@ function renderCards() {
     for (const p of programs) {
         const card = document.createElement('div');
         card.className = 'program-card';
+        card.setAttribute('role', 'listitem');
         card.dataset.status = p.status;
         card.dataset.testid = `programs-card-${p.id}`;
 

@@ -88,6 +88,14 @@ function init() {
         isDirty = true;
     });
 
+    // Ctrl+S / Cmd+S keyboard shortcut
+    document.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+            e.preventDefault();
+            save();
+        }
+    });
+
     // Unsaved changes warning
     window.addEventListener('beforeunload', (e) => {
         if (isDirty) {

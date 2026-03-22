@@ -46,7 +46,7 @@
 
         .btn-new {
             background: var(--brand-gold);
-            color: white;
+            color: #1a1625;
             border: none;
             padding: 8px 16px;
             border-radius: 6px;
@@ -57,7 +57,7 @@
         .btn-new:hover { opacity: 0.9; }
 
         .btn-import {
-            background: var(--color-bg-card);
+            background: var(--color-card-bg);
             color: var(--color-text-primary);
             border: 1px solid var(--color-border);
             padding: 8px 16px;
@@ -65,7 +65,7 @@
             cursor: pointer;
         }
 
-        .btn-import:hover { background: var(--color-bg-hover); }
+        .btn-import:hover { background: var(--color-bg-elevated); }
 
         .program-grid {
             display: grid;
@@ -75,7 +75,7 @@
         }
 
         .program-card {
-            background: var(--color-bg-card);
+            background: var(--color-card-bg);
             border: 1px solid var(--color-border);
             border-radius: 8px;
             padding: 16px;
@@ -139,7 +139,7 @@
         }
 
         .btn-action {
-            background: var(--color-bg-hover);
+            background: var(--color-bg-elevated);
             color: var(--color-text-primary);
             border: 1px solid var(--color-border) !important;
         }
@@ -215,22 +215,22 @@
         <div class="action-bar">
             <h2>Programs</h2>
             <div class="action-buttons">
-                <input type="file" id="import-file" accept=".efapp,.zip" style="display:none">
+                <input type="file" id="import-file" accept=".efapp,.zip" style="display:none" aria-label="Import .efapp bundle">
                 <button class="btn-import" data-testid="programs-btn-import" onclick="document.getElementById('import-file').click()">Import</button>
                 <button class="btn-new" data-testid="programs-btn-new" onclick="location.href='program-editor.html'">+ New Program</button>
             </div>
         </div>
 
-        <div id="program-grid" class="program-grid"></div>
+        <div id="program-grid" class="program-grid" role="list"></div>
         <div id="empty-state" class="empty-state" style="display:none">
             <h3>No programs yet</h3>
             <p>Create a new program or import an .efapp bundle to get started.</p>
         </div>
 
-        <div id="log-panel" class="log-panel" data-testid="programs-log-panel">
+        <div id="log-panel" class="log-panel" data-testid="programs-log-panel" role="log" aria-live="polite">
             <div class="log-panel-header">
                 <span id="log-panel-title">Logs</span>
-                <button class="log-panel-close" id="log-panel-close">&times;</button>
+                <button class="log-panel-close" id="log-panel-close" aria-label="Close logs">&times;</button>
             </div>
             <div id="log-panel-body" class="log-panel-body"></div>
         </div>

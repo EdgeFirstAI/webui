@@ -42,7 +42,7 @@
             left: 0;
             right: 0;
             height: 48px;
-            background: var(--color-bg-card);
+            background: var(--color-card-bg);
             border-bottom: 1px solid var(--color-border);
             display: flex;
             align-items: center;
@@ -73,7 +73,7 @@
             padding: 6px 14px;
             border-radius: 5px;
             border: 1px solid var(--color-border);
-            background: var(--color-bg-hover);
+            background: var(--color-bg-elevated);
             color: var(--color-text-primary);
             cursor: pointer;
             font-size: 0.85rem;
@@ -89,7 +89,7 @@
 
         .btn-deploy {
             background: var(--brand-gold) !important;
-            color: white !important;
+            color: #1a1625 !important;
             border-color: var(--brand-gold) !important;
         }
 
@@ -231,7 +231,8 @@
 <body>
     <!-- Top bar -->
     <div class="editor-topbar">
-        <input type="text" id="editor-name" data-testid="editor-input-name" placeholder="Program name" value="Untitled">
+        <label for="editor-name" class="sr-only">Program name</label>
+        <input type="text" id="editor-name" data-testid="editor-input-name" placeholder="Program name" value="Untitled" aria-label="Program name">
         <span class="spacer"></span>
         <button class="btn-save" id="btn-save" data-testid="editor-btn-save">Save</button>
         <button class="btn-deploy" id="btn-deploy" data-testid="editor-btn-deploy">Deploy</button>
@@ -242,12 +243,12 @@
     </div>
 
     <!-- Blockly workspace -->
-    <div id="blockly-workspace" data-testid="editor-workspace">
-        <div class="workspace-spinner" id="workspace-spinner">Loading editor...</div>
+    <div id="blockly-workspace" data-testid="editor-workspace" role="application" aria-label="Block editor workspace">
+        <div class="workspace-spinner" id="workspace-spinner" role="status" aria-live="polite">Loading editor...</div>
     </div>
 
     <!-- Code preview panel -->
-    <div id="editor-code-panel" data-testid="editor-code-panel">
+    <div id="editor-code-panel" data-testid="editor-code-panel" role="complementary" aria-label="Generated Python code">
         <div class="code-panel-header">
             <span>Generated Python</span>
             <button id="btn-copy-code" data-testid="editor-btn-copy-code" style="background:none;border:none;color:#a0a0b0;cursor:pointer;">Copy</button>
@@ -258,10 +259,10 @@
     </div>
 
     <!-- Log drawer -->
-    <div id="editor-log-panel" data-testid="editor-log-panel">
+    <div id="editor-log-panel" data-testid="editor-log-panel" role="log" aria-live="polite">
         <div class="log-drawer-header">
             <span>Program Logs</span>
-            <button class="log-drawer-close" id="btn-log-close">&times;</button>
+            <button class="log-drawer-close" id="btn-log-close" aria-label="Close logs">&times;</button>
         </div>
         <div class="log-drawer-body" id="log-drawer-body"></div>
     </div>
