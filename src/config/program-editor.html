@@ -1,0 +1,278 @@
+<!--
+  Copyright (C) 2025 Au-Zone Technologies Inc. All Rights Reserved.
+  SPDX-License-Identifier: Apache-2.0
+-->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Program Editor</title>
+    <link href="../css/styles.css" rel="stylesheet">
+    <link href="../css/full.css" rel="stylesheet" type="text/css" />
+    <script src="../js/tailwind.js"></script>
+    <script src="../js/theme.js"></script>
+    <script src="../js/neuralMesh.js"></script>
+    <script src="../js/serviceCache.js"></script>
+    <script src="../js/navbar.js"></script>
+    <script src="../js/status.js"></script>
+
+    <!-- Import map: edgefirst-blockly internally imports from blockly/* bare specifiers -->
+    <script type="importmap">
+    {
+      "imports": {
+        "blockly/core":   "../js/vendor/blockly.es.js",
+        "blockly/blocks": "../js/vendor/blockly.es.js",
+        "blockly/python": "../js/vendor/blockly.es.js",
+        "blockly/msg/en": "../js/vendor/blockly.es.js"
+      }
+    }
+    </script>
+
+    <style>
+        body {
+            overflow: hidden;
+        }
+
+        /* Top bar */
+        .editor-topbar {
+            position: fixed;
+            top: 64px; /* below navbar */
+            left: 0;
+            right: 0;
+            height: 48px;
+            background: var(--color-bg-card);
+            border-bottom: 1px solid var(--color-border);
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            gap: 8px;
+            z-index: 10;
+        }
+
+        .editor-topbar input {
+            background: transparent;
+            border: 1px solid transparent;
+            color: var(--color-text-primary);
+            font-size: 1rem;
+            font-weight: 600;
+            padding: 4px 8px;
+            border-radius: 4px;
+            width: 250px;
+        }
+
+        .editor-topbar input:focus {
+            outline: none;
+            border-color: var(--brand-gold);
+        }
+
+        .editor-topbar .spacer { flex: 1; }
+
+        .editor-topbar button {
+            padding: 6px 14px;
+            border-radius: 5px;
+            border: 1px solid var(--color-border);
+            background: var(--color-bg-hover);
+            color: var(--color-text-primary);
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+
+        .editor-topbar button:hover { opacity: 0.85; }
+
+        .btn-save {
+            background: var(--brand-navy) !important;
+            color: white !important;
+            border-color: var(--brand-navy) !important;
+        }
+
+        .btn-deploy {
+            background: var(--brand-gold) !important;
+            color: white !important;
+            border-color: var(--brand-gold) !important;
+        }
+
+        /* Workspace */
+        #blockly-workspace {
+            position: fixed;
+            top: 112px; /* navbar 64 + topbar 48 */
+            left: 0;
+            right: 0;
+            bottom: 0;
+            transition: right 0.3s ease;
+        }
+
+        #blockly-workspace.code-open {
+            right: 35%;
+        }
+
+        .workspace-spinner {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--color-text-secondary);
+            font-size: 1.1rem;
+        }
+
+        /* Code panel */
+        #editor-code-panel {
+            position: fixed;
+            top: 112px;
+            right: 0;
+            bottom: 0;
+            width: 35%;
+            background: #1a1625;
+            border-left: 1px solid #333;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            z-index: 5;
+        }
+
+        #editor-code-panel.visible {
+            transform: translateX(0);
+        }
+
+        .code-panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            background: #231e30;
+            color: #a0a0b0;
+            font-size: 0.8rem;
+        }
+
+        .code-panel-body {
+            flex: 1;
+            overflow: auto;
+            padding: 12px;
+        }
+
+        .code-panel-body pre {
+            margin: 0;
+            font-family: 'Menlo', 'Consolas', monospace;
+            font-size: 0.8rem;
+            line-height: 1.6;
+            color: #abb2bf;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        /* Syntax highlighting */
+        .kw  { color: #c678dd; }
+        .str { color: #98c379; }
+        .cmt { color: #5c6370; font-style: italic; }
+        .num { color: #d19a66; }
+
+        /* Log drawer */
+        #editor-log-panel {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            height: 200px;
+            background: #1a1625;
+            border-top: 1px solid #333;
+            transform: translateY(100%);
+            transition: transform 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            z-index: 15;
+        }
+
+        #editor-log-panel.visible {
+            transform: translateY(0);
+        }
+
+        .log-drawer-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 12px;
+            background: #231e30;
+            color: #a0a0b0;
+            font-size: 0.8rem;
+        }
+
+        .log-drawer-close {
+            background: none;
+            border: none;
+            color: #a0a0b0;
+            cursor: pointer;
+        }
+
+        .log-drawer-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px 12px;
+            font-family: monospace;
+            font-size: 0.8rem;
+            line-height: 1.6;
+        }
+
+        .log-line { white-space: pre-wrap; word-break: break-all; }
+        .log-line.debug { color: #5c6370; }
+        .log-line.info  { color: #a8e6a0; }
+        .log-line.warn  { color: #e8b820; }
+        .log-line.error { color: #ef4444; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            #editor-code-panel { width: 100%; }
+            #blockly-workspace.code-open { right: 0; }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Top bar -->
+    <div class="editor-topbar">
+        <input type="text" id="editor-name" data-testid="editor-input-name" placeholder="Program name" value="Untitled">
+        <span class="spacer"></span>
+        <button class="btn-save" id="btn-save" data-testid="editor-btn-save">Save</button>
+        <button class="btn-deploy" id="btn-deploy" data-testid="editor-btn-deploy">Deploy</button>
+        <button id="btn-start" data-testid="editor-btn-start" style="display:none">Start</button>
+        <button id="btn-stop" data-testid="editor-btn-stop" style="display:none">Stop</button>
+        <button id="btn-code" data-testid="editor-btn-code">{ } Code</button>
+        <button id="btn-logs" data-testid="editor-btn-logs">Logs</button>
+    </div>
+
+    <!-- Blockly workspace -->
+    <div id="blockly-workspace" data-testid="editor-workspace">
+        <div class="workspace-spinner" id="workspace-spinner">Loading editor...</div>
+    </div>
+
+    <!-- Code preview panel -->
+    <div id="editor-code-panel" data-testid="editor-code-panel">
+        <div class="code-panel-header">
+            <span>Generated Python</span>
+            <button id="btn-copy-code" data-testid="editor-btn-copy-code" style="background:none;border:none;color:#a0a0b0;cursor:pointer;">Copy</button>
+        </div>
+        <div class="code-panel-body">
+            <pre id="code-output"></pre>
+        </div>
+    </div>
+
+    <!-- Log drawer -->
+    <div id="editor-log-panel" data-testid="editor-log-panel">
+        <div class="log-drawer-header">
+            <span>Program Logs</span>
+            <button class="log-drawer-close" id="btn-log-close">&times;</button>
+        </div>
+        <div class="log-drawer-body" id="log-drawer-body"></div>
+    </div>
+
+    <script>
+        window.addEventListener('load', () => {
+            initNavbar('Program Editor');
+            NeuralMesh.init();
+        });
+    </script>
+    <script type="module" src="../js/editor.js"></script>
+</body>
+
+</html>
