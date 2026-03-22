@@ -4,6 +4,9 @@ import htmlPlugin from "eslint-plugin-html";
 
 export default [
   {
+    ignores: ["src/js/vendor/"],
+  },
+  {
     files: ["**/*.{js,html}"],
     languageOptions: {
       globals: globals.browser,
