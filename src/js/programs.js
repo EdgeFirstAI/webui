@@ -111,6 +111,7 @@ async function refreshPrograms() {
 }
 
 function startPolling() {
+    if (pollInterval) return; // Prevent duplicate intervals
     refreshPrograms();
     pollInterval = setInterval(refreshPrograms, 5000);
 }
@@ -122,12 +123,17 @@ function stopPolling() {
     }
 }
 
-// Pause polling when tab is hidden
+// Pause polling and reconnect logs when tab visibility changes
 document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') {
         stopPolling();
     } else {
         startPolling();
+        // Reconnect log WebSocket if it was disconnected while hidden
+        if (activeLogId && (!logWebSocket || logWebSocket.readyState !== WebSocket.OPEN)) {
+            logReconnectDelay = 100;
+            connectLogStream(activeLogId);
+        }
     }
 });
 
