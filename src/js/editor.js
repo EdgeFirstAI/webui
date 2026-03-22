@@ -13,6 +13,7 @@ import {
 let workspace = null;
 let programId = null;
 let programName = 'Untitled';
+let programDescription = '';
 let programCreated = null;
 let isDirty = false;
 let codeVisible = false;
@@ -140,32 +141,38 @@ function renderHighlightedCode(code) {
     }
 }
 
+const PYTHON_KEYWORDS = new Set([
+    'import', 'from', 'def', 'class', 'if', 'else', 'elif', 'for', 'while',
+    'return', 'async', 'await', 'try', 'except', 'finally', 'with', 'as',
+    'in', 'not', 'and', 'or', 'True', 'False', 'None', 'pass', 'break',
+    'continue', 'raise', 'yield',
+]);
+
 function highlightLine(line, container) {
-    // Comment
+    // Handle inline comments: split at first #
     const commentIdx = line.indexOf('#');
-    if (commentIdx === 0) {
-        const span = document.createElement('span');
-        span.className = 'cmt';
-        span.textContent = line;
-        container.appendChild(span);
-        return;
-    }
+    const codePart = commentIdx >= 0 ? line.slice(0, commentIdx) : line;
+    const commentPart = commentIdx >= 0 ? line.slice(commentIdx) : null;
 
-    // Simple keyword + string highlighting
-    const keywords = /\b(import|from|def|class|if|else|elif|for|while|return|async|await|try|except|finally|with|as|in|not|and|or|True|False|None|pass|break|continue|raise|yield)\b/g;
-    const parts = line.split(keywords);
-
-    for (const part of parts) {
-        if (!part) continue;
-        if (keywords.test(part)) {
-            keywords.lastIndex = 0; // reset regex state
+    // Tokenize code portion by word boundaries
+    const tokens = codePart.split(/\b/);
+    for (const token of tokens) {
+        if (PYTHON_KEYWORDS.has(token)) {
             const span = document.createElement('span');
             span.className = 'kw';
-            span.textContent = part;
+            span.textContent = token;
             container.appendChild(span);
-        } else {
-            container.appendChild(document.createTextNode(part));
+        } else if (token) {
+            container.appendChild(document.createTextNode(token));
         }
+    }
+
+    // Append comment if present
+    if (commentPart) {
+        const span = document.createElement('span');
+        span.className = 'cmt';
+        span.textContent = commentPart;
+        container.appendChild(span);
     }
 }
 
@@ -192,18 +199,22 @@ function copyCode() {
 // --- Save / Deploy ---
 
 let lastSaveBlob = null;
+let isSaving = false;
 
 async function save() {
-    const wsJson = Blockly.serialization.workspaces.save(workspace);
-    const code = pythonGenerator.workspaceToCode(workspace);
-    const blob = await buildBundle(wsJson, code, {
-        name: programName,
-        description: '',
-        created: programCreated || new Date().toISOString(),
-    });
-    lastSaveBlob = blob;
+    if (isSaving) return false;
+    isSaving = true;
 
     try {
+        const wsJson = Blockly.serialization.workspaces.save(workspace);
+        const code = pythonGenerator.workspaceToCode(workspace);
+        const blob = await buildBundle(wsJson, code, {
+            name: programName,
+            description: programDescription,
+            created: programCreated || new Date().toISOString(),
+        });
+        lastSaveBlob = blob;
+
         let result;
         if (programId) {
             result = await updateProgram(programId, blob);
@@ -211,29 +222,39 @@ async function save() {
             result = await createProgram(blob);
             programId = result.id;
             programCreated = new Date().toISOString();
-            // Update URL without reload
             const url = new URL(location);
             url.searchParams.set('id', programId);
             history.replaceState(null, '', url);
         }
+
         isDirty = false;
         clearDraft();
+        // Invalidate sessionStorage cache so re-opens get the fresh version
+        if (programId) sessionStorage.removeItem(`efapp-cache-${programId}`);
         showToast('Saved');
+        return true;
     } catch (err) {
         if (err instanceof ApiError && err.status === 409) {
-            if (confirm('A program with this name already exists. Open it for editing?')) {
-                // Try to find the existing program's ID from the error
-                location.href = `program-editor.html`;
+            try {
+                const body = await err.response.json();
+                if (confirm('A program with this name already exists. Open it for editing?')) {
+                    location.href = `program-editor.html?id=${body.id || ''}`;
+                }
+            } catch {
+                showToast('A program with this name already exists.', true);
             }
         } else {
             showToast('Save failed: ' + err.message, true);
         }
+        return false;
+    } finally {
+        isSaving = false;
     }
 }
 
 async function deploy() {
-    await save();
-    if (programId) {
+    const saved = await save();
+    if (saved && programId) {
         try {
             await startProgram(programId);
             showToast('Deployed and started');
@@ -297,6 +318,7 @@ async function loadProgram(id) {
     }
 
     programName = config.name || 'Untitled';
+    programDescription = config.description || '';
     programCreated = config.created;
     nameInput.value = programName;
     isDirty = false;
@@ -365,6 +387,7 @@ function connectLogStream() {
     }
 
     logWebSocket = connectLogs(programId, (msg) => {
+        logReconnectDelay = 100; // Reset on successful message
         const line = document.createElement('div');
         line.className = `log-line ${msg.level || 'info'}`;
         const ts = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : '';
@@ -398,10 +421,11 @@ function showToast(message, isError = false) {
     toast.style.cssText = `
         position: fixed; bottom: 20px; right: 20px; z-index: 100;
         padding: 12px 20px; border-radius: 6px; font-size: 0.9rem;
-        color: white; background: ${isError ? '#ef4444' : '#22c55e'};
+        color: white; background: ${isError ? 'var(--color-status-error, #ef4444)' : 'var(--color-status-success, #22c55e)'};
         box-shadow: 0 4px 12px rgba(0,0,0,0.3);
         transition: opacity 0.3s;
     `;
+    toast.setAttribute('role', 'alert');
     toast.textContent = message;
     document.body.appendChild(toast);
     setTimeout(() => {

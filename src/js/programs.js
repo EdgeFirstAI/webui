@@ -164,6 +164,7 @@ function hideLogs() {
 
 function connectLogStream(id) {
     logWebSocket = connectLogs(id, (msg) => {
+        logReconnectDelay = 100; // Reset on successful message
         const line = document.createElement('div');
         line.className = `log-line ${msg.level || 'info'}`;
         const ts = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : '';
@@ -190,23 +191,44 @@ function connectLogStream(id) {
 
 logPanelClose.addEventListener('click', hideLogs);
 
+// --- Toast ---
+
+function showToast(message, isError = false) {
+    const toast = document.createElement('div');
+    toast.style.cssText = `
+        position: fixed; bottom: 20px; right: 20px; z-index: 100;
+        padding: 12px 20px; border-radius: 6px; font-size: 0.9rem;
+        color: white; background: ${isError ? 'var(--color-status-error, #ef4444)' : 'var(--color-status-success, #22c55e)'};
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3); transition: opacity 0.3s;
+    `;
+    toast.setAttribute('role', 'alert');
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
 // --- Actions ---
 
 async function handleStart(id) {
     try {
         await startProgram(id);
+        showToast('Program started');
         await refreshPrograms();
     } catch (err) {
-        console.error('Failed to start program:', err);
+        showToast('Failed to start: ' + err.message, true);
     }
 }
 
 async function handleStop(id) {
     try {
         await stopProgram(id);
+        showToast('Program stopped');
         await refreshPrograms();
     } catch (err) {
-        console.error('Failed to stop program:', err);
+        showToast('Failed to stop: ' + err.message, true);
     }
 }
 
@@ -216,9 +238,10 @@ async function handleDelete(id) {
     try {
         await deleteProgram(id);
         if (activeLogId === id) hideLogs();
+        showToast('Program deleted');
         await refreshPrograms();
     } catch (err) {
-        console.error('Failed to delete program:', err);
+        showToast('Failed to delete: ' + err.message, true);
     }
 }
 
@@ -231,8 +254,10 @@ async function handleExport(id) {
         const a = document.createElement('a');
         a.href = url;
         a.download = `${program?.name || id}.efapp`;
+        document.body.appendChild(a);
         a.click();
-        URL.revokeObjectURL(url);
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (err) {
         console.error('Failed to export program:', err);
     }

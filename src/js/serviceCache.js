@@ -211,6 +211,7 @@ Object.assign(window.serviceCache, {
     getReplayStatus,
     isServiceEnabled,
     isServiceRunning,
+    programsAvailable,
     clearCache,
     startBackgroundUpdates,
     stopBackgroundUpdates,
