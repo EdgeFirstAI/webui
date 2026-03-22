@@ -89,6 +89,9 @@
                 <a href="/config/services" class="widget-card" id="settings-card-services" data-testid="settings-card-services">
                     <h3>Service Status</h3>
                 </a>
+                <a href="/config/programs" class="widget-card" id="settings-card-programs" data-testid="settings-card-programs" data-capability="programs" style="display:none">
+                    <h3>Programs</h3>
+                </a>
                 <a href="#" class="widget-card" id="settings-card-studio" data-testid="settings-card-studio" onclick="showStudioSettings(); return false;">
                     <h3>EdgeFirst Studio</h3>
                 </a>
@@ -106,6 +109,11 @@
                     const service = card.dataset.service;
                     card.style.display = window.serviceCache.isServiceEnabled(service) ? '' : 'none';
                 });
+                // Programs card uses capability probe, not service status
+                const programsCard = document.getElementById('settings-card-programs');
+                if (programsCard) {
+                    programsCard.style.display = window.serviceCache.programsAvailable() ? '' : 'none';
+                }
             }
 
             updateGatedCards();
