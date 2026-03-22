@@ -15,6 +15,7 @@ const ALL_SERVICES = [
 window.serviceCache = {
     serviceStatuses: null,
     replayStatus: null,
+    _programsAvailable: false,
     lastUpdate: 0,
     isInitialized: false,
     backgroundUpdateTimer: null,
@@ -24,6 +25,7 @@ window.serviceCache = {
     getReplayStatus: async () => null,
     isServiceEnabled: () => false,
     isServiceRunning: () => false,
+    programsAvailable: () => false,
     clearCache: () => { },
     startBackgroundUpdates: () => { },
     stopBackgroundUpdates: () => { },
@@ -87,6 +89,13 @@ async function performBackgroundUpdate() {
             saveToStorage();
             window.serviceCache.updateCallbacks.forEach(callback => callback());
         }
+        // Probe programs API availability
+        try {
+            const programsRes = await fetch('/api/programs');
+            window.serviceCache._programsAvailable = programsRes.ok;
+        } catch {
+            window.serviceCache._programsAvailable = false;
+        }
     } catch (error) {
         console.error('Error during background update:', error);
     }
@@ -135,6 +144,11 @@ function isServiceEnabled(serviceName) {
     return entry?.enabled === 'enabled';
 }
 
+// Function to check if the programs API is available
+function programsAvailable() {
+    return window.serviceCache._programsAvailable;
+}
+
 // Function to check if a service is currently running
 function isServiceRunning(serviceName) {
     const statuses = window.serviceCache.serviceStatuses;
@@ -179,6 +193,7 @@ function clearCache() {
         getReplayStatus,
         isServiceEnabled,
         isServiceRunning,
+        programsAvailable,
         clearCache,
         startBackgroundUpdates,
         stopBackgroundUpdates,
