@@ -240,13 +240,8 @@ async function save() {
         return true;
     } catch (err) {
         if (err instanceof ApiError && err.status === 409) {
-            try {
-                const body = await err.response.json();
-                if (confirm('A program with this name already exists. Open it for editing?')) {
-                    location.href = `program-editor.html?id=${body.id || ''}`;
-                }
-            } catch {
-                showToast('A program with this name already exists.', true);
+            if (confirm('A program with this name already exists. Open it for editing?')) {
+                location.href = `program-editor.html?id=${err.body?.id || ''}`;
             }
         } else {
             showToast('Save failed: ' + err.message, true);

@@ -11,22 +11,24 @@ export async function listPrograms() {
 }
 
 export async function createProgram(blob) {
+    console.log('[programApi] POST /api/programs', { size: blob.size, type: blob.type });
     const res = await fetch(BASE, {
         method: 'POST',
         headers: { 'Content-Type': 'application/zip' },
         body: blob
     });
-    if (!res.ok) throw new ApiError(res);
+    if (!res.ok) throw await ApiError.fromResponse(res, 'POST', BASE);
     return res.json();
 }
 
 export async function updateProgram(id, blob) {
+    console.log(`[programApi] PUT /api/programs/${id}`, { size: blob.size, type: blob.type });
     const res = await fetch(`${BASE}/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/zip' },
         body: blob
     });
-    if (!res.ok) throw new ApiError(res);
+    if (!res.ok) throw await ApiError.fromResponse(res, 'PUT', `${BASE}/${id}`);
     return res.json();
 }
 
@@ -88,9 +90,23 @@ export function connectLogs(id, onMessage, onClose, tail = 50) {
 }
 
 export class ApiError extends Error {
-    constructor(response) {
-        super(`API error: ${response.status} ${response.statusText}`);
-        this.status = response.status;
-        this.response = response;
+    constructor(status, statusText, body, method, url) {
+        const serverMsg = body?.error || statusText;
+        super(`${method || 'API'} ${url || ''} ${status}: ${serverMsg}`);
+        this.status = status;
+        this.body = body;
+        this.serverError = serverMsg;
+        this.serverCode = body?.code;
+    }
+
+    static async fromResponse(res, method, url) {
+        let body = null;
+        try {
+            body = await res.json();
+        } catch {
+            // Response body is not JSON
+        }
+        console.error(`[programApi] ${method} ${url} → ${res.status}`, body || res.statusText);
+        return new ApiError(res.status, res.statusText, body, method, url);
     }
 }

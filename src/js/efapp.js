@@ -41,6 +41,9 @@ export async function buildBundle(workspaceJson, pythonCode, metadata) {
     zip.file('app.py', pythonCode);
     zip.file('config.json', JSON.stringify(config, null, 2));
 
+    console.log('[efapp] buildBundle config:', config);
+    console.log('[efapp] buildBundle app.py length:', pythonCode.length);
+
     return zip.generateAsync({ type: 'blob', compression: 'STORE' });
 }
 
