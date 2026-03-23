@@ -101,6 +101,86 @@ const btnCode = document.getElementById('btn-code');
 const btnLogs = document.getElementById('btn-logs');
 const btnCopyCode = document.getElementById('btn-copy-code');
 const btnLogClose = document.getElementById('btn-log-close');
+const btnExamples = document.getElementById('btn-examples');
+const examplesDropdown = document.getElementById('examples-dropdown');
+
+// --- Examples ---
+
+let examplesData = null;
+
+async function loadExamplesIndex() {
+    try {
+        const res = await fetch('/js/vendor/examples.json');
+        if (!res.ok) return;
+        examplesData = await res.json();
+        buildExamplesMenu();
+    } catch {
+        // Examples not available — button stays inert
+    }
+}
+
+function buildExamplesMenu() {
+    if (!examplesData || !examplesData.length) return;
+    examplesDropdown.replaceChildren();
+
+    for (const ex of examplesData) {
+        const item = document.createElement('div');
+        item.className = 'example-item';
+        item.setAttribute('role', 'menuitem');
+        item.dataset.testid = `editor-example-${ex.id}`;
+
+        const name = document.createElement('div');
+        name.className = 'example-item-name';
+        name.textContent = ex.name;
+        item.appendChild(name);
+
+        if (ex.description) {
+            const desc = document.createElement('div');
+            desc.className = 'example-item-desc';
+            desc.textContent = ex.description;
+            item.appendChild(desc);
+        }
+
+        item.addEventListener('click', () => loadExample(ex));
+        examplesDropdown.appendChild(item);
+    }
+}
+
+function toggleExamples() {
+    const visible = examplesDropdown.style.display !== 'none';
+    examplesDropdown.style.display = visible ? 'none' : 'block';
+}
+
+function loadExample(ex) {
+    if (isDirty && !confirm('Load example? Unsaved changes will be lost.')) return;
+
+    workspace.clear();
+    Blockly.serialization.workspaces.load(ex.workspace, workspace);
+    programName = ex.name;
+    programDescription = ex.description || ex.name;
+    nameInput.value = programName;
+    descInput.value = programDescription;
+    programId = null;
+    programCreated = null;
+    isDirty = true;
+
+    // Update URL to remove any existing program ID
+    const url = new URL(location);
+    url.searchParams.delete('id');
+    history.replaceState(null, '', url);
+
+    examplesDropdown.style.display = 'none';
+    showToast(`Loaded example: ${ex.name}`);
+
+    if (codeVisible) generateCode();
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', (e) => {
+    if (!btnExamples.contains(e.target) && !examplesDropdown.contains(e.target)) {
+        examplesDropdown.style.display = 'none';
+    }
+});
 
 // --- Blockly initialization ---
 
@@ -146,6 +226,7 @@ function init() {
     btnLogs.addEventListener('click', toggleLogs);
     btnCopyCode.addEventListener('click', copyCode);
     btnLogClose.addEventListener('click', () => toggleLogs(false));
+    btnExamples.addEventListener('click', toggleExamples);
     nameInput.addEventListener('input', () => {
         programName = nameInput.value;
         isDirty = true;
@@ -511,6 +592,9 @@ function showToast(message, isError = false) {
 document.addEventListener('DOMContentLoaded', async () => {
     init();
 
+    // Load examples index (non-blocking)
+    loadExamplesIndex();
+
     // Parse program ID from URL
     const params = new URLSearchParams(location.search);
     const id = params.get('id');
@@ -526,7 +610,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!checkDraftRecovery()) {
             // Place a starter on_message block
             const starterBlock = {
-                type: 'edgefirst_zenoh_on_message',
+                type: 'edgefirst_on_message',
                 x: 50,
                 y: 50,
             };

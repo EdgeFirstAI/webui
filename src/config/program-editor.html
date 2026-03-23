@@ -220,6 +220,45 @@
         .log-line.warn  { color: #e8b820; }
         .log-line.error { color: #ef4444; }
 
+        /* Examples dropdown */
+        .examples-dropdown {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            margin-top: 4px;
+            min-width: 320px;
+            background: var(--color-card-bg, #252033);
+            border: 1px solid var(--color-border);
+            border-radius: 8px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+            z-index: 50;
+            overflow: hidden;
+        }
+
+        .example-item {
+            padding: 10px 14px;
+            cursor: pointer;
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        .example-item:last-child { border-bottom: none; }
+
+        .example-item:hover {
+            background: var(--color-bg-elevated, #2d2740);
+        }
+
+        .example-item-name {
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: var(--color-text-primary);
+        }
+
+        .example-item-desc {
+            font-size: 0.75rem;
+            color: var(--color-text-secondary);
+            margin-top: 2px;
+        }
+
         /* Responsive */
         @media (max-width: 768px) {
             #editor-code-panel { width: 100%; }
@@ -235,6 +274,10 @@
         <input type="text" id="editor-name" data-testid="editor-input-name" placeholder="Program name" value="Untitled" aria-label="Program name">
         <input type="text" id="editor-description" data-testid="editor-input-description" placeholder="Description" aria-label="Program description" style="width:300px;font-size:0.85rem;font-weight:normal;">
         <span class="spacer"></span>
+        <div style="position:relative;display:inline-block;">
+            <button id="btn-examples" data-testid="editor-btn-examples">Examples</button>
+            <div id="examples-dropdown" class="examples-dropdown" role="menu" aria-label="Example programs" style="display:none;"></div>
+        </div>
         <button class="btn-save" id="btn-save" data-testid="editor-btn-save">Save</button>
         <button class="btn-deploy" id="btn-deploy" data-testid="editor-btn-deploy">Deploy</button>
         <button id="btn-start" data-testid="editor-btn-start" style="display:none">Start</button>
