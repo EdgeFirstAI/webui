@@ -24,6 +24,7 @@ let draftTimer = null;
 
 // --- DOM refs ---
 const nameInput = document.getElementById('editor-name');
+const descInput = document.getElementById('editor-description');
 const workspaceDiv = document.getElementById('blockly-workspace');
 const spinner = document.getElementById('workspace-spinner');
 const codePanel = document.getElementById('editor-code-panel');
@@ -86,6 +87,10 @@ function init() {
     btnLogClose.addEventListener('click', () => toggleLogs(false));
     nameInput.addEventListener('input', () => {
         programName = nameInput.value;
+        isDirty = true;
+    });
+    descInput.addEventListener('input', () => {
+        programDescription = descInput.value;
         isDirty = true;
     });
 
@@ -321,6 +326,7 @@ async function loadProgram(id) {
     programDescription = config.description || '';
     programCreated = config.created;
     nameInput.value = programName;
+    descInput.value = programDescription;
     isDirty = false;
 }
 

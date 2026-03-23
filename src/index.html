@@ -305,10 +305,8 @@
                 cardContainer.appendChild(createCard('/gps', 'GPS', ['Explore Location']));
             }
 
-            // Programs (capability-gated, not service-gated)
-            if (window.serviceCache.programsAvailable()) {
-                cardContainer.appendChild(createCard('/config/programs', 'Programs', ['Build & Deploy Visual Programs']));
-            }
+            // Programs — always visible
+            cardContainer.appendChild(createCard('/config/programs', 'Programs', ['Build & Deploy Visual Programs']));
         }
 
         window.addEventListener('load', async () => {
