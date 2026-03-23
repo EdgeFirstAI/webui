@@ -7,6 +7,65 @@ import {
 } from './programApi.js';
 import { loadBundle } from './efapp.js';
 
+// --- Busy overlay ---
+
+let busyOverlay = null;
+const BUSY_TIMEOUT = 15000;
+
+function showBusy(label) {
+    hideBusy();
+    busyOverlay = document.createElement('div');
+    busyOverlay.style.cssText = `
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 200;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(0,0,0,0.35); pointer-events: all;
+    `;
+    const box = document.createElement('div');
+    box.style.cssText = `
+        background: var(--color-card-bg, #252033); color: var(--color-text-primary, #f6f7f8);
+        padding: 20px 32px; border-radius: 10px; text-align: center;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.4); font-size: 0.95rem;
+    `;
+    const spinner = document.createElement('div');
+    spinner.style.cssText = `
+        width: 24px; height: 24px; margin: 0 auto 12px;
+        border: 3px solid rgba(255,255,255,0.2); border-top-color: var(--brand-gold, #E8B820);
+        border-radius: 50%; animation: busySpin 0.8s linear infinite;
+    `;
+    const text = document.createElement('div');
+    text.textContent = label;
+    box.appendChild(spinner);
+    box.appendChild(text);
+    busyOverlay.appendChild(box);
+    document.body.appendChild(busyOverlay);
+
+    if (!document.getElementById('busy-spin-style')) {
+        const style = document.createElement('style');
+        style.id = 'busy-spin-style';
+        style.textContent = '@keyframes busySpin { to { transform: rotate(360deg); } }';
+        document.head.appendChild(style);
+    }
+
+    busyOverlay._timeout = setTimeout(hideBusy, BUSY_TIMEOUT);
+}
+
+function hideBusy() {
+    if (busyOverlay) {
+        clearTimeout(busyOverlay._timeout);
+        busyOverlay.remove();
+        busyOverlay = null;
+    }
+}
+
+async function withBusy(label, fn) {
+    showBusy(label);
+    try {
+        return await fn();
+    } finally {
+        hideBusy();
+    }
+}
+
 // --- State ---
 let programs = [];
 let activeLogId = null;
@@ -219,54 +278,62 @@ function showToast(message, isError = false) {
 // --- Actions ---
 
 async function handleStart(id) {
-    try {
-        await startProgram(id);
-        showToast('Program started');
-        await refreshPrograms();
-    } catch (err) {
-        showToast('Failed to start: ' + err.message, true);
-    }
+    await withBusy('Starting...', async () => {
+        try {
+            await startProgram(id);
+            showToast('Program started');
+            await refreshPrograms();
+        } catch (err) {
+            showToast('Failed to start: ' + err.message, true);
+        }
+    });
 }
 
 async function handleStop(id) {
-    try {
-        await stopProgram(id);
-        showToast('Program stopped');
-        await refreshPrograms();
-    } catch (err) {
-        showToast('Failed to stop: ' + err.message, true);
-    }
+    await withBusy('Stopping...', async () => {
+        try {
+            await stopProgram(id);
+            showToast('Program stopped');
+            await refreshPrograms();
+        } catch (err) {
+            showToast('Failed to stop: ' + err.message, true);
+        }
+    });
 }
 
 async function handleDelete(id) {
     const program = programs.find(p => p.id === id);
     if (!confirm(`Delete "${program?.name || id}"? This cannot be undone.`)) return;
-    try {
-        await deleteProgram(id);
-        if (activeLogId === id) hideLogs();
-        showToast('Program deleted');
-        await refreshPrograms();
-    } catch (err) {
-        showToast('Failed to delete: ' + err.message, true);
-    }
+    await withBusy('Deleting...', async () => {
+        try {
+            await deleteProgram(id);
+            if (activeLogId === id) hideLogs();
+            showToast('Program deleted');
+            await refreshPrograms();
+        } catch (err) {
+            showToast('Failed to delete: ' + err.message, true);
+        }
+    });
 }
 
 async function handleExport(id) {
-    try {
-        const bytes = await downloadProgram(id);
-        const program = programs.find(p => p.id === id);
-        const blob = new Blob([bytes], { type: 'application/zip' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${program?.name || id}.efapp`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch (err) {
-        console.error('Failed to export program:', err);
-    }
+    await withBusy('Exporting...', async () => {
+        try {
+            const bytes = await downloadProgram(id);
+            const program = programs.find(p => p.id === id);
+            const blob = new Blob([bytes], { type: 'application/zip' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${program?.name || id}.efapp`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        } catch (err) {
+            showToast('Failed to export: ' + err.message, true);
+        }
+    });
 }
 
 // --- Import ---
@@ -276,17 +343,18 @@ importFile.addEventListener('change', async (e) => {
     if (!file) return;
     importFile.value = '';
 
-    try {
-        const bytes = await file.arrayBuffer();
-        // Validate bundle structure first
-        await loadBundle(bytes);
-        // Upload to server
-        const blob = new Blob([bytes], { type: 'application/zip' });
-        await createProgram(blob);
-        await refreshPrograms();
-    } catch (err) {
-        alert('Import failed:\n' + err.message);
-    }
+    await withBusy('Importing...', async () => {
+        try {
+            const bytes = await file.arrayBuffer();
+            await loadBundle(bytes);
+            const blob = new Blob([bytes], { type: 'application/zip' });
+            await createProgram(blob);
+            showToast('Program imported');
+            await refreshPrograms();
+        } catch (err) {
+            showToast('Import failed: ' + err.message, true);
+        }
+    });
 });
 
 // --- Init ---

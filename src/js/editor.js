@@ -9,6 +9,67 @@ import {
     startProgram, stopProgram, connectLogs, ApiError
 } from './programApi.js';
 
+// --- Busy overlay ---
+
+let busyOverlay = null;
+const BUSY_TIMEOUT = 15000; // 15s max before auto-dismiss
+
+function showBusy(label) {
+    hideBusy();
+    busyOverlay = document.createElement('div');
+    busyOverlay.style.cssText = `
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 200;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(0,0,0,0.35); pointer-events: all;
+    `;
+    const box = document.createElement('div');
+    box.style.cssText = `
+        background: var(--color-card-bg, #252033); color: var(--color-text-primary, #f6f7f8);
+        padding: 20px 32px; border-radius: 10px; text-align: center;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.4); font-size: 0.95rem;
+    `;
+    const spinner = document.createElement('div');
+    spinner.style.cssText = `
+        width: 24px; height: 24px; margin: 0 auto 12px;
+        border: 3px solid rgba(255,255,255,0.2); border-top-color: var(--brand-gold, #E8B820);
+        border-radius: 50%; animation: busySpin 0.8s linear infinite;
+    `;
+    const text = document.createElement('div');
+    text.textContent = label;
+    box.appendChild(spinner);
+    box.appendChild(text);
+    busyOverlay.appendChild(box);
+    document.body.appendChild(busyOverlay);
+
+    // Inject animation if not already present
+    if (!document.getElementById('busy-spin-style')) {
+        const style = document.createElement('style');
+        style.id = 'busy-spin-style';
+        style.textContent = '@keyframes busySpin { to { transform: rotate(360deg); } }';
+        document.head.appendChild(style);
+    }
+
+    // Safety timeout
+    busyOverlay._timeout = setTimeout(hideBusy, BUSY_TIMEOUT);
+}
+
+function hideBusy() {
+    if (busyOverlay) {
+        clearTimeout(busyOverlay._timeout);
+        busyOverlay.remove();
+        busyOverlay = null;
+    }
+}
+
+async function withBusy(label, fn) {
+    showBusy(label);
+    try {
+        return await fn();
+    } finally {
+        hideBusy();
+    }
+}
+
 // --- State ---
 let workspace = null;
 let programId = null;
@@ -209,6 +270,7 @@ let isSaving = false;
 async function save() {
     if (isSaving) return false;
     isSaving = true;
+    showBusy('Saving...');
 
     try {
         // Read current values from inputs (in case event listeners missed a change)
@@ -253,34 +315,39 @@ async function save() {
         return false;
     } finally {
         isSaving = false;
+        hideBusy();
     }
 }
 
 async function deploy() {
     const saved = await save();
     if (saved && programId) {
-        try {
-            await startProgram(programId);
-            showToast('Deployed and started');
-        } catch (err) {
-            showToast('Deploy failed: ' + err.message, true);
-        }
+        await withBusy('Deploying...', async () => {
+            try {
+                await startProgram(programId);
+                showToast('Deployed and started');
+            } catch (err) {
+                showToast('Deploy failed: ' + err.message, true);
+            }
+        });
     }
 }
 
 async function handleStartStop(action) {
     if (!programId) return;
-    try {
-        if (action === 'start') {
-            await startProgram(programId);
-            showToast('Started');
-        } else {
-            await stopProgram(programId);
-            showToast('Stopped');
+    await withBusy(action === 'start' ? 'Starting...' : 'Stopping...', async () => {
+        try {
+            if (action === 'start') {
+                await startProgram(programId);
+                showToast('Started');
+            } else {
+                await stopProgram(programId);
+                showToast('Stopped');
+            }
+        } catch (err) {
+            showToast(`${action} failed: ${err.message}`, true);
         }
-    } catch (err) {
-        showToast(`${action} failed: ${err.message}`, true);
-    }
+    });
 }
 
 // --- Load ---
