@@ -228,21 +228,33 @@ function hideLogs() {
 }
 
 function connectLogStream(id) {
+    let lastLogMessage = '';
+
     logWebSocket = connectLogs(id, (msg) => {
         logReconnectDelay = 100; // Reset on successful message
+
+        // Suppress repeated identical messages
+        const msgText = msg.message || '';
+        if (msgText === lastLogMessage) return;
+        lastLogMessage = msgText;
+
         const line = document.createElement('div');
         line.className = `log-line ${msg.level || 'info'}`;
         const ts = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : '';
-        line.textContent = `[${ts}] ${msg.message}`;
+        line.textContent = `[${ts}] ${msgText}`;
+
+        // Auto-scroll only if user is near the bottom
+        const atBottom = logPanelBody.scrollHeight - logPanelBody.scrollTop - logPanelBody.clientHeight < 40;
+
         logPanelBody.appendChild(line);
 
-        // Cap buffer
         while (logPanelBody.children.length > LOG_BUFFER_MAX) {
             logPanelBody.removeChild(logPanelBody.firstChild);
         }
 
-        // Auto-scroll
-        logPanelBody.scrollTop = logPanelBody.scrollHeight;
+        if (atBottom) {
+            logPanelBody.scrollTop = logPanelBody.scrollHeight;
+        }
     }, () => {
         // Reconnect with backoff, paused when hidden
         if (activeLogId === id && document.visibilityState !== 'hidden') {

@@ -539,18 +539,33 @@ function connectLogStream() {
         logWebSocket = null;
     }
 
+    let lastLogMessage = '';
+
     logWebSocket = connectLogs(programId, (msg) => {
         logReconnectDelay = 100; // Reset on successful message
+
+        // Suppress repeated identical messages (e.g., "not running" spam)
+        const msgText = msg.message || '';
+        if (msgText === lastLogMessage) return;
+        lastLogMessage = msgText;
+
         const line = document.createElement('div');
         line.className = `log-line ${msg.level || 'info'}`;
         const ts = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : '';
-        line.textContent = `[${ts}] ${msg.message}`;
+        line.textContent = `[${ts}] ${msgText}`;
+
+        // Auto-scroll only if user is already near the bottom
+        const atBottom = logBody.scrollHeight - logBody.scrollTop - logBody.clientHeight < 40;
+
         logBody.appendChild(line);
 
         while (logBody.children.length > LOG_BUFFER_MAX) {
             logBody.removeChild(logBody.firstChild);
         }
-        logBody.scrollTop = logBody.scrollHeight;
+
+        if (atBottom) {
+            logBody.scrollTop = logBody.scrollHeight;
+        }
     }, () => {
         if (logVisible && programId && document.visibilityState !== 'hidden') {
             setTimeout(connectLogStream, logReconnectDelay);
