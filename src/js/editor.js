@@ -211,6 +211,10 @@ async function save() {
     isSaving = true;
 
     try {
+        // Read current values from inputs (in case event listeners missed a change)
+        programName = nameInput.value || 'Untitled';
+        programDescription = descInput.value || programName;
+
         const wsJson = Blockly.serialization.workspaces.save(workspace);
         const code = pythonGenerator.workspaceToCode(workspace);
         const blob = await buildBundle(wsJson, code, {
