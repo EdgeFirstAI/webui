@@ -1,36 +1,6 @@
-import * as u from "blockly/core";
-import { pythonGenerator as r, Order as i } from "blockly/python";
-const M = [
-  {
-    type: "edgefirst_zenoh_on_message",
-    message0: "on message from %1",
-    args0: [
-      {
-        type: "field_dropdown",
-        name: "TOPIC",
-        options: [
-          ["Camera DMA", "rt/camera/dma"],
-          ["Camera JPEG", "rt/camera/jpeg"],
-          ["Camera Info", "rt/camera/info"],
-          ["Model Boxes", "rt/model/boxes2d"],
-          ["Model Mask", "rt/model/mask"],
-          ["Model Info", "rt/model/info"],
-          ["GPS", "rt/gps"],
-          ["IMU", "rt/imu"]
-        ]
-      }
-    ],
-    message1: "do %1",
-    args1: [
-      {
-        type: "input_statement",
-        name: "HANDLER"
-      }
-    ],
-    style: "hat_blocks",
-    tooltip: "Entry point — runs your code each time a message arrives. Use multiple blocks for different topics.",
-    helpUrl: ""
-  },
+import * as m from "blockly/core";
+import { pythonGenerator as i, Order as a } from "blockly/python";
+const q = [
   {
     type: "edgefirst_zenoh_publish",
     message0: "publish %1 to %2",
@@ -74,44 +44,265 @@ const M = [
     helpUrl: ""
   }
 ];
-let C = !1;
-function P() {
-  C || (C = !0, u.common.defineBlocksWithJsonArray(M));
+let S = !1;
+function Q() {
+  S || (S = !0, m.common.defineBlocksWithJsonArray(q));
 }
-const z = [
+const u = [
   {
-    type: "edgefirst_camera_frame",
-    message0: "frame",
-    output: "DMABuffer",
-    style: "camera_blocks",
-    tooltip: "Deserialize a DMA buffer from the incoming message",
-    helpUrl: ""
-  },
-  {
-    type: "edgefirst_camera_info",
-    message0: "camera info %1",
-    args0: [
+    label: "EdgeFirst",
+    module: "edgefirst.schemas.edgefirst_msgs",
+    types: [
       {
-        type: "field_dropdown",
-        name: "FIELD",
-        options: [
-          ["width", "width"],
-          ["height", "height"],
-          ["format", "fourcc"]
+        label: "DMA Buffer",
+        python: "DmaBuffer",
+        defaultTopic: "rt/camera/dma",
+        fields: [
+          { label: "fd", python: "fd" },
+          { label: "width", python: "width" },
+          { label: "height", python: "height" },
+          { label: "stride", python: "stride" },
+          { label: "fourcc", python: "fourcc" },
+          { label: "length", python: "length" },
+          { label: "timestamp", python: "timestamp" }
+        ]
+      },
+      {
+        label: "Camera Info",
+        python: "CameraInfo",
+        defaultTopic: "rt/camera/info",
+        fields: [
+          { label: "width", python: "width" },
+          { label: "height", python: "height" },
+          { label: "fourcc", python: "fourcc" }
+        ]
+      },
+      {
+        label: "JPEG Frame",
+        python: "JpegFrame",
+        defaultTopic: "rt/camera/jpeg",
+        fields: [
+          { label: "data", python: "data" },
+          { label: "width", python: "width" },
+          { label: "height", python: "height" },
+          { label: "timestamp", python: "timestamp" }
+        ]
+      },
+      {
+        label: "Detect (Boxes 2D)",
+        python: "Detect",
+        defaultTopic: "rt/model/boxes2d",
+        fields: [
+          { label: "boxes", python: "boxes" }
+        ]
+      },
+      {
+        label: "Mask",
+        python: "Mask",
+        defaultTopic: "rt/model/mask",
+        fields: [
+          { label: "data", python: "data" },
+          { label: "width", python: "width" },
+          { label: "height", python: "height" }
+        ]
+      },
+      {
+        label: "Model Info",
+        python: "ModelInfo",
+        defaultTopic: "rt/model/info",
+        fields: [
+          { label: "name", python: "name" },
+          { label: "framework", python: "framework" },
+          { label: "input width", python: "input_width" },
+          { label: "input height", python: "input_height" }
+        ]
+      },
+      {
+        label: "Box 2D",
+        python: "Box2D",
+        defaultTopic: null,
+        fields: [
+          { label: "label", python: "label" },
+          { label: "confidence", python: "confidence" },
+          { label: "center x", python: "center_x" },
+          { label: "center y", python: "center_y" },
+          { label: "width", python: "size_x" },
+          { label: "height", python: "size_y" }
         ]
       }
-    ],
-    output: "String",
-    style: "camera_blocks",
-    tooltip: "Get camera info field from the message",
-    helpUrl: ""
+    ]
+  },
+  {
+    label: "Sensors",
+    module: "edgefirst.schemas.sensor_msgs",
+    types: [
+      {
+        label: "IMU",
+        python: "Imu",
+        defaultTopic: "rt/imu",
+        fields: [
+          { label: "accel x", python: "linear_acceleration_x" },
+          { label: "accel y", python: "linear_acceleration_y" },
+          { label: "accel z", python: "linear_acceleration_z" },
+          { label: "gyro x", python: "angular_velocity_x" },
+          { label: "gyro y", python: "angular_velocity_y" },
+          { label: "gyro z", python: "angular_velocity_z" }
+        ]
+      },
+      {
+        label: "GPS",
+        python: "NavSatFix",
+        defaultTopic: "rt/gps",
+        fields: [
+          { label: "latitude", python: "latitude" },
+          { label: "longitude", python: "longitude" },
+          { label: "altitude", python: "altitude" }
+        ]
+      },
+      {
+        label: "Temperature",
+        python: "Temperature",
+        defaultTopic: "rt/temperature",
+        fields: [
+          { label: "temperature", python: "temperature" },
+          { label: "variance", python: "variance" }
+        ]
+      },
+      {
+        label: "Illuminance",
+        python: "Illuminance",
+        defaultTopic: "rt/illuminance",
+        fields: [
+          { label: "illuminance", python: "illuminance" },
+          { label: "variance", python: "variance" }
+        ]
+      },
+      {
+        label: "Humidity",
+        python: "RelativeHumidity",
+        defaultTopic: "rt/humidity",
+        fields: [
+          { label: "relative humidity", python: "relative_humidity" },
+          { label: "variance", python: "variance" }
+        ]
+      },
+      {
+        label: "Pressure",
+        python: "FluidPressure",
+        defaultTopic: "rt/pressure",
+        fields: [
+          { label: "fluid pressure", python: "fluid_pressure" },
+          { label: "variance", python: "variance" }
+        ]
+      }
+    ]
   }
 ];
-let B = !1;
-function R() {
-  B || (B = !0, u.common.defineBlocksWithJsonArray(z));
+function ee(t) {
+  for (const e of u) {
+    const o = e.types.find((s) => s.python === t);
+    if (o) return o;
+  }
 }
-const V = [
+function te(t) {
+  for (const e of u)
+    if (e.types.some((o) => o.python === t))
+      return e.module;
+}
+function oe() {
+  const t = [];
+  for (const e of u)
+    for (const o of e.types) {
+      if (o.fields.length === 0) continue;
+      const s = `edgefirst_field_${o.python.toLowerCase()}`, d = o.fields.map((c) => [c.label, c.python]);
+      t.push({
+        type: s,
+        message0: "%1 of %2",
+        args0: [
+          {
+            type: "field_dropdown",
+            name: "FIELD",
+            options: d
+          },
+          {
+            type: "field_variable",
+            name: "VAR",
+            variable: "msg"
+          }
+        ],
+        output: null,
+        style: "data_blocks",
+        tooltip: `Get a field from a ${o.label} message`,
+        helpUrl: ""
+      });
+    }
+  return t;
+}
+function ne(t) {
+  const e = u.find((o) => o.module === t);
+  return e ? e.types.filter((o) => o.defaultTopic).map((o) => [o.label, o.python]) : [["(none)", ""]];
+}
+const se = {
+  type: "edgefirst_on_message",
+  message0: "on %1 %2 message from %3",
+  args0: [
+    {
+      type: "field_dropdown",
+      name: "GROUP",
+      options: u.map((t) => [t.label, t.module])
+    },
+    {
+      type: "field_dropdown",
+      name: "TYPE",
+      options: ne(u[0].module)
+    },
+    {
+      type: "field_input",
+      name: "TOPIC",
+      text: u[0].types[0].defaultTopic ?? "rt/topic"
+    }
+  ],
+  message1: "as %1 do %2",
+  args1: [
+    {
+      type: "field_variable",
+      name: "MSG_VAR",
+      variable: "msg"
+    },
+    {
+      type: "input_statement",
+      name: "HANDLER"
+    }
+  ],
+  style: "hat_blocks",
+  tooltip: "Entry point — runs your code each time a typed message arrives on the topic.",
+  helpUrl: "",
+  extensions: ["edgefirst_message_type_extension"]
+};
+let A = !1;
+function ie() {
+  if (A) return;
+  A = !0, m.Extensions.isRegistered("edgefirst_message_type_extension") || m.Extensions.register(
+    "edgefirst_message_type_extension",
+    function() {
+      const o = this.getField("GROUP"), s = this.getField("TYPE"), d = this.getField("TOPIC");
+      o.setValidator(function(c) {
+        const p = u.find((_) => _.module === c);
+        if (p) {
+          const _ = p.types.filter((f) => f.defaultTopic).map((f) => [f.label, f.python]);
+          s.menuGenerator_ = _, s.setValue(_[0][1]);
+        }
+        return c;
+      }), s.setValidator(function(c) {
+        const p = ee(c);
+        return p?.defaultTopic && d.setValue(p.defaultTopic), c;
+      });
+    }
+  );
+  const t = oe(), e = [se, ...t];
+  m.common.defineBlocksWithJsonArray(e);
+}
+const le = [
   {
     type: "edgefirst_model_load",
     message0: "load model %1 as %2",
@@ -132,39 +323,40 @@ const V = [
       { type: "field_variable", name: "MODEL", variable: "model" },
       { type: "input_value", name: "INPUT", check: ["DMABuffer", "Image"] }
     ],
-    output: "ModelOutput",
+    previousStatement: null,
+    nextStatement: null,
     style: "model_blocks",
-    tooltip: "Run inference on an image using a loaded model",
+    tooltip: "Run inference on an image. Results are read by Boxes or Mask blocks using the same model variable.",
     helpUrl: ""
   },
   {
     type: "edgefirst_model_boxes",
     message0: "boxes from %1",
     args0: [
-      { type: "input_value", name: "OUTPUT", check: "ModelOutput" }
+      { type: "field_variable", name: "MODEL", variable: "model" }
     ],
     output: "Detections",
     style: "model_blocks",
-    tooltip: "Decode bounding boxes from model output",
+    tooltip: "Decode bounding boxes from the last inference run on this model",
     helpUrl: ""
   },
   {
     type: "edgefirst_model_mask",
     message0: "mask from %1",
     args0: [
-      { type: "input_value", name: "OUTPUT", check: "ModelOutput" }
+      { type: "field_variable", name: "MODEL", variable: "model" }
     ],
     output: "MaskData",
     style: "model_blocks",
-    tooltip: "Decode segmentation mask from model output",
+    tooltip: "Decode segmentation mask from the last inference run on this model",
     helpUrl: ""
   }
 ];
-let N = !1;
-function G() {
-  N || (N = !0, u.common.defineBlocksWithJsonArray(V));
+let $ = !1;
+function re() {
+  $ || ($ = !0, m.common.defineBlocksWithJsonArray(le));
 }
-const H = [
+const ae = [
   {
     type: "edgefirst_processing_resize",
     message0: "resize %1 to %2 x %3",
@@ -224,31 +416,11 @@ const H = [
     helpUrl: ""
   }
 ];
-let I = !1;
-function j() {
-  I || (I = !0, u.common.defineBlocksWithJsonArray(H));
+let L = !1;
+function ce() {
+  L || (L = !0, m.common.defineBlocksWithJsonArray(ae));
 }
-const q = [
-  {
-    type: "edgefirst_data_deserialize",
-    message0: "deserialize %1 as %2",
-    args0: [
-      { type: "input_value", name: "DATA", check: "Bytes" },
-      { type: "field_dropdown", name: "TYPE", options: [
-        ["DMA Buffer", "DmaBuffer"],
-        ["Boxes 2D", "Detect"],
-        ["Camera Info", "CameraInfo"],
-        ["IMU", "Imu"],
-        ["GPS", "NavSatFix"]
-      ] }
-    ],
-    // output: null — dynamic type depends on TYPE dropdown selection.
-    // Future: use block extension to update output type when dropdown changes.
-    output: null,
-    style: "data_blocks",
-    tooltip: "Deserialize raw bytes into a typed message",
-    helpUrl: ""
-  },
+const pe = [
   {
     type: "edgefirst_data_serialize",
     message0: "serialize %1",
@@ -256,27 +428,6 @@ const q = [
     output: "Bytes",
     style: "data_blocks",
     tooltip: "Serialize data to CDR bytes for publishing",
-    helpUrl: ""
-  },
-  {
-    type: "edgefirst_data_box_field",
-    message0: "%1 of %2",
-    args0: [
-      { type: "field_dropdown", name: "FIELD", options: [
-        ["label", "label"],
-        ["confidence", "confidence"],
-        ["center x", "center_x"],
-        ["center y", "center_y"],
-        ["width", "size_x"],
-        ["height", "size_y"]
-      ] },
-      { type: "input_value", name: "BOX", check: "Box" }
-    ],
-    // output: null — dynamic type depends on TYPE dropdown selection.
-    // Future: use block extension to update output type when dropdown changes.
-    output: null,
-    style: "data_blocks",
-    tooltip: "Get a field from a detection box",
     helpUrl: ""
   },
   {
@@ -289,11 +440,11 @@ const q = [
     helpUrl: ""
   }
 ];
-let O = !1;
-function W() {
-  O || (O = !0, u.common.defineBlocksWithJsonArray(q));
+let M = !1;
+function de() {
+  M || (M = !0, m.common.defineBlocksWithJsonArray(pe));
 }
-const Y = [
+const me = [
   {
     type: "edgefirst_flow_for_each_box",
     message0: "for each box in %1",
@@ -341,63 +492,25 @@ const Y = [
     helpUrl: ""
   }
 ];
-let E = !1;
-function J() {
-  E || (E = !0, u.common.defineBlocksWithJsonArray(Y));
+let P = !1;
+function ue() {
+  P || (P = !0, m.common.defineBlocksWithJsonArray(me));
 }
-function a(t, e, o) {
+function l(t, e, o) {
   t.definitions_[e] = o;
 }
-function Z(t) {
+function fe(t) {
   return t.edgefirst_;
 }
-function y(t) {
+function B(t) {
   return t.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
 }
-r.forBlock.edgefirst_zenoh_on_message = function(t, e) {
-  const o = t.getFieldValue("TOPIC"), n = e.statementToCode(t, "HANDLER");
-  a(e, "import_asyncio", "import asyncio"), a(e, "import_zenoh", "import zenoh");
-  const c = e.provideFunction_(
-    "MessageDrain",
-    `
-class ${e.FUNCTION_NAME_PLACEHOLDER_}:
-    """Thread-safe bridge from Zenoh subscriber callbacks to asyncio.
-
-    Zenoh callbacks run on the subscriber thread. asyncio.Queue is not
-    thread-safe, so all queue operations must happen on the event loop
-    thread via call_soon_threadsafe.
-    """
-    def __init__(self, loop, maxsize=2):
-        self._queue = asyncio.Queue(maxsize=maxsize)
-        self._loop = loop
-
-    def callback(self, msg):
-        """Called from Zenoh subscriber thread — must not touch the queue directly."""
-        if not self._loop.is_closed():
-            self._loop.call_soon_threadsafe(self._enqueue, msg)
-
-    def _enqueue(self, msg):
-        """Runs on the event loop thread — safe to manipulate the queue."""
-        if self._queue.full():
-            self._queue.get_nowait()
-        self._queue.put_nowait(msg)
-
-    async def get_latest(self):
-        """Wait for a message, then drain to the newest available."""
-        latest = await self._queue.get()
-        while not self._queue.empty():
-            latest = self._queue.get_nowait()
-        return latest
-`
-  ), m = Z(e), p = m.handlerCounter++;
-  return m.handlers.push({ topic: o, index: p, drainClass: c, body: n }), "";
-};
-r.forBlock.edgefirst_zenoh_publish = function(t, e) {
-  const o = e.valueToCode(t, "DATA", i.NONE) || "''", n = t.getFieldValue("TOPIC");
-  a(e, "import_zenoh", "import zenoh");
-  const m = t.getInputTargetBlock("DATA")?.outputConnection?.getCheck()?.[0];
+i.forBlock.edgefirst_zenoh_publish = function(t, e) {
+  const o = e.valueToCode(t, "DATA", a.NONE) || "''", s = t.getFieldValue("TOPIC");
+  l(e, "import_zenoh", "import zenoh");
+  const c = t.getInputTargetBlock("DATA")?.outputConnection?.getCheck()?.[0];
   let p;
-  switch (m) {
+  switch (c) {
     case "Bytes":
       p = o;
       break;
@@ -412,273 +525,275 @@ r.forBlock.edgefirst_zenoh_publish = function(t, e) {
       p = `str(${o}).encode()`;
       break;
   }
-  return `session.put("${y(n)}", ${p})
+  return `session.put("${B(s)}", ${p})
 `;
 };
-r.forBlock.edgefirst_zenoh_topic = function(t) {
-  return [`"${t.getFieldValue("TOPIC")}"`, i.ATOMIC];
+i.forBlock.edgefirst_zenoh_topic = function(t) {
+  return [`"${t.getFieldValue("TOPIC")}"`, a.ATOMIC];
 };
-r.forBlock.edgefirst_camera_frame = function(t, e) {
-  return a(
+i.forBlock.edgefirst_on_message = function(t, e) {
+  const o = t.getFieldValue("GROUP"), s = t.getFieldValue("TYPE"), d = t.getFieldValue("TOPIC"), c = t.getFieldValue("MSG_VAR"), p = e.getVariableName(c), _ = e.statementToCode(t, "HANDLER");
+  l(e, "import_zenoh", "import zenoh"), l(e, "import_signal", "import signal"), l(e, "import_time", "import time");
+  const f = o || te(s) || "edgefirst.schemas.edgefirst_msgs";
+  l(
     e,
-    "import_dmabuffer",
-    "from edgefirst.schemas.edgefirst_msgs import DmaBuffer"
-  ), ["DmaBuffer.deserialize(msg.payload.to_bytes())", i.FUNCTION_CALL];
+    `import_schema_${s}`,
+    `from ${f} import ${s}`
+  );
+  const b = fe(e), k = b.handlerCounter++;
+  return b.handlers.push({
+    topic: d,
+    index: k,
+    body: _,
+    msgType: s,
+    msgVar: p,
+    importPath: f
+  }), "";
 };
-r.forBlock.edgefirst_camera_info = function(t, e) {
-  const o = t.getFieldValue("FIELD");
-  return a(
-    e,
-    "import_camera_info",
-    "from edgefirst.schemas.edgefirst_msgs import CameraInfo"
-  ), [`CameraInfo.deserialize(msg.payload.to_bytes()).${o}`, i.MEMBER];
-};
-r.forBlock.edgefirst_model_load = function(t, e) {
-  const o = t.getFieldValue("PATH"), n = e.getVariableName(
+function ge(t) {
+  i.forBlock[t] = function(e, o) {
+    const s = e.getFieldValue("FIELD");
+    return [`${o.getVariableName(e.getFieldValue("VAR") || "msg")}.${s}`, a.MEMBER];
+  };
+}
+for (const t of u)
+  for (const e of t.types) {
+    if (e.fields.length === 0) continue;
+    const o = `edgefirst_field_${e.python.toLowerCase()}`;
+    ge(o);
+  }
+i.forBlock.edgefirst_model_load = function(t, e) {
+  const o = t.getFieldValue("PATH"), s = e.getVariableName(
     t.getFieldValue("VAR") || "model"
   );
-  return a(
+  return l(
     e,
     "import_tflite",
     "from edgefirst.tflite import Interpreter"
-  ), a(
+  ), l(
     e,
-    `setup_${n}`,
-    `    ${n} = Interpreter('${o}')`
+    `setup_1_${s}`,
+    `${s} = Interpreter('${o}')`
   ), "";
 };
-r.forBlock.edgefirst_model_run = function(t, e) {
+i.forBlock.edgefirst_model_run = function(t, e) {
   const o = e.getVariableName(
     t.getFieldValue("MODEL") || "model"
-  ), n = e.valueToCode(t, "INPUT", i.NONE) || "image";
-  return a(e, "import_asyncio", "import asyncio"), [`await ${e.provideFunction_(
-    "run_model",
-    `
-async def ${e.FUNCTION_NAME_PLACEHOLDER_}(model, input_data):
-    loop = asyncio.get_running_loop()
-    def _invoke():
-        model.set_input(input_data)
-        model.invoke()
-    await loop.run_in_executor(None, _invoke)
-    return model
-`
-  )}(${o}, ${n})`, i.NONE];
+  ), s = e.valueToCode(t, "INPUT", a.NONE) || "image";
+  return `${o}.set_input(${s})
+${o}.invoke()
+`;
 };
-r.forBlock.edgefirst_model_boxes = function(t, e) {
-  const o = e.valueToCode(t, "OUTPUT", i.NONE) || "model";
-  return a(
+i.forBlock.edgefirst_model_boxes = function(t, e) {
+  const o = e.getVariableName(
+    t.getFieldValue("MODEL") || "model"
+  );
+  return l(
     e,
     "import_hal_decoder",
     "from edgefirst.hal import Decoder"
-  ), a(
+  ), l(
     e,
-    "setup_decoder",
-    "    decoder = Decoder(model, threshold=0.5)"
-  ), [`decoder.decode(${o})`, i.FUNCTION_CALL];
+    "setup_2_decoder",
+    "decoder = Decoder(model, threshold=0.5)"
+  ), [`decoder.decode(${o})`, a.FUNCTION_CALL];
 };
-r.forBlock.edgefirst_model_mask = function(t, e) {
-  const o = e.valueToCode(t, "OUTPUT", i.NONE) || "model";
-  return a(
+i.forBlock.edgefirst_model_mask = function(t, e) {
+  const o = e.getVariableName(
+    t.getFieldValue("MODEL") || "model"
+  );
+  return l(
     e,
     "import_hal_decoder",
     "from edgefirst.hal import Decoder"
-  ), a(
+  ), l(
     e,
-    "setup_mask_decoder",
-    "    mask_decoder = Decoder(model)"
-  ), [`mask_decoder.decode(${o})`, i.FUNCTION_CALL];
+    "setup_2_mask_decoder",
+    "mask_decoder = Decoder(model)"
+  ), [`mask_decoder.decode(${o})`, a.FUNCTION_CALL];
 };
-r.forBlock.edgefirst_processing_resize = function(t, e) {
-  const o = e.valueToCode(t, "INPUT", i.NONE) || "image", n = t.getFieldValue("WIDTH"), c = t.getFieldValue("HEIGHT");
-  return a(e, "import_hal_processor", "from edgefirst.hal import ImageProcessor"), a(e, "setup_processor", "    processor = ImageProcessor()"), [`processor.resize(${o}, ${n}, ${c})`, i.FUNCTION_CALL];
+i.forBlock.edgefirst_processing_resize = function(t, e) {
+  const o = e.valueToCode(t, "INPUT", a.NONE) || "image", s = t.getFieldValue("WIDTH"), d = t.getFieldValue("HEIGHT");
+  return l(e, "import_hal_processor", "from edgefirst.hal import ImageProcessor"), l(e, "setup_processor", "processor = ImageProcessor()"), [`processor.resize(${o}, ${s}, ${d})`, a.FUNCTION_CALL];
 };
-r.forBlock.edgefirst_processing_convert = function(t, e) {
-  const o = e.valueToCode(t, "INPUT", i.NONE) || "image", n = t.getFieldValue("FORMAT");
-  return a(e, "import_hal_processor", "from edgefirst.hal import ImageProcessor"), a(e, "setup_processor", "    processor = ImageProcessor()"), [`processor.convert(${o}, '${n}')`, i.FUNCTION_CALL];
+i.forBlock.edgefirst_processing_convert = function(t, e) {
+  const o = e.valueToCode(t, "INPUT", a.NONE) || "image", s = t.getFieldValue("FORMAT");
+  return l(e, "import_hal_processor", "from edgefirst.hal import ImageProcessor"), l(e, "setup_processor", "processor = ImageProcessor()"), [`processor.convert(${o}, '${s}')`, a.FUNCTION_CALL];
 };
-r.forBlock.edgefirst_processing_crop = function(t, e) {
-  const o = e.valueToCode(t, "IMAGE", i.NONE) || "image", n = e.valueToCode(t, "BOX", i.NONE) || "box";
-  return a(e, "import_hal_processor", "from edgefirst.hal import ImageProcessor"), a(e, "setup_processor", "    processor = ImageProcessor()"), [`processor.crop(${o}, ${n})`, i.FUNCTION_CALL];
+i.forBlock.edgefirst_processing_crop = function(t, e) {
+  const o = e.valueToCode(t, "IMAGE", a.NONE) || "image", s = e.valueToCode(t, "BOX", a.NONE) || "box";
+  return l(e, "import_hal_processor", "from edgefirst.hal import ImageProcessor"), l(e, "setup_processor", "processor = ImageProcessor()"), [`processor.crop(${o}, ${s})`, a.FUNCTION_CALL];
 };
-r.forBlock.edgefirst_processing_track = function(t, e) {
-  const o = e.valueToCode(t, "DETECTIONS", i.NONE) || "detections";
-  return a(e, "import_hal_tracker", "from edgefirst.hal import Tracker"), a(e, "setup_tracker", "    tracker = Tracker()"), [`tracker.update(${o})`, i.FUNCTION_CALL];
+i.forBlock.edgefirst_processing_track = function(t, e) {
+  const o = e.valueToCode(t, "DETECTIONS", a.NONE) || "detections";
+  return l(e, "import_hal_tracker", "from edgefirst.hal import Tracker"), l(e, "setup_tracker", "tracker = Tracker()"), [`tracker.update(${o})`, a.FUNCTION_CALL];
 };
-r.forBlock.edgefirst_processing_nms = function(t, e) {
-  const o = e.valueToCode(t, "DETECTIONS", i.NONE) || "detections", n = t.getFieldValue("THRESHOLD");
-  return [`${o}.nms(${n})`, i.FUNCTION_CALL];
+i.forBlock.edgefirst_processing_nms = function(t, e) {
+  const o = e.valueToCode(t, "DETECTIONS", a.NONE) || "detections", s = t.getFieldValue("THRESHOLD");
+  return [`${o}.nms(${s})`, a.FUNCTION_CALL];
 };
-const K = {
-  DmaBuffer: "from edgefirst.schemas.edgefirst_msgs import DmaBuffer",
-  Detect: "from edgefirst.schemas.edgefirst_msgs import Detect",
-  CameraInfo: "from edgefirst.schemas.edgefirst_msgs import CameraInfo",
-  Imu: "from edgefirst.schemas.edgefirst_msgs import Imu",
-  NavSatFix: "from edgefirst.schemas.edgefirst_msgs import NavSatFix"
+i.forBlock.edgefirst_data_serialize = function(t, e) {
+  return [`${e.valueToCode(t, "DATA", a.NONE) || "data"}.serialize()`, a.FUNCTION_CALL];
 };
-r.forBlock.edgefirst_data_deserialize = function(t, e) {
-  const o = e.valueToCode(t, "DATA", i.NONE) || "msg.payload.to_bytes()", n = t.getFieldValue("TYPE"), c = K[n];
-  return c && a(e, `import_schema_${n}`, c), [`${n}.deserialize(${o})`, i.FUNCTION_CALL];
+i.forBlock.edgefirst_data_image_array = function(t, e) {
+  const o = e.valueToCode(t, "INPUT", a.NONE) || "image";
+  return l(e, "import_numpy", "import numpy as np"), [`np.asarray(${o})`, a.FUNCTION_CALL];
 };
-r.forBlock.edgefirst_data_serialize = function(t, e) {
-  return [`${e.valueToCode(t, "DATA", i.NONE) || "data"}.serialize()`, i.FUNCTION_CALL];
-};
-r.forBlock.edgefirst_data_box_field = function(t, e) {
-  const o = t.getFieldValue("FIELD");
-  return [`${e.valueToCode(t, "BOX", i.NONE) || "box"}.${o}`, i.MEMBER];
-};
-r.forBlock.edgefirst_data_image_array = function(t, e) {
-  const o = e.valueToCode(t, "INPUT", i.NONE) || "image";
-  return a(e, "import_numpy", "import numpy as np"), [`np.asarray(${o})`, i.FUNCTION_CALL];
-};
-r.forBlock.edgefirst_flow_for_each_box = function(t, e) {
-  const o = e.valueToCode(t, "DETECTIONS", i.NONE) || "detections", n = e.statementToCode(t, "BODY") || `    pass
+i.forBlock.edgefirst_flow_for_each_box = function(t, e) {
+  const o = e.valueToCode(t, "DETECTIONS", a.NONE) || "detections", s = e.statementToCode(t, "BODY") || `    pass
 `;
   return `for box in ${o}.boxes:
-${n}`;
+${s}`;
 };
-r.forBlock.edgefirst_flow_if_label = function(t, e) {
-  const o = t.getFieldValue("LABEL"), n = e.statementToCode(t, "BODY") || `    pass
+i.forBlock.edgefirst_flow_if_label = function(t, e) {
+  const o = t.getFieldValue("LABEL"), s = e.statementToCode(t, "BODY") || `    pass
 `;
-  return `if box.label == "${y(o)}":
-${n}`;
+  return `if box.label == "${B(o)}":
+${s}`;
 };
-r.forBlock.edgefirst_flow_if_confidence = function(t, e) {
-  const o = t.getFieldValue("THRESHOLD"), n = e.statementToCode(t, "BODY") || `    pass
+i.forBlock.edgefirst_flow_if_confidence = function(t, e) {
+  const o = t.getFieldValue("THRESHOLD"), s = e.statementToCode(t, "BODY") || `    pass
 `;
   return `if box.confidence > ${o}:
-${n}`;
+${s}`;
 };
-r.forBlock.edgefirst_flow_log = function(t, e) {
+i.forBlock.edgefirst_flow_log = function(t, e) {
   const o = t.getFieldValue("MESSAGE");
-  return a(e, "import_logging", "import logging"), a(e, "module_logger", "logger = logging.getLogger(__name__)"), `logger.info("${y(o)}")
+  return l(e, "import_logging", "import logging"), l(e, "module_logger", "logger = logging.getLogger(__name__)"), `logger.info("${B(o)}")
 `;
 };
-function X() {
-  P(), R(), G(), j(), W(), J();
+function _e() {
+  Q(), ie(), re(), ce(), de(), ue();
 }
-function Q(t) {
+function ye(t) {
   return t.replace(/^rt\//, "").replace(/\//g, "_").replace(/-/g, "_").replace(/[^a-zA-Z0-9_]/g, "") || "topic";
 }
-function ee() {
-  if (r.__edgefirstRegistered) return;
-  r.__edgefirstRegistered = !0;
-  const t = r.init.bind(r), e = r.finish.bind(r);
-  r.init = function(o) {
+function he() {
+  if (i.__edgefirstRegistered) return;
+  i.__edgefirstRegistered = !0;
+  const t = i.init.bind(i), e = i.finish.bind(i);
+  i.INDENT = "    ", i.init = function(o) {
     t(o), this.edgefirst_ = {
       handlers: [],
       handlerCounter: 0
     };
-  }, r.finish = function(o) {
-    const n = this.edgefirst_;
-    if (!n || n.handlers.length === 0)
+  }, i.finish = function(o) {
+    const s = this.edgefirst_;
+    if (!s || s.handlers.length === 0)
       return e(o);
-    a(this, "import_asyncio", "import asyncio"), a(this, "import_logging", "import logging"), a(this, "import_signal", "import signal"), a(this, "import_zenoh", "import zenoh"), a(this, "module_logger", "logger = logging.getLogger(__name__)");
-    const c = this.definitions_, m = [];
-    for (const [s, l] of Object.entries(c))
-      s.startsWith("setup_") && m.push(l);
-    for (const s of Object.keys(c))
-      s.startsWith("setup_") && delete c[s];
-    const p = e(o), D = [...n.handlers].sort(
-      (s, l) => s.topic.localeCompare(l.topic)
-    ), k = /* @__PURE__ */ new Map(), _ = D.map((s) => {
-      let l = Q(s.topic);
-      const d = k.get(l) ?? 0;
-      return k.set(l, d + 1), d > 0 && (l = `${l}_${d}`), { ...s, slug: l };
-    }), v = _.map((s) => {
-      const d = (s.body || "").split(`
-`), b = d.filter((f) => f.trim().length > 0), S = b.length > 0 ? Math.min(...b.map((f) => f.match(/^(\s*)/)?.[1].length ?? 0)) : 0, L = "            ", T = d.map((f) => {
-        if (!f.trim()) return "";
-        const w = f.slice(S);
-        return L + w;
-      }).join(`
-`), U = T.trim() ? `
-` + T : `
-            pass`;
-      return `async def handle_${s.slug}(drain, session):
-    _consecutive_errors = 0
-    while True:
-        try:
-            msg = await drain.get_latest()${U}
-            _consecutive_errors = 0
-        except Exception:
-            _consecutive_errors += 1
-            logger.warning("Error in handle_${s.slug}", exc_info=True)
-            if _consecutive_errors >= 5:
-                logger.error("handle_${s.slug}: %d consecutive errors, backing off", _consecutive_errors)
-                await asyncio.sleep(1.0)`;
-    }).join(`
-
-`), x = _.map(
-      (s) => `    ${s.slug}_drain = ${s.drainClass}(loop)
-    sub_${s.slug} = session.declare_subscriber("${s.topic}", ${s.slug}_drain.callback)
-    logger.info("Subscribing to ${s.topic}")`
-    ).join(`
-
-`), A = m.length > 0 ? `
-` + m.join(`
-`) + `
-` : "";
-    let g;
-    if (_.length === 1) {
-      const s = _[0];
-      g = `    task = asyncio.create_task(
-        handle_${s.slug}(${s.slug}_drain, session)
-    )
-
-    await stop.wait()
-    task.cancel()
-    try:
-        await task
-    except asyncio.CancelledError:
-        pass`;
-    } else {
-      const s = _.map(
-        (d) => `    task_${d.slug} = asyncio.create_task(
-        handle_${d.slug}(${d.slug}_drain, session)
-    )`
-      ).join(`
-`), l = _.map((d) => `task_${d.slug}`).join(", ");
-      g = `${s}
-
-    await stop.wait()
-    for t in [${l}]:
-        t.cancel()
-    await asyncio.gather(${l}, return_exceptions=True)`;
+    l(this, "import_logging", "import logging"), l(this, "import_signal", "import signal"), l(this, "import_time", "import time"), l(this, "import_zenoh", "import zenoh");
+    const d = this.definitions_, c = [];
+    for (const [n, r] of Object.entries(d))
+      n.startsWith("setup_") && c.push([n, r]);
+    c.sort((n, r) => n[0].localeCompare(r[0]));
+    const p = c.map(([, n]) => n);
+    for (const n of Object.keys(d))
+      n.startsWith("setup_") && delete d[n];
+    delete d.module_logger;
+    const _ = /* @__PURE__ */ new Set(["logging", "signal", "time", "sys", "os", "json"]), f = /* @__PURE__ */ new Set(["zenoh", "numpy", "cv2"]), b = [];
+    for (const [n, r] of Object.entries(d))
+      (n.startsWith("import_") || n.startsWith("module_")) && b.push(r);
+    const k = [], T = [], C = [];
+    for (const n of b) {
+      const r = n.match(/^(?:import|from)\s+(\w+)/)?.[1] ?? "";
+      _.has(r) ? k.push(n) : f.has(r) ? T.push(n) : C.push(n);
     }
-    const $ = _.map((s) => `        sub_${s.slug}.undeclare()`).join(`
-`), h = (s) => s.split(`
-`).map((l) => l.trim() ? "    " + l : l).join(`
-`), F = `async def main():
-    logging.basicConfig(level=logging.INFO)
-${A}
-    config = zenoh.Config()
-    session = zenoh.open(config)
-    loop = asyncio.get_running_loop()
-    stop = asyncio.Event()
+    k.sort(), T.sort(), C.sort();
+    const I = [k, T, C].filter((n) => n.length > 0).map((n) => n.join(`
+`)).join(`
 
-    for sig in (signal.SIGTERM, signal.SIGINT):
-        loop.add_signal_handler(sig, stop.set)
+`), N = e(o).split(`
+`).filter((n) => {
+      const r = n.trim();
+      return !(!r || r.startsWith("import ") || r.startsWith("from ") || /^\w+\s*=\s*None$/.test(r));
+    }).join(`
+`).trim(), w = [...s.handlers].sort(
+      (n, r) => n.topic.localeCompare(r.topic)
+    ), O = /* @__PURE__ */ new Map(), x = w.map((n) => {
+      let r = ye(n.topic);
+      const g = O.get(r) ?? 0;
+      return O.set(r, g + 1), g > 0 && (r = `${r}_${g}`), { ...n, slug: r };
+    }), z = `#!/usr/bin/env python3
+"""Generated by EdgeFirst Blockly v0.1.0"""`, U = `logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)`;
+    let v = "";
+    p.length > 0 && (v = `# --- Setup ---
 
-    try:
-${h(x)}
+${p.join(`
+`)}`);
+    const V = `# --- Signal handling ---
 
-${h(g)}
-    finally:
-${$}
-        session.close()`;
-    return [p, v, F, `if __name__ == "__main__":
-    asyncio.run(main())`].filter(
-      (s) => s.trim()
+running = True
+
+
+def on_exit(sig, frame):
+    global running
+    running = False
+
+
+signal.signal(signal.SIGTERM, on_exit)
+signal.signal(signal.SIGINT, on_exit)`, R = `# --- Handlers ---
+
+${x.map((n) => {
+      const r = n.body || "", g = n.msgType || "", H = n.msgVar || "msg", F = r.split(`
+`), E = F.filter((h) => h.trim().length > 0), j = E.length > 0 ? Math.min(...E.map((h) => h.match(/^(\s*)/)?.[1].length ?? 0)) : 0, W = "    ", D = F.map((h) => {
+        if (!h.trim()) return "";
+        const X = h.slice(j);
+        return W + X;
+      }).join(`
+`), Y = g ? `
+    ${H} = ${g}.deserialize(sample.payload.to_bytes())` : "", J = D.trim() ? `
+` + D : `
+    pass`, K = g ? "sample" : "msg", Z = g ? ` ${g}` : "";
+      return `def on_${n.slug}(${K}):
+    """Handle${Z} messages from ${n.topic}."""${Y}${J}`;
+    }).map((n) => n.replace(/\n+$/, "")).join(`
+
+
+`)}`, G = `# --- Main ---
+
+session = zenoh.open(zenoh.Config())
+
+${x.map(
+      (n) => `session.declare_subscriber("${n.topic}", on_${n.slug})
+logger.info("Listening on ${n.topic}")`
     ).join(`
 
+`)}
+
+while running:
+    time.sleep(0.1)
+
+session.close()`, y = [z];
+    return I && y.push(I), N && y.push(N), y.push(U), v && y.push(v), y.push(V), y.push(R), y.push(G), y.join(`
 
 `) + `
 `;
   };
 }
-const ne = {
+function be() {
+  const t = [];
+  t.push({
+    kind: "block",
+    type: "edgefirst_on_message"
+  }), t.push({ kind: "sep", gap: "24" });
+  for (const e of u)
+    for (const o of e.types)
+      o.fields.length !== 0 && t.push({
+        kind: "block",
+        type: `edgefirst_field_${o.python.toLowerCase()}`
+      });
+  return t;
+}
+const Be = {
   kind: "categoryToolbox",
   contents: [
+    {
+      kind: "category",
+      name: "Messages",
+      categoryStyle: "messages_category",
+      contents: be()
+    },
     {
       kind: "category",
       name: "Zenoh",
@@ -686,31 +801,11 @@ const ne = {
       contents: [
         {
           kind: "block",
-          type: "edgefirst_zenoh_on_message",
-          fields: { TOPIC: "rt/camera/dma" }
-        },
-        {
-          kind: "block",
           type: "edgefirst_zenoh_publish"
         },
         {
           kind: "block",
           type: "edgefirst_zenoh_topic"
-        }
-      ]
-    },
-    {
-      kind: "category",
-      name: "Camera",
-      categoryStyle: "camera_category",
-      contents: [
-        {
-          kind: "block",
-          type: "edgefirst_camera_frame"
-        },
-        {
-          kind: "block",
-          type: "edgefirst_camera_info"
         }
       ]
     },
@@ -726,14 +821,7 @@ const ne = {
         },
         {
           kind: "block",
-          type: "edgefirst_model_run",
-          inputs: {
-            INPUT: {
-              shadow: {
-                type: "edgefirst_camera_frame"
-              }
-            }
-          }
+          type: "edgefirst_model_run"
         },
         {
           kind: "block",
@@ -779,15 +867,7 @@ const ne = {
       contents: [
         {
           kind: "block",
-          type: "edgefirst_data_deserialize"
-        },
-        {
-          kind: "block",
           type: "edgefirst_data_serialize"
-        },
-        {
-          kind: "block",
-          type: "edgefirst_data_box_field"
         },
         {
           kind: "block",
@@ -874,13 +954,13 @@ const ne = {
       ]
     }
   ]
-}, re = u.Theme.defineTheme("edgefirst", {
+}, Ie = m.Theme.defineTheme("edgefirst", {
   name: "edgefirst",
-  base: u.Themes.Classic,
+  base: m.Themes.Classic,
   blockStyles: {
     hat_blocks: { colourPrimary: "#2962FF", hat: "cap" },
     zenoh_blocks: { colourPrimary: "#2962FF" },
-    camera_blocks: { colourPrimary: "#2E7D32" },
+    messages_blocks: { colourPrimary: "#2962FF" },
     model_blocks: { colourPrimary: "#7B1FA2" },
     processing_blocks: { colourPrimary: "#E65100" },
     data_blocks: { colourPrimary: "#00838F" },
@@ -888,7 +968,7 @@ const ne = {
   },
   categoryStyles: {
     zenoh_category: { colour: "#2962FF" },
-    camera_category: { colour: "#2E7D32" },
+    messages_category: { colour: "#2962FF" },
     model_category: { colour: "#7B1FA2" },
     processing_category: { colour: "#E65100" },
     data_category: { colour: "#00838F" },
@@ -904,7 +984,7 @@ const ne = {
     scrollbarColour: "#797979",
     scrollbarOpacity: 0.4
   }
-}), ie = {
+}), Ne = {
   /** Raw DMA buffer from the camera hardware, produced by the Camera Frame block. */
   DMABuffer: "DMABuffer",
   /** Processed image (numpy array), produced by resize/convert/crop blocks. */
@@ -922,18 +1002,20 @@ const ne = {
   /** Raw byte buffer, used for serialized CDR messages. */
   Bytes: "Bytes"
 };
-function ae() {
-  X(), ee();
+function Oe() {
+  _e(), he();
 }
 export {
-  ie as CONNECTION_TYPES,
-  a as addDefinition,
-  re as edgefirstTheme,
-  ne as edgefirstToolbox,
-  y as escapePython,
-  Z as getEdgeFirstState,
-  ae as register,
-  X as registerEdgeFirstBlocks,
-  ee as registerEdgeFirstGenerators
+  Ne as CONNECTION_TYPES,
+  u as SCHEMA_REGISTRY,
+  l as addDefinition,
+  Ie as edgefirstTheme,
+  Be as edgefirstToolbox,
+  B as escapePython,
+  fe as getEdgeFirstState,
+  Oe as register,
+  _e as registerEdgeFirstBlocks,
+  he as registerEdgeFirstGenerators,
+  ye as slugifyTopic
 };
 //# sourceMappingURL=edgefirst-blockly.es.js.map
