@@ -533,45 +533,63 @@ function toggleLogs(forceState) {
     }
 }
 
+// Track last displayed message text across reconnections
+let lastLogText = '';
+let logProgramStopped = false;
+
 function connectLogStream() {
     if (logWebSocket) {
         logWebSocket.close();
         logWebSocket = null;
     }
 
-    let lastLogMessage = '';
+    logProgramStopped = false;
 
     logWebSocket = connectLogs(programId, (msg) => {
-        logReconnectDelay = 100; // Reset on successful message
+        logReconnectDelay = 100;
 
-        // Suppress repeated identical messages (e.g., "not running" spam)
         const msgText = msg.message || '';
-        if (msgText === lastLogMessage) return;
-        lastLogMessage = msgText;
 
-        const line = document.createElement('div');
-        line.className = `log-line ${msg.level || 'info'}`;
-        const ts = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : '';
-        line.textContent = `[${ts}] ${msgText}`;
-
-        // Auto-scroll only if user is already near the bottom
-        const atBottom = logBody.scrollHeight - logBody.scrollTop - logBody.clientHeight < 40;
-
-        logBody.appendChild(line);
-
-        while (logBody.children.length > LOG_BUFFER_MAX) {
-            logBody.removeChild(logBody.firstChild);
+        // Detect "not running" status messages — show once as a status line, stop reconnecting
+        if (msgText.toLowerCase().includes('not running')) {
+            if (!logProgramStopped) {
+                logProgramStopped = true;
+                appendLogLine('Program is not running', 'warn');
+            }
+            return;
         }
 
-        if (atBottom) {
-            logBody.scrollTop = logBody.scrollHeight;
-        }
+        // Suppress consecutive duplicate lines
+        if (msgText === lastLogText) return;
+        lastLogText = msgText;
+
+        appendLogLine(`[${msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : ''}] ${msgText}`, msg.level || 'info');
     }, () => {
+        // Don't reconnect if the program is stopped — no point hammering the server
+        if (logProgramStopped) return;
+
         if (logVisible && programId && document.visibilityState !== 'hidden') {
             setTimeout(connectLogStream, logReconnectDelay);
             logReconnectDelay = Math.min(logReconnectDelay * 2, 8000);
         }
     });
+}
+
+function appendLogLine(text, level) {
+    const line = document.createElement('div');
+    line.className = `log-line ${level}`;
+    line.textContent = text;
+
+    const atBottom = logBody.scrollHeight - logBody.scrollTop - logBody.clientHeight < 40;
+    logBody.appendChild(line);
+
+    while (logBody.children.length > LOG_BUFFER_MAX) {
+        logBody.removeChild(logBody.firstChild);
+    }
+
+    if (atBottom) {
+        logBody.scrollTop = logBody.scrollHeight;
+    }
 }
 
 // Reconnect on tab visibility

@@ -227,36 +227,51 @@ function hideLogs() {
     }
 }
 
+let lastProgramLogText = '';
+let logProgramStopped = false;
+
+function appendProgramLogLine(text, level) {
+    const line = document.createElement('div');
+    line.className = `log-line ${level}`;
+    line.textContent = text;
+
+    const atBottom = logPanelBody.scrollHeight - logPanelBody.scrollTop - logPanelBody.clientHeight < 40;
+    logPanelBody.appendChild(line);
+
+    while (logPanelBody.children.length > LOG_BUFFER_MAX) {
+        logPanelBody.removeChild(logPanelBody.firstChild);
+    }
+
+    if (atBottom) {
+        logPanelBody.scrollTop = logPanelBody.scrollHeight;
+    }
+}
+
 function connectLogStream(id) {
-    let lastLogMessage = '';
+    logProgramStopped = false;
 
     logWebSocket = connectLogs(id, (msg) => {
-        logReconnectDelay = 100; // Reset on successful message
+        logReconnectDelay = 100;
 
-        // Suppress repeated identical messages
         const msgText = msg.message || '';
-        if (msgText === lastLogMessage) return;
-        lastLogMessage = msgText;
 
-        const line = document.createElement('div');
-        line.className = `log-line ${msg.level || 'info'}`;
-        const ts = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : '';
-        line.textContent = `[${ts}] ${msgText}`;
-
-        // Auto-scroll only if user is near the bottom
-        const atBottom = logPanelBody.scrollHeight - logPanelBody.scrollTop - logPanelBody.clientHeight < 40;
-
-        logPanelBody.appendChild(line);
-
-        while (logPanelBody.children.length > LOG_BUFFER_MAX) {
-            logPanelBody.removeChild(logPanelBody.firstChild);
+        // Detect "not running" — show once, stop reconnecting
+        if (msgText.toLowerCase().includes('not running')) {
+            if (!logProgramStopped) {
+                logProgramStopped = true;
+                appendProgramLogLine('Program is not running', 'warn');
+            }
+            return;
         }
 
-        if (atBottom) {
-            logPanelBody.scrollTop = logPanelBody.scrollHeight;
-        }
+        // Suppress consecutive duplicates
+        if (msgText === lastProgramLogText) return;
+        lastProgramLogText = msgText;
+
+        appendProgramLogLine(`[${msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : ''}] ${msgText}`, msg.level || 'info');
     }, () => {
-        // Reconnect with backoff, paused when hidden
+        if (logProgramStopped) return;
+
         if (activeLogId === id && document.visibilityState !== 'hidden') {
             setTimeout(() => {
                 if (activeLogId === id) connectLogStream(id);
