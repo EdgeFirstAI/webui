@@ -565,9 +565,7 @@
                     <!-- Hidden Model Children -->
                     <input type="checkbox" id="topic_model_info" name="topics" value="/model/info"
                         style="display: none;">
-                    <input type="checkbox" id="topic_model_boxes2d" name="topics" value="/model/boxes2d"
-                        style="display: none;">
-                    <input type="checkbox" id="topic_model_mask" name="topics" value="/model/mask_compressed"
+                    <input type="checkbox" id="topic_model_output" name="topics" value="/model/output"
                         style="display: none;">
 
                     <!-- Fusion Parent -->
@@ -616,8 +614,7 @@
             '/camera/h264',
             '/camera/jpeg',
             '/model/info',
-            '/model/boxes2d',
-            '/model/mask_compressed',
+            '/model/output',
             '/fusion/radar',
             '/fusion/lidar',
             '/fusion/occupancy'
@@ -979,8 +976,7 @@
             const isChecked = this.checked;
             const modelChildren = [
                 'topic_model_info',
-                'topic_model_boxes2d',
-                'topic_model_mask'
+                'topic_model_output'
             ];
 
             modelChildren.forEach(childId => {
@@ -1011,7 +1007,7 @@
 
         // Update the initialization function to handle model and fusion topics
         function initializeModelState() {
-            const modelTopics = ['/model/info', '/model/boxes2d', '/model/mask_compressed'];
+            const modelTopics = ['/model/info', '/model/output'];
             const fusionTopics = ['/fusion/radar', '/fusion/lidar', '/fusion/occupancy'];
 
             const hasModelTopics = modelTopics.some(topic => existingTopics.includes(topic));

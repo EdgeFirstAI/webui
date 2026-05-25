@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.1.1] - 2026-05-25
+
+### Changed
+
+- Migrated `combined.js` and `segmentation.js` from the legacy split `/detect/boxes2d/` + `/detect/mask/` topics to the unified `/model/output/` `Model.msg` published by the EdgeFirst `model` service
+- Extracted the camera page's shader-based segmentation overlay into a reusable `segOverlay.js` module that handles both instance (`boxed=true`) and semantic masks
+- `combined.js` falls back to `Box.distance` / `Box.speed` (populated by the fusion service in the unified Model.msg) when radar projection data is unavailable
+- MCAP recorder config now records `/model/output` in place of `/model/boxes2d` and `/model/mask_compressed`
+
+### Removed
+
+- Legacy parsers `boxes.js` (`Detect.msg`) and `mask.js` (compressed semantic-tensor mask) — superseded by `model.js` parsing the unified `Model.msg`
+- `ProjectedMask.js` THREE.js material — replaced by the shader in `segOverlay.js`
+- `fzstd.js` zstd decoder — masks are now uncompressed, with compression handled by the WebSocket transport layer
+- Orphaned `module.js` WASM/zstd codec shim
+- Defensive zstd-encoding throw in `model.js` (the encoding field is always empty in the new schema)
+
 ## [4.1.0] - 2026-05-25
 
 ### Added

@@ -46,9 +46,6 @@ function parseMask(reader) {
     const width = reader.uint32()
     const length = reader.uint32()
     const encoding = reader.string()
-    if (encoding === 'zstd') {
-        throw new Error('model.js does not support zstd-encoded masks; use mask.js instead')
-    }
     const mask = reader.uint8Array()
     const boxed = reader.int8() > 0
     return { height, width, length, encoding, mask, boxed }
