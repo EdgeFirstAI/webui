@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.1.0] - 2026-05-25
+
+### Added
+
+- TemporalSync module for camera-model frame synchronization with an ImageBitmap ring buffer, EMA-based latency estimation, and adaptive buffer sizing
+- Camera page integration of TemporalSync to align decoded video frames with model overlays via ROS timestamp correlation
+- Temporal sync stats HUD on camera page showing model latency, throughput, and buffer depth (`data-testid="camera-sync-stats"`)
+- `onMergedFrame` callback and latest ROS timestamp tracking in SmartVideoManager for tile-mode temporal sync
+- Separate `fallbackH264StreamFunc` parameter in `SmartVideoManager.init()` so tile and fallback streams can use different decode pipelines
+- `captureFrames` mode and ROS timestamp passthrough (`rosTimeSec`, `rosTimeNsec`) in `stream.js` for ImageBitmap-based frame capture
+
+### Fixed
+
+- Blank tile-mode composites during TemporalSync integration — tiles continue to use canvas-drawing `h264Stream` while only the fallback stream uses `captureFrames`
+- ImageBitmap leak in TemporalSync when `releaseCallback` is null (both uncalibrated passthrough and calibrated release paths now close bitmaps)
+
 ## [4.0.1] - 2026-03-12
 
 ### Fixed
