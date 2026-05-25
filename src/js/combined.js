@@ -56,7 +56,7 @@ let CAMERA_PCD_LABEL = "disabled"
 let DRAW_BOX = true
 let DRAW_BOX_TEXT = true
 
-let socketUrlH264 = '/api/rt/camera/h264/'
+// Note: H.264 stream URLs are owned by SmartVideoManager (tiles + fallback).
 let socketUrlPcd = '/api/rt/radar/targets/'
 let socketUrlModel = '/api/rt/model/output/'
 let socketUrlErrors = '/api/ws/dropped'

@@ -56,10 +56,12 @@ function parseModelMsg(arrayBuffer) {
     const reader = new CdrReader(dataView)
 
     const header = parseHeader(reader)
-    const input_time = parseTime(reader)
-    const model_time = parseTime(reader)
-    const output_time = parseTime(reader)
-    const decode_time = parseTime(reader)
+    // Skip past the four Duration timing fields — they're part of the wire
+    // format but nothing in the webui consumes them today.
+    parseTime(reader)
+    parseTime(reader)
+    parseTime(reader)
+    parseTime(reader)
 
     const boxCount = reader.sequenceLength()
     const boxes = []

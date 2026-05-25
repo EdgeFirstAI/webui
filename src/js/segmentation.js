@@ -41,7 +41,7 @@ let texture_camera
 let material_proj
 let modelData = null
 
-const socketUrlH264 = '/api/rt/camera/h264/'
+// Note: H.264 stream URLs are owned by SmartVideoManager (tiles + fallback).
 const socketUrlModel = '/api/rt/model/output/'
 const socketUrlModelInfo = '/api/rt/model/info/'
 const socketUrlErrors = '/api/ws/dropped'
