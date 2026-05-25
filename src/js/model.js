@@ -46,9 +46,6 @@ function parseMask(reader) {
     const width = reader.uint32()
     const length = reader.uint32()
     const encoding = reader.string()
-    if (encoding === 'zstd') {
-        throw new Error('model.js does not support zstd-encoded masks; use mask.js instead')
-    }
     const mask = reader.uint8Array()
     const boxed = reader.int8() > 0
     return { height, width, length, encoding, mask, boxed }
@@ -59,10 +56,12 @@ function parseModelMsg(arrayBuffer) {
     const reader = new CdrReader(dataView)
 
     const header = parseHeader(reader)
-    const input_time = parseTime(reader)
-    const model_time = parseTime(reader)
-    const output_time = parseTime(reader)
-    const decode_time = parseTime(reader)
+    // Skip past the four Duration timing fields — they're part of the wire
+    // format but nothing in the webui consumes them today.
+    parseTime(reader)
+    parseTime(reader)
+    parseTime(reader)
+    parseTime(reader)
 
     const boxCount = reader.sequenceLength()
     const boxes = []
