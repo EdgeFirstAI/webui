@@ -82,8 +82,8 @@ sequenceDiagram
     participant Z as Zenoh
     participant S as Services
 
-    B->>W: WebSocket connect /rt/camera/h264
-    W->>Z: Subscribe rt/camera/h264
+    B->>W: WebSocket connect /api/rt/camera/h264?compress=false
+    W->>Z: Subscribe camera/h264
     S->>Z: Publish H.264 frames
     Z->>W: Forward messages
     W->>B: Stream CDR binary data
@@ -92,25 +92,29 @@ sequenceDiagram
 
 ### WebSocket Topics
 
+HTTP paths stay under `/api/rt/…`. WebSRV maps the path remainder to a bare
+Zenoh application key (`camera/h264`); the session namespace prefixes the
+hostname on the wire (`{hostname}/camera/h264`).
+
 **Video Streaming:**
-- `/rt/camera/h264` - Single H.264 stream
-- `/rt/camera/h264/{tl,tr,bl,br}` - Tiled 4K video quadrants
+- `/api/rt/camera/h264?compress=false` → `camera/h264` — Single H.264 stream
+- `/api/rt/camera/h264/{tl,tr,bl,br}?compress=false` → `camera/h264/{tl,tr,bl,br}` — Tiled 4K quadrants
 
 **AI Outputs:**
-- `/rt/model/output` - Unified model output (detection boxes + segmentation masks)
+- `/api/rt/model/output/` → `model/output` — Unified model output (boxes + masks)
 
 **LiDAR & Fusion:**
-- `/rt/lidar/points` - Raw LiDAR point cloud (PointCloud2)
-- `/rt/lidar/clusters` - Enriched LiDAR with cluster/class IDs
-- `/rt/fusion/lidar` - Fused lidar data
-- `/rt/tf_static` - Static transforms (LiDAR→camera extrinsics)
-- `/rt/camera/info` - Camera intrinsics (focal length, principal point)
+- `/api/rt/lidar/points/` → `lidar/points` — Raw LiDAR point cloud (PointCloud2)
+- `/api/rt/lidar/clusters/` → `lidar/clusters` — Enriched LiDAR with cluster/class IDs
+- `/api/rt/fusion/lidar/` → `fusion/lidar` — Fused lidar data
+- `/api/rt/tf_static/` → `tf_static` — Static transforms (LiDAR→camera extrinsics)
+- `/api/rt/camera/info/` → `camera/info` — Camera intrinsics
 
 **Sensors:**
-- `/rt/radar/targets` - Radar point cloud
-- `/rt/fusion/radar` - Fused radar data
-- `/rt/gps/*` - GPS position
-- `/rt/imu/*` - IMU orientation
+- `/api/rt/radar/targets/` → `radar/targets` — Radar point cloud
+- `/api/rt/fusion/radar/` → `fusion/radar` — Fused radar data
+- `/api/rt/gps/` → `gps` — GPS position
+- `/api/rt/imu/` → `imu` — IMU orientation
 
 ### Priority Queuing
 

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Camera config Mirror dropdown defaults to **Both** (vflip+hflip) for the
+  upside-down Maivin/Raivin sensor mount.
+- Fusion config default radar input topic is `radar/clusters` (no `rt/`
+  prefix), matching the hostname-namespaced Zenoh keys from EDGEAI-1396.
+  Browser WebSocket URLs stay under `/api/rt/…`; WebSRV maps that HTTP path
+  to the bare application key.
+
 ## [4.1.1] - 2026-05-25
 
 ### Changed
