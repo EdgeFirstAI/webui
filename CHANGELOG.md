@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.2.0] - 2026-08-31
+
 ### Changed
 - Camera config Mirror dropdown defaults to **Both** (vflip+hflip) for the
   upside-down Maivin/Raivin sensor mount.
