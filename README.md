@@ -90,7 +90,7 @@ webui/
 │   ├── camera.html         # Camera visualization
 │   ├── combined.html       # Multi-modal view
 │   ├── combined_lidar.html # 3D lidar view
-│   ├── grid.html           # Occupancy grid
+│   ├── grid.html           # Radar point cloud view
 │   ├── segmentation.html   # Segmentation only
 │   ├── gps.html            # GPS map
 │   ├── imu.html            # IMU orientation

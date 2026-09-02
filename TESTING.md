@@ -270,7 +270,8 @@ Test on supported browsers:
 - [ ] Mask aligns with video
 
 **Sensors:**
-- [ ] Radar points render (Raivin)
+- [ ] Radar points render on the Radar page (Raivin)
+- [ ] Radar page Source/Colour/Elevation controls update the view
 - [ ] Lidar points render
 - [ ] GPS map shows position
 - [ ] IMU orientation displays
@@ -388,8 +389,18 @@ data-testid="<page>-<element>-<name>"
 - `jpeg-image-container` - Image container
 - `jpeg-image` - JPEG image element
 
-**Grid Page (`grid.html`):**
+**Radar Page (`grid.html`):**
 - `grid-main-container` - Main container
+- `grid-viewport` - 3D viewport container
+- `grid-controls` - Controls container (dropdowns + toggles)
+- `grid-source` - Source selector (Radar Targets, Radar Clusters, Fusion Radar)
+- `grid-color-mode` - Colour mode selector (Fixed, Distance, plus Speed/Power/RCS/Cluster/Vision Class/Track ID/Instance ID when the stream carries the field)
+- `grid-elevation-filter` - Elevation toggle container
+- `grid-show-elevation` - Elevation checkbox (draw points at their `z` height instead of flat on the grid)
+- `grid-bg-filter` - Draw Background toggle container (visible in Vision Class mode when a background class is detected)
+- `grid-show-background` - Draw Background checkbox
+- `grid-fusion-warning` - Hint banner when the selected source is not publishing
+- `grid-unavailable` - Overlay when radar data is not being received
 
 **Settings Page (`config/settings.html`):**
 - `settings-card-recorder`

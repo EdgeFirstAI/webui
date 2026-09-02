@@ -57,7 +57,9 @@ The WebSRV backend subscribes to Zenoh topics and bridges them to WebSocket endp
 | `boxes.js` | 2D bounding box overlay rendering on Canvas. |
 | `mask.js` / `ProjectedMask.js` | Segmentation mask decompression (Zstandard WASM) and WebGL overlay. |
 | `lidar.js` | 3D LiDAR point cloud viewer using Three.js with orbit controls and multiple color modes. |
-| `pointcloud2.js` | ROS PointCloud2 message parser for LiDAR data. |
+| `grid.js` | Radar point cloud viewer on a polar range/bearing grid with source, colour mode, and elevation controls. |
+| `pointColors.js` | Shared colour helpers (Turbo, distance, cluster ID, diverging speed, theme-aware fixed) for the LiDAR and Radar viewers. |
+| `pointcloud2.js` | ROS PointCloud2 message parser for LiDAR and radar data. |
 
 ### Service-Enabled Gating Pattern
 
