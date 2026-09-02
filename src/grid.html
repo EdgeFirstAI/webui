@@ -22,72 +22,117 @@
         body {
             margin: 0;
             display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
         }
 
         main {
             display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        #grid-viewport {
+            width: 100%;
             height: 100%;
-        }
-
-        #info {
-            position: absolute;
-            left: 10px;
-            top: 10px;
-            text-align: left;
-            z-index: 100;
-            display: block;
-            font-family: Verdana, Geneva, Tahoma, sans-serif;
-        }
-
-        #legend {
-            display: flex;
-            flex-direction: column;
-            border: 1px solid #ccc;
-            padding: 10px;
-            width: 150px;
-            height: fit-content;
             position: relative;
-            background-color: var(--color-overlay-bg);
         }
 
-        .navbar-end .btn-circle svg {
-            width: 24px;
-            height: 24px;
-            color: white;
+        #grid-viewport canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
         }
 
-        .navbar-end .btn-circle:hover svg {
-            color: #e2e8f0;
-        }
-
-        .navbar-end .menu {
+        #grid-controls {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            z-index: 10;
             display: flex;
             align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
         }
 
-        .navbar-end .btn-circle.btn-lg {
-            width: 3rem;
-            height: 3rem;
+        #grid-controls select {
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid var(--color-border);
+            background-color: var(--color-bg-surface);
+            color: var(--color-text-primary);
+            font-size: 14px;
+            font-family: inherit;
+            cursor: pointer;
+            box-shadow: 0 2px 4px var(--color-shadow);
+        }
+
+        #grid-controls select:focus {
+            outline: 2px solid var(--brand-gold);
+            outline-offset: 2px;
+        }
+
+        .grid-toggle {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid var(--color-border);
+            background-color: var(--color-bg-surface);
+            color: var(--color-text-primary);
+            font-size: 13px;
+            box-shadow: 0 2px 4px var(--color-shadow);
+        }
+
+        .grid-toggle label {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .grid-toggle input[type="checkbox"] {
+            accent-color: var(--brand-gold);
+        }
+
+        #bg-filter {
+            display: none;
+        }
+
+        #fusion-warning {
+            display: none;
+            position: absolute;
+            bottom: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+            padding: 8px 16px;
+            border-radius: 6px;
+            background-color: var(--color-status-warning);
+            color: #1a1625;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        #grid-unavailable {
+            position: absolute;
+            inset: 0;
+            z-index: 20;
             display: flex;
             align-items: center;
             justify-content: center;
+            pointer-events: none;
         }
 
-        .navbar-end .btn-circle.btn-lg svg {
-            margin-top: -5px;
-            width: 25px;
-            height: 25px;
-            color: white;
-        }
-
-        .navbar-end .btn-circle.btn-lg:hover svg {
-            color: #e2e8f0;
-        }
-
-        /* Add mode indicator styles */
-        #modeIndicator {
-            transition: all 0.3s ease;
-            white-space: nowrap;
+        #grid-unavailable span {
+            font-size: 2rem;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            color: var(--color-text-muted);
         }
     </style>
 
@@ -96,12 +141,32 @@
 <body>
     <script>
         window.addEventListener('load', () => {
-            initNavbar('Grid');
+            initNavbar('Radar');
             NeuralMesh.init();
         });
     </script>
     <main id="grid-main-container" data-testid="grid-main-container" class="bg-neural">
-        <!-- Grid content here -->
+        <div id="grid-viewport" data-testid="grid-viewport">
+            <div id="grid-controls" data-testid="grid-controls">
+                <select id="source-select" data-testid="grid-source" aria-label="Radar source">
+                    <option value="targets" selected>Radar Targets</option>
+                    <option value="clusters">Radar Clusters</option>
+                    <option value="fusion">Fusion Radar</option>
+                </select>
+                <select id="color-mode" data-testid="grid-color-mode" aria-label="Colour mode">
+                    <option value="fixed">Fixed</option>
+                    <option value="distance" selected>Distance</option>
+                </select>
+                <div id="elevation-filter" class="grid-toggle" data-testid="grid-elevation-filter">
+                    <label><input type="checkbox" id="show-elevation" data-testid="grid-show-elevation"> Elevation</label>
+                </div>
+                <div id="bg-filter" class="grid-toggle" data-testid="grid-bg-filter">
+                    <label><input type="checkbox" id="show-background" data-testid="grid-show-background"> Draw Background</label>
+                </div>
+            </div>
+            <div id="fusion-warning" data-testid="grid-fusion-warning"></div>
+            <div id="grid-unavailable" data-testid="grid-unavailable"><span>Radar Unavailable</span></div>
+        </div>
     </main>
     <script type="module" src="./js/grid.js"></script>
 </body>

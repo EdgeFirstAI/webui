@@ -165,7 +165,7 @@ The SmartVideoManager handles tile detection and synchronization:
 | `camera.html` | Camera stream with segmentation, bounding box, and LiDAR overlays |
 | `lidar.html` | 3D LiDAR point cloud with colour modes and cluster filtering |
 | `combined.html` | Split view: video, segmentation, radar grid |
-| `grid.html` | Occupancy grid visualization |
+| `grid.html` | Radar point cloud on a polar range/bearing grid with source, colour mode, and elevation controls |
 | `segmentation.html` | Segmentation mask only |
 | `jpeg.html` | JPEG camera viewer |
 | `gps.html` | GPS map tracking |

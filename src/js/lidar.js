@@ -6,6 +6,7 @@ import { OrbitControls } from './OrbitControls.js'
 import { PCDLoader } from './PCDLoader.js'
 import ModelInfo from './modelInfo.js'
 import { mask_colors } from './utils.js'
+import { distanceColor, clusterColor, getFixedColor, neutralGrey, resolveIsDark, getBgColorFromCSS } from './pointColors.js'
 import { parsePointCloud2, extractFieldArray } from './pointcloud2.js'
 
 // ---------------------------------------------------------------------------
@@ -60,7 +61,7 @@ camera.position.set(0, 5, 10)
 camera.lookAt(0, 0, 0)
 
 const scene = new THREE.Scene()
-scene.background = getBgColorFromCSS()
+scene.background = getBgColorFromCSS(cachedIsDark)
 
 const controls = new OrbitControls(camera, renderer.domElement)
 controls.enableDamping = true
@@ -132,113 +133,14 @@ function resetEnrichedColorModes() {
 // Part B: Colour Mode Logic
 // ---------------------------------------------------------------------------
 
-/**
- * Attempt to read the CSS variable --color-bg-base from the root element and
- * return a THREE.Color. Falls back to a sensible dark/light default.
- */
-function getBgColorFromCSS() {
-    const style = getComputedStyle(document.documentElement)
-    const raw = style.getPropertyValue('--color-bg-base').trim()
-    if (raw) {
-        try {
-            return new THREE.Color(raw)
-        } catch (_) { /* fall through */ }
-    }
-    // Fallback
-    return cachedIsDark ? new THREE.Color(0x1a1625) : new THREE.Color(0xf0f2f5)
-}
 
-/**
- * Polynomial approximation of the Turbo colourmap.
- * Input: t in [0, 1]. Output: { r, g, b } each in [0, 1].
- */
-function turboColormap(t) {
-    t = Math.max(0, Math.min(1, t))
 
-    const r = 0.13572138 + t * (4.61539260 + t * (-42.66032258 + t * (132.13108234 + t * (-152.94239396 + t * 59.28637943))))
-    const g = 0.09140261 + t * (2.19418839 + t * (4.84296658 + t * (-14.18503333 + t * (4.27729857 + t * 2.82956604))))
-    const b = 0.10667330 + t * (12.64194608 + t * (-60.58204836 + t * (110.36276771 + t * (-89.90310912 + t * 27.34824973))))
 
-    return {
-        r: Math.max(0, Math.min(1, r)),
-        g: Math.max(0, Math.min(1, g)),
-        b: Math.max(0, Math.min(1, b))
-    }
-}
 
-/**
- * Apply the distance colourmap. In dark mode we use turbo directly; in light
- * mode we darken and saturate the output so points are vivid against the
- * bright background.
- */
-function distanceColor(t) {
-    const c = turboColormap(t)
-    if (cachedIsDark) return c
-
-    // Light mode: increase saturation and darken to improve contrast
-    const max = Math.max(c.r, c.g, c.b, 1e-6)
-    const boost = 1.0 / max           // normalise so the brightest channel = 1
-    let r = c.r * boost
-    let g = c.g * boost
-    let b = c.b * boost
-
-    // Then darken by 30 % so the colours are rich, not washed-out
-    const darken = 0.70
-    r *= darken
-    g *= darken
-    b *= darken
-
-    return {
-        r: Math.max(0, Math.min(1, r)),
-        g: Math.max(0, Math.min(1, g)),
-        b: Math.max(0, Math.min(1, b))
-    }
-}
-
-/**
- * Generate a distinct colour for a cluster ID using golden-angle hue spacing.
- * Returns { r, g, b } each in [0, 1].
- */
-function clusterColor(id) {
-    if (id <= 0) return cachedIsDark ? { r: 0.3, g: 0.3, b: 0.35 } : { r: 0.6, g: 0.6, b: 0.65 }
-
-    // Golden angle gives good hue separation between adjacent IDs
-    const hue = (id * 137.508) % 360
-    const sat = cachedIsDark ? 0.75 : 0.85
-    const light = cachedIsDark ? 0.60 : 0.45
-
-    // HSL → RGB
-    const c = (1 - Math.abs(2 * light - 1)) * sat
-    const x = c * (1 - Math.abs(((hue / 60) % 2) - 1))
-    const m = light - c / 2
-    let r, g, b
-    if (hue < 60) { r = c; g = x; b = 0 }
-    else if (hue < 120) { r = x; g = c; b = 0 }
-    else if (hue < 180) { r = 0; g = c; b = x }
-    else if (hue < 240) { r = 0; g = x; b = c }
-    else if (hue < 300) { r = x; g = 0; b = c }
-    else { r = c; g = 0; b = x }
-    return { r: r + m, g: g + m, b: b + m }
-}
-
-/**
- * Resolve the current theme to a boolean (hits DOM + matchMedia).
- * Call sparingly — use cachedIsDark in hot paths.
- */
-function resolveIsDark() {
-    const theme = document.documentElement.getAttribute('data-theme') || 'auto'
-    return window.ThemeManager ? window.ThemeManager.isDark(theme) : true
-}
 
 // Initialise the cache now that DOM is ready
 cachedIsDark = resolveIsDark()
 
-/**
- * Fixed colour — lavender for dark theme, deep purple for light theme.
- */
-function getFixedColor() {
-    return cachedIsDark ? new THREE.Color(0xE6E6FA) : new THREE.Color(0x3E3371)
-}
 
 /**
  * Apply the current colour mode to every Points child inside a Three.js group.
@@ -254,7 +156,7 @@ function applyColorMode(group) {
         const colors = new Float32Array(count * 3)
 
         if (currentColorMode === 'fixed') {
-            const c = getFixedColor()
+            const c = getFixedColor(cachedIsDark)
             for (let i = 0; i < count; i++) {
                 colors[i * 3] = c.r
                 colors[i * 3 + 1] = c.g
@@ -277,7 +179,7 @@ function applyColorMode(group) {
                 const y = posAttr.getY(i)
                 const z = posAttr.getZ(i)
                 const t = Math.min(Math.sqrt(x * x + y * y + z * z) / maxDist, 1.0)
-                const c = distanceColor(t)
+                const c = distanceColor(t, cachedIsDark)
                 colors[i * 3] = c.r
                 colors[i * 3 + 1] = c.g
                 colors[i * 3 + 2] = c.b
@@ -292,7 +194,7 @@ function applyColorMode(group) {
             for (let i = 0; i < count; i++) {
                 const id = (hasData && i < lastParsedPoints.length)
                     ? lastParsedPoints[i] : 0
-                const c = clusterColor(id)
+                const c = clusterColor(id, cachedIsDark)
                 colors[i * 3] = c.r
                 colors[i * 3 + 1] = c.g
                 colors[i * 3 + 2] = c.b
@@ -301,8 +203,8 @@ function applyColorMode(group) {
             const hasData = lastParsedPoints.length > 0
             if (!hasData) showFusionWarning()
 
-            const gr = cachedIsDark ? 0.35 : 0.7
-            const generic = getFixedColor()
+            const gr = neutralGrey(cachedIsDark)
+            const generic = getFixedColor(cachedIsDark)
             for (let i = 0; i < count; i++) {
                 const cls = (hasData && i < lastParsedPoints.length)
                     ? lastParsedPoints[i] : 0
@@ -326,7 +228,7 @@ function applyColorMode(group) {
             const hasData = lastParsedPoints.length > 0
             if (!hasData) showFusionWarning()
 
-            const gr = cachedIsDark ? 0.35 : 0.7
+            const gr = neutralGrey(cachedIsDark)
             for (let i = 0; i < count; i++) {
                 const tid = (hasData && i < lastParsedPoints.length)
                     ? lastParsedPoints[i] : 0
@@ -335,7 +237,7 @@ function applyColorMode(group) {
                     colors[i * 3 + 1] = gr
                     colors[i * 3 + 2] = gr
                 } else {
-                    const c = clusterColor(tid)
+                    const c = clusterColor(tid, cachedIsDark)
                     colors[i * 3] = c.r
                     colors[i * 3 + 1] = c.g
                     colors[i * 3 + 2] = c.b
@@ -345,7 +247,7 @@ function applyColorMode(group) {
             const hasData = lastParsedPoints.length > 0
             if (!hasData) showFusionWarning()
 
-            const gr = cachedIsDark ? 0.35 : 0.7
+            const gr = neutralGrey(cachedIsDark)
             for (let i = 0; i < count; i++) {
                 const iid = (hasData && i < lastParsedPoints.length)
                     ? lastParsedPoints[i] : 0
@@ -354,7 +256,7 @@ function applyColorMode(group) {
                     colors[i * 3 + 1] = gr
                     colors[i * 3 + 2] = gr
                 } else {
-                    const c = clusterColor(iid)
+                    const c = clusterColor(iid, cachedIsDark)
                     colors[i * 3] = c.r
                     colors[i * 3 + 1] = c.g
                     colors[i * 3 + 2] = c.b
@@ -625,7 +527,7 @@ function updatePointCloud(arrayBuffer) {
 // ---------------------------------------------------------------------------
 document.addEventListener('themechange', (e) => {
     cachedIsDark = resolveIsDark()
-    scene.background = getBgColorFromCSS()
+    scene.background = getBgColorFromCSS(cachedIsDark)
 
     // Recolour & resize points — colours and size vary with theme
     if (pointsGroup) {

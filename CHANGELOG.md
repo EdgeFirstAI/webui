@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Radar page (`grid.html`) controls matching the LiDAR viewer: a Source
+  dropdown (Radar Targets, Radar Clusters, Fusion Radar), a Colour dropdown
+  whose Speed, Power, RCS, Cluster, Vision Class, Track ID and Instance ID
+  modes appear only when the stream carries the field, and an Elevation
+  toggle that lifts points off the grid plane by their `z` value.
+- "Radar Unavailable" overlay and per-source hint banner when the selected
+  radar stream is not publishing.
+- `pointColors.js` shared colour helpers (Turbo, distance, cluster ID,
+  diverging speed, theme-aware fixed colour) used by both the LiDAR and
+  Radar pages.
+
+### Fixed
+- Radar page never drew the radar point cloud: the grid renderer was
+  initialised with point drawing disabled, so only the polar grid appeared
+  even while `radar/targets` was publishing.
+
+### Changed
+- Radar points render as a single `THREE.Points` cloud with round 8–9 px
+  sprites (versus 3–4 px on the LiDAR page) so sparse radar returns stand out.
+- Polar grid lines are lighter and semi-transparent with fainter half-metre
+  rings, the fan spans ±70° so bearing labels sit on 0°, ±20°, ±40°, ±60°,
+  range labels every 2 m, and the camera frames the full 0–20 m fan.
+- Radar page background and grid colours follow the light/dark theme.
+
 ## [4.2.0] - 2026-08-31
 
 ### Changed
