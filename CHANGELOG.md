@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.3.0] - 2026-09-02
+
 ### Added
 - Radar page (`grid.html`) controls matching the LiDAR viewer: a Source
   dropdown (Radar Targets, Radar Clusters, Fusion Radar), a Colour dropdown
