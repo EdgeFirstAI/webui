@@ -77,6 +77,7 @@ let drawBackground = false
 let cachedIsDark = true
 let lastParsed = null        // most recent parsePointCloud2 result
 let socket = null
+let reconnectTimer = null
 let unavailableTimer = null
 let fusionWarningTimer = null
 let gridGroup = null
@@ -440,6 +441,11 @@ function armUnavailableTimer() {
 // WebSocket
 // ---------------------------------------------------------------------------
 function connectSocket() {
+    // A pending reconnect belongs to the previous socket; drop it so it can't
+    // fire after this connection is established.
+    clearTimeout(reconnectTimer)
+    reconnectTimer = null
+
     if (socket) {
         socket.onmessage = null
         socket.onclose = null
@@ -449,11 +455,12 @@ function connectSocket() {
     }
 
     const url = SOURCES[currentSource].url
-    socket = new WebSocket(url)
-    socket.binaryType = 'arraybuffer'
+    const ws = new WebSocket(url)
+    ws.binaryType = 'arraybuffer'
+    socket = ws
     armUnavailableTimer()
 
-    socket.onmessage = (event) => {
+    ws.onmessage = (event) => {
         gridUnavailable.style.display = 'none'
         armUnavailableTimer()
         try {
@@ -465,13 +472,16 @@ function connectSocket() {
         }
     }
 
-    socket.onerror = (error) => {
+    ws.onerror = (error) => {
         console.error(`Radar WebSocket ${url} error:`, error)
     }
 
-    socket.onclose = () => {
+    ws.onclose = () => {
+        // Only the current socket may schedule a reconnect; a socket that was
+        // replaced by a source switch must not tear down its successor.
+        if (socket !== ws) return
         console.log(`Radar WebSocket ${url} closed — reconnecting in ${RECONNECT_DELAY_MS / 1000} s`)
-        setTimeout(connectSocket, RECONNECT_DELAY_MS)
+        reconnectTimer = setTimeout(connectSocket, RECONNECT_DELAY_MS)
     }
 }
 
