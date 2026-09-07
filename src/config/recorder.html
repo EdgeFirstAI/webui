@@ -16,6 +16,7 @@
     <script src="../js/neuralMesh.js"></script>
     <script src="../js/serviceCache.js"></script>
     <script src="../js/navbar.js"></script>
+    <script src="../js/configSave.js"></script>
     <script src="../js/status.js"></script>
     <style>
         body {
@@ -854,30 +855,15 @@
             // Combine all topics: manual topics, localization topics, and selected UI topics
             const allTopics = [...new Set([...manualTopics, ...localizationTopics, ...selectedTopics])].join(' ');
 
-            fetch('/api/config/recorder', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    fileName: "recorder",
-                    storage: storage,
-                    compression: compression,
-                    topics: allTopics,
-                    cube_fps: cubeFps
-                })
-            })
-                .then(response => {
-                    loadingOverlay.style.display = 'none';
-                    if (!response.ok) {
-                        alert('Error saving configuration');
-                    }
-                })
-                .catch(error => {
-                    loadingOverlay.style.display = 'none';
-                    console.error('Error saving config:', error);
-                    alert('Error saving configuration');
-                });
+            saveServiceConfig('recorder', {
+                storage: storage,
+                compression: compression,
+                topics: allTopics,
+                cube_fps: cubeFps
+            }).then(result => {
+                loadingOverlay.style.display = 'none';
+                alert(result.message);
+            });
         });
 
         // Initial setup function

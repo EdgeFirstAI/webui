@@ -17,6 +17,7 @@
     <script src="../js/neuralMesh.js"></script>
     <script src="../js/navbar.js"></script>
     <script src="../js/serviceCache.js"></script>
+    <script src="../js/configSave.js"></script>
     <script src="../js/status.js"></script>
     <style>
         body {
@@ -311,7 +312,6 @@
             loadingOverlay.style.display = 'block';
 
             const configData = {
-                fileName: "fusion",
                 rust_log: document.getElementById('rust_log').value,
                 radar_input_topic: document.getElementById('radar_input_topic').value,
                 model: document.getElementById('model').value,
@@ -325,25 +325,10 @@
                 bin_delay: document.getElementById('bin_delay').value
             };
 
-            fetch('/api/config/fusion', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(configData)
-            })
-                .then(response => {
-                    loadingOverlay.style.display = 'none';
-                    if (response.ok) {
-                    } else {
-                        alert('Error saving configuration');
-                    }
-                })
-                .catch(error => {
-                    loadingOverlay.style.display = 'none';
-                    console.error('Error:', error);
-                    alert('Error saving configuration');
-                });
+            saveServiceConfig('fusion', configData).then(result => {
+                loadingOverlay.style.display = 'none';
+                alert(result.message);
+            });
         });
 
         window.addEventListener('DOMContentLoaded', () => {

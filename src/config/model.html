@@ -16,6 +16,7 @@
     <script src="../js/neuralMesh.js"></script>
     <script src="../js/serviceCache.js"></script>
     <script src="../js/navbar.js"></script>
+    <script src="../js/configSave.js"></script>
     <script src="../js/status.js"></script>
     <style>
         * {
@@ -354,7 +355,6 @@
             const modelValue = document.getElementById('model')?.value;
 
             const configData = {
-                fileName: "model",
                 MODEL: modelValue,
                 VISUALIZATION: document.getElementById('visualization')?.value,
                 LABELS: document.getElementById('labels')?.value,
@@ -378,24 +378,10 @@
                 }
             });
 
-            fetch('/api/config/model', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(configData)
-            })
-                .then(response => {
-                    loadingOverlay.style.display = 'none';
-                    if (!response.ok) {
-                        throw new Error('Failed to save configuration');
-                    }
-                })
-                .catch(error => {
-                    loadingOverlay.style.display = 'none';
-                    console.error('Error saving config:', error);
-                    alert('Error saving configuration');
-                });
+            saveServiceConfig('model', configData).then(result => {
+                loadingOverlay.style.display = 'none';
+                alert(result.message);
+            });
         };
 
         function setInputValue(elementId, value, defaultValue) {

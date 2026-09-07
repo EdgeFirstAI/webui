@@ -187,6 +187,40 @@ Located under `/config/`:
 | `services.html` | Service status and control |
 | `settings.html` | General settings hub |
 
+#### Saving a Configuration
+
+The seven service pages save through `js/configSave.js`, which owns the whole
+`POST /api/config/{service}` round trip. It takes the service name and the
+values, and returns `{ ok, level, message, body }`. Pages hide their loading
+overlay and show `message`; `saveServiceConfig` never rejects, so no page
+needs a `.catch` to avoid a stuck overlay.
+
+`fileName` is added by the helper rather than by each page. WebSRV requires
+it to match the `{service}` URL segment and answers 400 when they disagree —
+deriving both from one argument leaves no way for a page to get it wrong.
+
+WebSRV answers in JSON for every outcome, and the status code alone does not
+say whether the save worked:
+
+| Response | `level` | Shown to the user |
+|----------|---------|-------------------|
+| 200, `applied`, `restarted` | success | Saved and restarted. |
+| 200, `applied`, not running | success | Saved; the service was not running, so it was not restarted. |
+| 200, `restart_error` | warning | Saved, **but the unit failed to come back up**, with the systemd detail. |
+| 200, not `applied` | info | No changes to save. |
+| 400 with `rejected` | error | Each refused key and why. Nothing was written. |
+| 400/404/500 with `error` | error | The message, plus the paths tried on a 404. |
+| Transport failure or timeout | error | The server could not be reached, or did not answer in 30 s. |
+
+The `restart_error` row is the reason `response.ok` is not enough on its own:
+the file is written before the restart is attempted, so a restart failure
+cannot be reported as an HTTP error without misreporting the write.
+
+When a save reports keys under `unmatched`, those keys existed nowhere in the
+file — active or commented — and were appended as new lines. The helper names
+them in the message, since a key that matches nothing is usually a settings
+page and a service that disagree about a variable's name.
+
 ## Combined Visualization
 
 ```mermaid

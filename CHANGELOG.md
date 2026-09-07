@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Configuration pages reported a successful save when the service had failed
+  to restart. WebSRV writes the file before attempting the restart, so a
+  failed restart arrives as `restart_error` on an HTTP 200; the pages checked
+  only `response.ok` and so announced success for a service that was down.
+  The restart failure and its systemd detail are now shown.
+- `camera.html`, `fusion.html` and `radarpub.html` gave no feedback at all on
+  a successful save — the success branch was empty — and `model.html` and
+  `recorder.html` showed nothing on success either. All seven pages now
+  report the outcome.
+- A failed save said only "Error saving configuration". The per-key reasons
+  WebSRV returns under `rejected` — an invalid key, a value carrying a
+  control character, a refused loader variable — are now listed, along with
+  the note that the file was left unchanged.
+- A missing configuration file (404) and a server error (500) were reported
+  with the same generic message as a rejected value. Each is now described,
+  and a 404 lists the paths that were tried.
+- A save that never reached the server, or hung, left the "Saving
+  configuration..." overlay up indefinitely. Requests now time out after 30
+  seconds and always clear the overlay.
+
+### Added
+
+- `js/configSave.js`, a shared save path for the seven service configuration
+  pages. It performs the request, parses the JSON body WebSRV returns for
+  every outcome, and hands the page a single message to display.
+- Keys that WebSRV appended because they appeared nowhere in the
+  configuration file, active or commented, are named in the save message.
+  A key that matches nothing usually means the settings page and the service
+  disagree about a variable's name.
+
+### Changed
+
+- The pages no longer send `fileName` themselves. `saveServiceConfig` derives
+  it from the service name it is already given, so it cannot disagree with
+  the `{service}` URL segment — a mismatch that WebSRV now rejects with 400.
+
 ## [4.3.0] - 2026-09-02
 
 ### Added
