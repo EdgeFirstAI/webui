@@ -249,9 +249,28 @@
             </div>
 
             <div class="form-group">
+                <label for="h264Tiles">4K Tiling:</label>
+                <input type="checkbox" id="h264Tiles" name="h264Tiles">
+                <label for="h264Tiles">Enabled</label>
+                <div class="comment">Splits a 4K frame into four 1080p tiles for hardware encoding.</div>
+            </div>
+
+            <div class="form-group">
+                <label for="h264TilesFps">4K Tiling FPS Limit:</label>
+                <input type="number" id="h264TilesFps" name="h264TilesFps" min="1" placeholder="15">
+                <div class="comment">Lower than the camera frame rate to reduce compression artifacts (default: 15).</div>
+            </div>
+
+            <div class="form-group">
                 <label for="jpeg">JPEG Streaming:</label>
                 <input type="checkbox" id="jpeg" name="jpeg">
                 <label for="jpeg">Enabled</label>
+            </div>
+
+            <div class="form-group">
+                <label for="jpegQuality">JPEG Quality:</label>
+                <input type="number" id="jpegQuality" name="jpegQuality" min="1" max="100" placeholder="85">
+                <div class="comment">1-100 (default: 85). 85 is visually equivalent to 100 for less work.</div>
             </div>
 
             <div class="button-container">
@@ -289,6 +308,9 @@
                     document.getElementById('h264Bitrate').value = data.H264_BITRATE || '';
                     document.getElementById('h264').checked = data.H264 === 'true';
                     document.getElementById('jpeg').checked = data.JPEG === 'true';
+                    document.getElementById('h264Tiles').checked = data.H264_TILES === 'true';
+                    document.getElementById('h264TilesFps').value = data.H264_TILES_FPS || '';
+                    document.getElementById('jpegQuality').value = data.JPEG_QUALITY || '';
                 })
                 .catch(error => console.error('Error fetching config:', error));
         });
@@ -304,6 +326,7 @@
             const h264Bitrate = document.getElementById('h264Bitrate').value;
             const h264 = document.getElementById('h264').checked ? 'true' : 'false';
             const jpeg = document.getElementById('jpeg').checked ? 'true' : 'false';
+            const h264Tiles = document.getElementById('h264Tiles').checked ? 'true' : 'false';
 
             saveServiceConfig('camera', {
                 camera: camera,
@@ -312,7 +335,10 @@
                 mirror: mirror,
                 h264_bitrate: h264Bitrate,
                 h264: h264,
-                jpeg: jpeg
+                jpeg: jpeg,
+                h264_tiles: h264Tiles,
+                h264_tiles_fps: document.getElementById('h264TilesFps').value,
+                jpeg_quality: document.getElementById('jpegQuality').value
             }).then(result => {
                 loadingOverlay.style.display = 'none';
                 window.showToast(result.message, result.level);
