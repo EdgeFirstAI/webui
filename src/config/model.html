@@ -213,12 +213,28 @@
             <label for="model">MODEL:</label>
             <input type="text" id="model" value="/usr/share/model/peoplesegdet.rtm">
         </div>
-        <!-- Commenting out decoder_model field
         <div class="form-group">
-            <label for="decoder_model">DECODER_MODEL:</label>
-            <input type="text" id="decoder_model" value="">
+            <label for="delegate">DELEGATE:</label>
+            <select id="delegate">
+                <option value="">CPU only</option>
+                <option value="/usr/lib/libvx_delegate.so">i.MX 8M Plus NPU</option>
+                <option value="/usr/lib/libneutron_delegate.so">i.MX 95 Neutron</option>
+            </select>
+            <div class="comment">TFLite delegate shared library. Empty runs inference on the CPU.</div>
         </div>
-        -->
+        <div class="form-group">
+            <label for="classes">CLASSES:</label>
+            <input type="text" id="classes" value="" placeholder="all classes">
+            <div class="comment">Space-separated class labels to keep. Empty keeps them all.</div>
+        </div>
+        <div class="form-group">
+            <label for="ssd_model">SSD_MODEL:</label>
+            <select id="ssd_model">
+                <option value="true">True</option>
+                <option value="false">False</option>
+            </select>
+            <div class="comment">Enable SSD model mode when a different model config is not found.</div>
+        </div>
         <div class="form-group">
             <label for="visualization">VISUALIZATION:</label>
             <select id="visualization">
@@ -258,6 +274,12 @@
         <div class="form-group">
             <label for="trackExtraLifespan">Track Extra Lifespan (seconds):</label>
             <input type="text" id="trackExtraLifespan" name="trackExtraLifespan" placeholder="2.0">
+        </div>
+        <div class="form-group">
+            <label for="track_score">TRACK_SCORE:</label>
+            <input type="number" id="track_score" value="0.1" step="0.01">
+            <div class="comment">Decoder score threshold while tracking. Lower than THRESHOLD, to let the
+                tracker recover low-confidence detections. Only used when TRACK is true.</div>
         </div>
         <div class="form-group">
             <label for="track_iou">TRACK_IOU:</label>
@@ -304,7 +326,6 @@
                         console.log('MODEL has unexpected type:', typeof data.MODEL, data.MODEL);
                     }
                     setInputValue('model', modelValue);
-                    setInputValue('decoder_model', data.DECODER_MODEL);
                     setInputValue('visualization', data.VISUALIZATION, 'false');
                     setInputValue('labels', data.LABELS, 'label');
                     setInputValue('threshold', data.THRESHOLD, 0.2);
@@ -315,6 +336,10 @@
                     setInputValue('trackExtraLifespan', data.TRACK_EXTRA_LIFESPAN, 0.5);
                     setInputValue('track_iou', data.TRACK_IOU, 0.25);
                     setInputValue('track_update', data.TRACK_UPDATE, 0.25);
+                    setInputValue('delegate', data.DELEGATE, '');
+                    setInputValue('classes', Array.isArray(data.CLASSES) ? data.CLASSES.join(' ') : data.CLASSES, '');
+                    setInputValue('ssd_model', data.SSD_MODEL, 'false');
+                    setInputValue('track_score', data.TRACK_SCORE, 0.1);
                 })
                 .catch(error => console.error('Error fetching configuration:', error));
         });
@@ -334,7 +359,11 @@
                 TRACK: document.getElementById('track')?.value,
                 TRACK_EXTRA_LIFESPAN: document.getElementById('trackExtraLifespan')?.value,
                 TRACK_IOU: document.getElementById('track_iou')?.value,
-                TRACK_UPDATE: document.getElementById('track_update')?.value
+                TRACK_UPDATE: document.getElementById('track_update')?.value,
+                DELEGATE: document.getElementById('delegate')?.value,
+                CLASSES: document.getElementById('classes')?.value,
+                SSD_MODEL: document.getElementById('ssd_model')?.value,
+                TRACK_SCORE: document.getElementById('track_score')?.value
             };
             Object.keys(configData).forEach(key => {
                 if (configData[key] === undefined) {

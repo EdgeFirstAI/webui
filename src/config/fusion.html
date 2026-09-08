@@ -244,6 +244,109 @@
                 <input type="number" id="bin_delay" name="bin_delay" min="1" value="3">
             </div>
 
+            <h2>Model</h2>
+
+            <div class="form-group">
+                <label for="engine">Engine:</label>
+                <input type="text" id="engine" name="engine" placeholder="npu">
+                <div class="comment">Engine for the model context (default: npu)</div>
+            </div>
+
+            <div class="form-group">
+                <label for="model_decoder">Model Decoder:</label>
+                <input type="text" id="model_decoder" name="model_decoder" placeholder="none">
+                <div class="comment">Path to the model decoder. Leave empty for none.</div>
+            </div>
+
+            <div class="form-group">
+                <label for="model_threshold">Model Threshold:</label>
+                <input type="number" id="model_threshold" name="model_threshold" step="0.01" placeholder="0.5">
+                <div class="comment">Threshold for the model output topic (default: 0.5)</div>
+            </div>
+
+            <div class="form-group">
+                <label for="model_grid_size">Model Grid Size:</label>
+                <input type="text" id="model_grid_size" name="model_grid_size" placeholder="1 1">
+                <div class="comment">Real-world size (length, width) in metres of one 1x1 model output grid
+                    cell. For a polar model the width is in degrees.</div>
+            </div>
+
+            <div class="form-group">
+                <label for="model_polar">Polar Model:</label>
+                <input type="checkbox" id="model_polar" name="model_polar">
+                <label for="model_polar">Enabled</label>
+            </div>
+
+            <div class="form-group">
+                <label for="logits">Apply Sigmoid:</label>
+                <select id="logits" name="logits">
+                    <option value="true" selected>True</option>
+                    <option value="false">False</option>
+                </select>
+                <div class="comment">Apply a sigmoid to the model output (default: true)</div>
+            </div>
+
+            <div class="form-group">
+                <label for="background_index">Background Class Index:</label>
+                <input type="number" id="background_index" name="background_index" placeholder="-1">
+                <div class="comment">Background class index for semantic segmentation instance detection.
+                    -1 uses the last channel (default); 0 or above is an explicit index.</div>
+            </div>
+
+            <div class="form-group">
+                <label for="max_model_age">Max Model Age (seconds):</label>
+                <input type="number" id="max_model_age" name="max_model_age" step="0.1" min="0" placeholder="0.5">
+                <div class="comment">Warn when model output data is older than this. 0 disables the warning.</div>
+            </div>
+
+            <h2>Sources</h2>
+
+            <div class="form-group">
+                <label for="grid_src">Occupancy Grid Source:</label>
+                <select id="grid_src" name="grid_src">
+                    <option value="disabled">Disabled</option>
+                    <option value="radar" selected>Radar</option>
+                    <option value="lidar">LiDAR</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="bbox3d_src">3D Bounding Box Source:</label>
+                <select id="bbox3d_src" name="bbox3d_src">
+                    <option value="disabled">Disabled</option>
+                    <option value="radar">Radar</option>
+                    <option value="lidar" selected>LiDAR</option>
+                </select>
+            </div>
+
+            <h2>Tracking</h2>
+
+            <div class="form-group">
+                <label for="track">Tracking:</label>
+                <input type="checkbox" id="track" name="track">
+                <label for="track">Enabled</label>
+                <div class="comment">Reduces flickering in the model output</div>
+            </div>
+
+            <div class="form-group">
+                <label for="track_extra_lifespan">Track Extra Lifespan (seconds):</label>
+                <input type="number" id="track_extra_lifespan" name="track_extra_lifespan" step="0.1" min="0" placeholder="0.5">
+                <div class="comment">How long a tracked object may be missing before it is removed</div>
+            </div>
+
+            <div class="form-group">
+                <label for="track_iou">Track IOU:</label>
+                <input type="number" id="track_iou" name="track_iou" step="0.01" placeholder="0.1">
+                <div class="comment">IOU threshold for box association. Higher values require boxes to match
+                    the predicted track more closely.</div>
+            </div>
+
+            <div class="form-group">
+                <label for="track_update">Track Update Factor:</label>
+                <input type="number" id="track_update" name="track_update" step="0.01" min="0" max="1" placeholder="0.4">
+                <div class="comment">Higher means less smoothing but a more rapid response to change (0.0 to 1.0)</div>
+            </div>
+
             <div class="button-container">
                 <button id="saveConfig" class="btn-primary btn-block">
                     Save Configuration
@@ -287,6 +390,23 @@
 
                     document.getElementById('angle_bin_width').value = data.ANGLE_BIN_WIDTH || '';
                     document.getElementById('bin_delay').value = data.BIN_DELAY || '';
+                    document.getElementById('engine').value = data.ENGINE || '';
+                    document.getElementById('model_decoder').value = data.MODEL_DECODER || '';
+                    document.getElementById('model_threshold').value = data.MODEL_THRESHOLD || '';
+
+                    const modelGridSize = Array.isArray(data.MODEL_GRID_SIZE) ? data.MODEL_GRID_SIZE.join(' ') : (data.MODEL_GRID_SIZE || '');
+                    document.getElementById('model_grid_size').value = modelGridSize.replace(/,/g, ' ');
+
+                    document.getElementById('model_polar').checked = data.MODEL_POLAR === 'true';
+                    document.getElementById('logits').value = data.LOGITS || 'true';
+                    document.getElementById('background_index').value = data.BACKGROUND_INDEX || '';
+                    document.getElementById('max_model_age').value = data.MAX_MODEL_AGE || '';
+                    document.getElementById('grid_src').value = data.GRID_SRC || 'radar';
+                    document.getElementById('bbox3d_src').value = data.BBOX3D_SRC || 'lidar';
+                    document.getElementById('track').checked = data.TRACK === 'true';
+                    document.getElementById('track_extra_lifespan').value = data.TRACK_EXTRA_LIFESPAN || '';
+                    document.getElementById('track_iou').value = data.TRACK_IOU || '';
+                    document.getElementById('track_update').value = data.TRACK_UPDATE || '';
                 })
                 .catch(error => console.error('Error fetching configuration:', error));
         });
@@ -302,7 +422,21 @@
                 range_bin_width: document.getElementById('range_bin_width').value,
                 angle_bin_limit: document.getElementById('angle_bin_limit').value,
                 angle_bin_width: document.getElementById('angle_bin_width').value,
-                bin_delay: document.getElementById('bin_delay').value
+                bin_delay: document.getElementById('bin_delay').value,
+                engine: document.getElementById('engine').value,
+                model_decoder: document.getElementById('model_decoder').value,
+                model_threshold: document.getElementById('model_threshold').value,
+                model_grid_size: document.getElementById('model_grid_size').value,
+                model_polar: document.getElementById('model_polar').checked ? 'true' : 'false',
+                logits: document.getElementById('logits').value,
+                background_index: document.getElementById('background_index').value,
+                max_model_age: document.getElementById('max_model_age').value,
+                grid_src: document.getElementById('grid_src').value,
+                bbox3d_src: document.getElementById('bbox3d_src').value,
+                track: document.getElementById('track').checked ? 'true' : 'false',
+                track_extra_lifespan: document.getElementById('track_extra_lifespan').value,
+                track_iou: document.getElementById('track_iou').value,
+                track_update: document.getElementById('track_update').value
             };
 
             saveServiceConfig('fusion', configData).then(result => {
