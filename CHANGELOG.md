@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- Nine configuration controls that wrote keys no service reads: the LiDAR
+  page's Zenoh Wait Before Drop; the Fusion page's Radar Input Topic,
+  Occlusion Angle Limit and Occlusion Range Limit; and the Model page's
+  `ENGINE`, `TRACK_HIGH_CONF`, `MASK_COMPRESSION`,
+  `VIV_VX_ENABLE_CACHE_GRAPH_BINARY` and `VIV_VX_CACHE_BINARY_GRAPH_DIR`.
+  These were inert while WebSRV could only rewrite keys already present in
+  a file; WebSRV 4.2.0 appends absent keys, so each had begun writing a
+  dead line into `/etc/default/*` on every save.
+- The Model page's commented-out `DECODER_MODEL` control, and the live
+  fetch line that populated it. Model has no such option.
+
+### Added
+
+- Thirty-eight settings the services accept that no page exposed. Camera
+  gains JPEG quality and the two 4K tiling settings. LiDAR gains sensor
+  type, mirroring, and new Ground Filtering, Clustering and Robosense
+  sections. Model gains the TFLite delegate, track score, class filter and
+  SSD mode. Radar gains mirroring and the frame transforms. Fusion gains
+  its engine, the model decoder, threshold, grid size and polar settings,
+  logits, background index, maximum model age, the occupancy grid and 3D
+  box sources, and the four tracking controls. Recorder gains recording
+  duration and hostname stripping, and now exposes every option it accepts.
+- Sensor Type on the LiDAR page, which selects between the Ouster and
+  Robosense settings the page already showed but never let anyone switch
+  between.
+
+### Changed
+
+- Every control's key, type, allowed values and default now come from the
+  service's own `clap` argument definitions rather than from the shipped
+  `.default` file, which can lag behind the code.
+- Leaving a control blank means "use the service default". Blank posts
+  `KEY=""`, which every service treats as unset, so the default applies.
+
 ## [4.4.0] - 2026-09-07
 
 ### Fixed
