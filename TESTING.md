@@ -412,6 +412,31 @@ data-testid="<page>-<element>-<name>"
 - `settings-card-services`
 - `settings-card-studio`
 
+**Toasts (every page):**
+- `toast-container` - Notification container. Created on the first toast and
+  then left in the DOM; it is hidden rather than removed once the last toast
+  goes, so **do not wait for it to disappear** — count `toast-message`
+  instead. It is a popover, so it renders in the browser's top layer and
+  stays visible and clickable above an open modal `<dialog>`; while one is
+  open the container is reparented inside it, so do not assume it is a child
+  of `<body>`.
+- `toast-message` - One notification, and the element to assert on. Carries
+  `data-level` of `success`, `info`, `warning` or `error`.
+- `toast-close` - Dismiss button on a notification.
+- `toast-dismiss-all` - Bulk dismiss, shown once three or more are stacked.
+
+Success and info toasts clear themselves after 5 seconds and warnings after
+10, so a test that asserts on one should read it promptly. Errors stay until
+dismissed. Toasts stack rather than replace: four failures in a row leave
+four `toast-message` elements.
+
+```js
+// Save a configuration and read the outcome
+await page.click('#saveConfig');   // config pages have no test IDs yet
+const toast = page.locator('[data-testid="toast-message"]');
+await expect(toast).toHaveAttribute('data-level', 'success');
+```
+
 ### Selenium Example
 
 ```python

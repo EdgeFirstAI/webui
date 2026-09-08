@@ -16,7 +16,9 @@
     <script src="../js/theme.js"></script>
     <script src="../js/neuralMesh.js"></script>
     <script src="../js/serviceCache.js"></script>
+    <script src="../js/toast.js"></script>
     <script src="../js/navbar.js"></script>
+    <script src="../js/configSave.js"></script>
     <script src="../js/status.js"></script>
     <style>
         body {
@@ -303,34 +305,18 @@
             const h264 = document.getElementById('h264').checked ? 'true' : 'false';
             const jpeg = document.getElementById('jpeg').checked ? 'true' : 'false';
 
-            fetch('/api/config/camera', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    fileName: "camera",
-                    camera: camera,
-                    camera_size: cameraSize,
-                    stream_size: streamSize,
-                    mirror: mirror,
-                    h264_bitrate: h264Bitrate,
-                    h264: h264,
-                    jpeg: jpeg
-                })
-            })
-                .then(response => {
-                    loadingOverlay.style.display = 'none';
-                    if (response.ok) {
-                    } else {
-                        alert('Error saving configuration');
-                    }
-                })
-                .catch(error => {
-                    loadingOverlay.style.display = 'none';
-                    console.error('Error:', error);
-                    alert('Error saving configuration');
-                });
+            saveServiceConfig('camera', {
+                camera: camera,
+                camera_size: cameraSize,
+                stream_size: streamSize,
+                mirror: mirror,
+                h264_bitrate: h264Bitrate,
+                h264: h264,
+                jpeg: jpeg
+            }).then(result => {
+                loadingOverlay.style.display = 'none';
+                window.showToast(result.message, result.level);
+            });
         });
 
         window.addEventListener('DOMContentLoaded', () => {

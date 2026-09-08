@@ -656,10 +656,7 @@ function showStudioAccountDialog(username) {
                 // Refresh navbar status
                 updateStudioStatus();
                 dialog.close();
-                // Show toast notification if available
-                if (typeof window.showToast === 'function') {
-                    window.showToast('Logged out from EdgeFirst Studio');
-                }
+                window.showToast('Logged out from EdgeFirst Studio', 'success');
             } catch (e) {
                 console.error('Logout error:', e);
             }
@@ -803,7 +800,7 @@ function startRecording() {
         })
         .catch(error => {
             console.error('Error starting recording:', error);
-            alert(`Error starting recording: ${error.message}`);
+            window.showToast(`Error starting recording: ${error.message}`, 'error');
             updateRecordingUI(false);
         });
 }
@@ -825,7 +822,7 @@ function stopRecording() {
         })
         .catch(error => {
             console.error('Error stopping recording:', error);
-            alert(`Error stopping recording: ${error.message}`);
+            window.showToast(`Error stopping recording: ${error.message}`, 'error');
             updateRecordingUI(true);
         });
 }

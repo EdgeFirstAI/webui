@@ -15,7 +15,9 @@
     <script src="../js/theme.js"></script>
     <script src="../js/neuralMesh.js"></script>
     <script src="../js/serviceCache.js"></script>
+    <script src="../js/toast.js"></script>
     <script src="../js/navbar.js"></script>
+    <script src="../js/configSave.js"></script>
     <script src="../js/status.js"></script>
     <style>
         body {
@@ -923,7 +925,6 @@
                 const stopAngle = document.getElementById('stop-angle-input').value;
 
                 const configData = {
-                    fileName: "lidarpub",
                     RUST_LOG: document.getElementById('log_level').value,
                     ZENOH_WAIT_BEFORE_DROP: document.getElementById('zenoh_timeout').value,
                     TARGET: document.getElementById('target').value,
@@ -934,26 +935,10 @@
                     TF_QUAT: document.getElementById('tf_quat').value
                 };
 
-                fetch('/api/config/lidarpub', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(configData)
-                })
-                    .then(response => {
-                        loadingOverlay.style.display = 'none';
-                        if (response.ok) {
-                            alert('Configuration saved successfully');
-                        } else {
-                            alert('Error saving configuration');
-                        }
-                    })
-                    .catch(error => {
-                        loadingOverlay.style.display = 'none';
-                        console.error('Error:', error);
-                        alert('Error saving configuration');
-                    });
+                saveServiceConfig('lidarpub', configData).then(result => {
+                    loadingOverlay.style.display = 'none';
+                    window.showToast(result.message, result.level);
+                });
             });
         });
 

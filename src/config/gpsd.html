@@ -17,7 +17,9 @@
     <script src="../js/theme.js"></script>
     <script src="../js/neuralMesh.js"></script>
     <script src="../js/serviceCache.js"></script>
+    <script src="../js/toast.js"></script>
     <script src="../js/navbar.js"></script>
+    <script src="../js/configSave.js"></script>
     <script src="../js/status.js"></script>
     <style>
         body {
@@ -283,33 +285,16 @@
             const usbAuto = document.getElementById('usbAuto').value;
             const gpsdSocket = document.getElementById('gpsdSocket').value;
 
-            fetch('/api/config/gpsd', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    fileName: "gpsd",
-                    START_DAEMON: startDaemon,
-                    GPSD_OPTIONS: gpsdOptions,
-                    DEVICES: devices,
-                    USBAUTO: usbAuto,
-                    GPSD_SOCKET: gpsdSocket
-                })
-            })
-                .then(response => {
-                    loadingOverlay.style.display = 'none';
-                    if (response.ok) {
-                        alert('Configuration saved successfully');
-                    } else {
-                        alert('Error saving configuration');
-                    }
-                })
-                .catch(error => {
-                    loadingOverlay.style.display = 'none';
-                    console.error('Error saving config:', error);
-                    alert('Error saving configuration');
-                });
+            saveServiceConfig('gpsd', {
+                START_DAEMON: startDaemon,
+                GPSD_OPTIONS: gpsdOptions,
+                DEVICES: devices,
+                USBAUTO: usbAuto,
+                GPSD_SOCKET: gpsdSocket
+            }).then(result => {
+                loadingOverlay.style.display = 'none';
+                window.showToast(result.message, result.level);
+            });
         });
 
         window.addEventListener('DOMContentLoaded', () => {

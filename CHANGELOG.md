@@ -7,6 +7,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.4.0] - 2026-09-07
+
+### Fixed
+
+- Configuration pages reported a successful save when the service had failed
+  to restart. WebSRV writes the file before attempting the restart, so a
+  failed restart arrives as `restart_error` on an HTTP 200; the pages checked
+  only `response.ok` and so announced success for a service that was down.
+  The restart failure and its systemd detail are now shown.
+- `camera.html`, `fusion.html` and `radarpub.html` gave no feedback at all on
+  a successful save — the success branch was empty — and `model.html` and
+  `recorder.html` showed nothing on success either. All seven pages now
+  report the outcome.
+- A failed save said only "Error saving configuration". The per-key reasons
+  WebSRV returns under `rejected` — an invalid key, a value carrying a
+  control character, a refused loader variable — are now listed, along with
+  the note that the file was left unchanged.
+- A missing configuration file (404) and a server error (500) were reported
+  with the same generic message as a rejected value. Each is now described,
+  and a 404 lists the paths that were tried.
+- A save that never reached the server, or hung, left the "Saving
+  configuration..." overlay up indefinitely. Requests now time out after 30
+  seconds and always clear the overlay.
+
+### Added
+
+- `js/configSave.js`, a shared save path for the seven service configuration
+  pages. It performs the request, parses the JSON body WebSRV returns for
+  every outcome, and hands the page a single message to display.
+- Keys that WebSRV appended because they appeared nowhere in the
+  configuration file, active or commented, are named in the save message.
+  A key that matches nothing usually means the settings page and the service
+  disagree about a variable's name.
+- `js/toast.js`, a shared notification bar used across the whole WebUI.
+  `window.showToast(message, level)` shows a card below the navbar in one of
+  four levels: `success` and `info` clear after 5 seconds, `warning` after
+  10, and `error` stays until dismissed, since a failed save names the keys
+  the user has to correct. Toasts stack rather than replace, so several
+  failures in a row each stay readable, and a bulk dismiss appears once
+  three are showing. Styling follows the existing
+  `--color-status-*` theme tokens, so it tracks light, dark and auto.
+
+### Changed
+
+- The pages no longer send `fileName` themselves. `saveServiceConfig` derives
+  it from the service name it is already given, so it cannot disagree with
+  the `{service}` URL segment — a mismatch that WebSRV now rejects with 400.
+- Every `alert()` in the WebUI is now a toast. `alert()` blocked the page
+  until it was acknowledged, rendered outside the theme, and could show only
+  one result at a time — a second failure had to wait for the first to be
+  clicked away. This covers all seven configuration pages, the services page,
+  recording start and stop, MCAP playback and deletion, and the switch back
+  to live mode. `confirm()` is unchanged: it asks a question the code
+  branches on, which a toast cannot do.
+- Configuration pages now colour the save outcome by its severity. The
+  `level` that `saveServiceConfig` had been returning since it was added was
+  discarded by every caller, so a failed restart looked the same as a clean
+  save.
+- The MCAP dialog's own toast implementation is gone, replaced by the shared
+  one. It was bottom-centred, hardcoded to a dark palette regardless of
+  theme, and had no notion of severity.
+- Two messages were never shown at all: signing out of EdgeFirst Studio and
+  cancelling its login dialog both called `window.showToast` behind a
+  `typeof` guard, and nothing ever defined it. Both now appear.
+- A failed MCAP delete names the file. "Error deleting file" alone did not
+  say which one, which matters when several are deleted in succession.
+
+### Removed
+
+- Bulk delete in the MCAP recordings dialog, along with its Select All
+  checkbox, per-row checkboxes and selection count. It was a placeholder
+  rather than a working implementation. Recordings are deleted one at a
+  time until it is built properly; per-file delete, upload and playback
+  are unaffected.
+
 ## [4.3.0] - 2026-09-02
 
 ### Added

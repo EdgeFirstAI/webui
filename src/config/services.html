@@ -354,6 +354,7 @@
     <script src="../js/theme.js"></script>
     <script src="../js/neuralMesh.js"></script>
     <script src="../js/serviceCache.js"></script>
+    <script src="../js/toast.js"></script>
     <script src="../js/navbar.js"></script>
     <script src="../js/status.js"></script>
     <script>
@@ -499,12 +500,12 @@
                     }
                     await fetchServices();
                 } else {
-                    alert('Error updating service.');
+                    window.showToast('Error updating service.', 'error');
                 }
             } catch (error) {
                 loadingOverlay.style.display = 'none';
                 console.error('Error updating service:', error);
-                alert('Error updating service. Please try again later.');
+                window.showToast('Error updating service. Please try again later.', 'error');
             }
         }
         window.addEventListener('load', fetchServices);

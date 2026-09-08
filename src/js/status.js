@@ -430,17 +430,6 @@ window.showMcapDialog = async function () {
             if (headerControls) {
                 headerControls.innerHTML = `
                             <div class="mcap-header-toolbar">
-                                <label class="mcap-checkbox-label">
-                                    <input type="checkbox" id="mcap-select-all" class="mcap-checkbox">
-                                    <span>Select All</span>
-                                </label>
-                                <button id="mcap-delete-selected" class="mcap-btn-secondary mcap-btn-sm" disabled title="Delete all selected files">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                                    </svg>
-                                    <span>Delete</span>
-                                    <span id="mcap-selected-count" class="mcap-count-badge"></span>
-                                </button>
                                 <div class="mcap-search-wrap mcap-search-compact">
                                     <svg class="mcap-search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
@@ -465,7 +454,6 @@ window.showMcapDialog = async function () {
                         <table class="mcap-table">
                             <thead>
                                 <tr>
-                                    <th style="text-align:center; width:2.5rem;"></th>
                                     <th style="width:3.5rem;">Play</th>
                                     <th>File Name</th>
                                     <th style="width:6rem;">Size</th>
@@ -486,7 +474,6 @@ window.showMcapDialog = async function () {
                         const downloadHref = `/api/recordings/download/${encodeURIComponent(dirName)}/${encodeURIComponent(file.name)}`;
                         return `
                                 <tr class="mcap-row-card" data-filename="${safeName}">
-                                    <td style="text-align:center; width:2.5rem;"><input type="checkbox" class="mcap-select-checkbox" data-filename="${safeName}"></td>
                                     <td style="text-align:center; width:3.5rem;">
                                         <button class="mcap-action-btn mcap-play-btn ${isCurrentlyPlaying ? 'mcap-btn-red' : 'mcap-btn-blue'}" title="${isCurrentlyPlaying ? 'Stop' : 'Play'}" data-filename="${safeName}" data-dirname="${safeDir}">
                                             <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" style="width: 1.25rem; height: 1.25rem;">
@@ -523,7 +510,7 @@ window.showMcapDialog = async function () {
                     `;
                 }
         content.innerHTML = tableHTML;
-        attachMcapTableListeners(dirName);
+        attachMcapTableListeners();
     } catch (error) {
         content.innerHTML = `<div class="text-red-600">Error connecting to server</div>`;
     }
@@ -600,120 +587,17 @@ window.showMcapDialog = async function () {
     renderStorageBar(info);
     // --- End Storage Info Bar Logic ---
 
-    function attachMcapTableListeners(dirName) {
-        const selectAll = document.getElementById('mcap-select-all');
-        const deleteBtn = document.getElementById('mcap-delete-selected');
+    function attachMcapTableListeners() {
         const tableBody = document.getElementById('mcap-table-body');
         const searchInput = document.getElementById('mcap-search');
         const searchClear = document.getElementById('mcap-search-clear');
-        const selectedCount = document.getElementById('mcap-selected-count');
-        function visibleCheckboxes() {
-            return Array.from(document.querySelectorAll('.mcap-select-checkbox')).filter(cb => {
-                const row = cb.closest('.mcap-row-card');
-                return row && row.style.display !== 'none';
-            });
-        }
-        function showToast(msg) {
-            let toast = document.getElementById('mcap-toast');
-            if (!toast) {
-                toast = document.createElement('div');
-                toast.id = 'mcap-toast';
-                toast.className = 'mcap-toast';
-                document.body.appendChild(toast);
-            }
-            toast.textContent = msg;
-            toast.style.opacity = '0.97';
-            toast.style.display = 'block';
-            setTimeout(() => { toast.style.opacity = '0'; }, 1800);
-            setTimeout(() => { toast.style.display = 'none'; }, 2200);
-        }
-        function showSpinner() {
-            let overlay = document.getElementById('mcap-spinner-overlay');
-            if (!overlay) {
-                overlay = document.createElement('div');
-                overlay.id = 'mcap-spinner-overlay';
-                overlay.className = 'mcap-spinner-overlay';
-                overlay.innerHTML = '<div class="mcap-spinner"></div>';
-                document.body.appendChild(overlay);
-            }
-            overlay.style.display = 'flex';
-        }
-        function hideSpinner() {
-            const overlay = document.getElementById('mcap-spinner-overlay');
-            if (overlay) overlay.style.display = 'none';
-        }
-        function updateDeleteBtnState() {
-            if (!deleteBtn) return;
-            const checked = visibleCheckboxes().filter(cb => cb.checked);
-            deleteBtn.disabled = checked.length === 0;
-            if (selectedCount) {
-                if (checked.length > 0) {
-                    selectedCount.textContent = `${checked.length}`;
-                    selectedCount.style.display = '';
-                } else {
-                    selectedCount.textContent = '';
-                    selectedCount.style.display = 'none';
-                }
-            }
-        }
-        function updateRowHighlight() {
-            Array.from(document.querySelectorAll('.mcap-select-checkbox')).forEach(cb => {
-                const row = cb.closest('.mcap-row-card');
-                if (row) row.classList.toggle('selected', cb.checked);
-            });
-        }
-        if (selectAll) {
-            selectAll.onchange = function () {
-                visibleCheckboxes().forEach(cb => cb.checked = this.checked);
-                updateDeleteBtnState();
-                updateRowHighlight();
-            };
-        }
-        if (tableBody) {
-            tableBody.onchange = function (e) {
-                if (e.target.classList.contains('mcap-select-checkbox')) {
-                    updateDeleteBtnState();
-                    updateRowHighlight();
-                    if (!e.target.checked && selectAll) selectAll.checked = false;
-                    if (visibleCheckboxes().every(cb => cb.checked) && selectAll) selectAll.checked = true;
-                }
-            };
-        }
-        if (deleteBtn) {
-            deleteBtn.onclick = async function () {
-                const selected = visibleCheckboxes().filter(cb => cb.checked).map(cb => cb.getAttribute('data-filename'));
-                if (selected.length === 0) {
-                    alert('No files selected.');
-                    return;
-                }
-                if (!confirm(`Delete ${selected.length} selected file(s)?`)) return;
-                showSpinner();
-                // Temporarily override window.confirm to always return true for deleteFile
-                const originalConfirm = window.confirm;
-                window.confirm = () => true;
-                for (const filename of selected) {
-                    await new Promise(resolve => { deleteFile(filename, dirName); setTimeout(resolve, 120); });
-                }
-                window.confirm = originalConfirm;
-                setTimeout(() => {
-                    hideSpinner();
-                    showToast(`${selected.length} file${selected.length > 1 ? 's' : ''} deleted.`);
-                    if (typeof showMcapDialog === 'function') showMcapDialog();
-                }, 400);
-            };
-        }
         if (searchInput && searchClear) {
             searchInput.oninput = function () {
                 const val = this.value.toLowerCase();
-                Array.from(document.querySelectorAll('.mcap-select-checkbox')).forEach(cb => {
-                    const row = cb.closest('.mcap-row-card');
-                    if (!row) return;
-                    const filename = cb.getAttribute('data-filename') || '';
+                Array.from(document.querySelectorAll('.mcap-row-card')).forEach(row => {
+                    const filename = row.getAttribute('data-filename') || '';
                     row.style.display = filename.toLowerCase().includes(val) ? '' : 'none';
                 });
-                if (selectAll) selectAll.checked = false;
-                updateDeleteBtnState();
-                updateRowHighlight();
                 searchClear.style.display = val ? 'block' : 'none';
             };
             searchClear.onclick = function () {
@@ -767,9 +651,6 @@ window.showMcapDialog = async function () {
                 }
             });
         }
-        
-        updateDeleteBtnState();
-        updateRowHighlight();
     }
 };
 
@@ -965,7 +846,7 @@ window.startPlaybackFromModal = function () {
         })
         .catch(error => {
             console.error('Error starting playback:', error);
-            alert(`Error starting playback: ${error.message}`);
+            window.showToast(`Error starting playback: ${error.message}`, 'error');
         });
 };
 
@@ -1219,21 +1100,6 @@ window.startPlaybackFromModal = function () {
     align-items: center;
     gap: 0.75rem;
 }
-.mcap-checkbox-label {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: #374151;
-    cursor: pointer;
-    user-select: none;
-}
-.mcap-checkbox {
-    width: 1rem;
-    height: 1rem;
-    accent-color: #3b82f6;
-}
 .mcap-btn-primary {
     display: inline-flex;
     align-items: center;
@@ -1275,16 +1141,6 @@ window.startPlaybackFromModal = function () {
     cursor: not-allowed;
     background: #f9fafb;
     color: #9ca3af;
-}
-.mcap-count-badge {
-    display: none;
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: #3b82f6;
-    margin-left: 0.25rem;
-}
-.mcap-count-badge:not(:empty) {
-    display: inline;
 }
 .mcap-search-container {
     flex: 1;
@@ -1370,11 +1226,6 @@ window.startPlaybackFromModal = function () {
     box-shadow: 0 2px 8px rgba(0,0,0,0.06);
     transition: box-shadow 0.18s, background 0.18s;
     color: #222;
-}
-.mcap-row-card.selected {
-    background: #e0e7ff !important;
-    box-shadow: 0 4px 16px rgba(66,133,244,0.13);
-    border-left: 4px solid #4285f4;
 }
 .mcap-row-card td {
     padding: 0.7rem 0.7rem;
@@ -1475,44 +1326,6 @@ window.startPlaybackFromModal = function () {
     background: #d4a41c !important;
     color: #222 !important;
 }
-.mcap-toast {
-    position: fixed;
-    left: 50%;
-    bottom: 2.5rem;
-    transform: translateX(-50%);
-    background: #222;
-    color: #fff;
-    padding: 0.9rem 2.2rem;
-    border-radius: 1.2rem;
-    font-size: 1.08rem;
-    font-weight: 500;
-    box-shadow: 0 4px 24px rgba(0,0,0,0.18);
-    z-index: 9999;
-    opacity: 0.97;
-    pointer-events: none;
-    transition: opacity 0.3s;
-}
-.mcap-spinner-overlay {
-    position: fixed;
-    left: 0; top: 0; right: 0; bottom: 0;
-    background: rgba(255,255,255,0.45);
-    z-index: 9998;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-.mcap-spinner {
-    border: 4px solid #e5e7eb;
-    border-top: 4px solid #4285f4;
-    border-radius: 50%;
-    width: 2.5rem;
-    height: 2.5rem;
-    animation: mcap-spin 1s linear infinite;
-}
-@keyframes mcap-spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
 .mcap-search-clear {
     position: absolute;
     right: 1.2rem;
@@ -1570,9 +1383,6 @@ window.startPlaybackFromModal = function () {
 [data-theme="dark"] .mcap-header-toolbar {
     background: transparent;
 }
-[data-theme="dark"] .mcap-checkbox-label {
-    color: #c9c5d4;
-}
 [data-theme="dark"] .mcap-btn-secondary {
     background: #3d3650;
     color: #c9c5d4;
@@ -1618,10 +1428,6 @@ window.startPlaybackFromModal = function () {
 [data-theme="dark"] .mcap-row-card:hover {
     background: #3d3650;
 }
-[data-theme="dark"] .mcap-row-card.selected {
-    background: #3d3650 !important;
-    border-left-color: #E8B820;
-}
 [data-theme="dark"] .mcap-row-card td {
     color: #c9c5d4;
 }
@@ -1650,13 +1456,6 @@ window.startPlaybackFromModal = function () {
 [data-theme="dark"] .mcap-storage-directory {
     border-top-color: rgba(255, 255, 255, 0.1);
     color: #9690a8;
-}
-[data-theme="dark"] .mcap-spinner-overlay {
-    background: rgba(26, 22, 37, 0.7);
-}
-[data-theme="dark"] .mcap-spinner {
-    border-color: #3d3650;
-    border-top-color: #E8B820;
 }
 [data-theme="dark"] .text-gray-600 {
     color: #9690a8 !important;
@@ -1705,9 +1504,6 @@ window.startPlaybackFromModal = function () {
     [data-theme="auto"] .mcap-header-toolbar {
         background: transparent;
     }
-    [data-theme="auto"] .mcap-checkbox-label {
-        color: #c9c5d4;
-    }
     [data-theme="auto"] .mcap-btn-secondary {
         background: #3d3650;
         color: #c9c5d4;
@@ -1753,10 +1549,6 @@ window.startPlaybackFromModal = function () {
     [data-theme="auto"] .mcap-row-card:hover {
         background: #3d3650;
     }
-    [data-theme="auto"] .mcap-row-card.selected {
-        background: #3d3650 !important;
-        border-left-color: #E8B820;
-    }
     [data-theme="auto"] .mcap-row-card td {
         color: #c9c5d4;
     }
@@ -1785,13 +1577,6 @@ window.startPlaybackFromModal = function () {
     [data-theme="auto"] .mcap-storage-directory {
         border-top-color: rgba(255, 255, 255, 0.1);
         color: #9690a8;
-    }
-    [data-theme="auto"] .mcap-spinner-overlay {
-        background: rgba(26, 22, 37, 0.7);
-    }
-    [data-theme="auto"] .mcap-spinner {
-        border-color: #3d3650;
-        border-top-color: #E8B820;
     }
     [data-theme="auto"] .text-gray-600 {
         color: #9690a8 !important;
@@ -1854,7 +1639,7 @@ window.togglePlayMcap = function (fileName, directory, options = null) {
             })
             .catch(error => {
                 console.error('Error stopping replay:', error);
-                alert(`Error stopping replay: ${error.message}`);
+                window.showToast(`Error stopping replay: ${error.message}`, 'error');
                 refreshTable();
             });
     } else if (!window.isPlaying) {
@@ -1866,7 +1651,7 @@ window.togglePlayMcap = function (fileName, directory, options = null) {
 function deleteFile(fileName, directory) {
     console.log('deleteFile called', fileName, directory); // Debug log
     if (fileName === window.currentRecordingFile) {
-        alert('Cannot delete file while it is being recorded');
+        window.showToast('Cannot delete file while it is being recorded', 'warning');
         return;
     }
     const confirmDelete = confirm(`Are you sure you want to delete: ${fileName}?`);
@@ -1896,7 +1681,7 @@ function deleteFile(fileName, directory) {
             if (typeof startPolling === 'function') startPolling();
         }).catch(error => {
             console.error('Error deleting file:', error);
-            alert(`Error deleting file: ${error.message}`);
+            window.showToast(`Error deleting file ${fileName}: ${error.message}`, 'error');
         });
     }
 }
@@ -2080,7 +1865,7 @@ window.switchToLive = async function () {
         }, maxWait);
     } catch (error) {
         loadingDialog.close();
-        alert('Error turning on all or some services but device is switched to live mode.');
+        window.showToast('Error turning on all or some services but device is switched to live mode.', 'warning');
     }
 };
 
@@ -2229,12 +2014,7 @@ window.showStudioLoginDialog = async function(onSuccess) {
     const closeHandler = () => {
         // Check if user cancelled (dialog closed without successful login and callback was expected)
         if (!window.studioAuth.isLoggedIn && hadCallback) {
-            const msg = 'Authentication cancelled. Upload cannot proceed without signing in.';
-            if (typeof window.showToast === 'function') {
-                window.showToast(msg);
-            } else {
-                console.log(msg);
-            }
+            window.showToast('Authentication cancelled. Upload cannot proceed without signing in.', 'warning');
         }
     };
     dialog.addEventListener('close', closeHandler, { once: true });

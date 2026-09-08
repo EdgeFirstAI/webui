@@ -187,6 +187,40 @@ Located under `/config/`:
 | `services.html` | Service status and control |
 | `settings.html` | General settings hub |
 
+#### Saving a Configuration
+
+The seven service pages save through `js/configSave.js`, which owns the whole
+`POST /api/config/{service}` round trip. It takes the service name and the
+values, and returns `{ ok, level, message, body }`. Pages hide their loading
+overlay and show `message`; `saveServiceConfig` never rejects, so no page
+needs a `.catch` to avoid a stuck overlay.
+
+`fileName` is added by the helper rather than by each page. WebSRV requires
+it to match the `{service}` URL segment and answers 400 when they disagree —
+deriving both from one argument leaves no way for a page to get it wrong.
+
+WebSRV answers in JSON for every outcome, and the status code alone does not
+say whether the save worked:
+
+| Response | `level` | Shown to the user |
+|----------|---------|-------------------|
+| 200, `applied`, `restarted` | success | Saved and restarted. |
+| 200, `applied`, not running | success | Saved; the service was not running, so it was not restarted. |
+| 200, `restart_error` | warning | Saved, **but the unit failed to come back up**, with the systemd detail. |
+| 200, not `applied` | info | No changes to save. |
+| 400 with `rejected` | error | Each refused key and why. Nothing was written. |
+| 400/404/500 with `error` | error | The message, plus the paths tried on a 404. |
+| Transport failure or timeout | error | The server could not be reached, or did not answer in 30 s. |
+
+The `restart_error` row is the reason `response.ok` is not enough on its own:
+the file is written before the restart is attempted, so a restart failure
+cannot be reported as an HTTP error without misreporting the write.
+
+When a save reports keys under `unmatched`, those keys existed nowhere in the
+file — active or commented — and were appended as new lines. The helper names
+them in the message, since a key that matches nothing is usually a settings
+page and a service that disagree about a variable's name.
+
 ## Combined Visualization
 
 ```mermaid
@@ -232,6 +266,53 @@ stateDiagram-v2
 - **Blue** - Replay Mode (MCAP playback active)
 - **Red** - Stopped (all sensors stopped)
 
+## Notifications
+
+Every page reports outcomes through `window.showToast(message, level)`, defined
+in `js/toast.js` and loaded ahead of `navbar.js` on all pages. It replaced
+`alert()`, which blocked the page until acknowledged, rendered unstyled and
+outside the theme, and could show only one result at a time — a second failure
+had to wait for the first to be clicked away.
+
+Four levels drive the accent colour, the ARIA role and how long a toast lives:
+
+| Level | Lifetime | Role | Used for |
+|-------|----------|------|----------|
+| `success` | 5 s | `status` | A save applied, signing out of Studio |
+| `info` | 5 s | `status` | Nothing to do — the file already held these values |
+| `warning` | 10 s | `alert` | Applied with a caveat — saved but the unit did not restart |
+| `error` | until dismissed | `alert` | Nothing was applied, or the request failed |
+
+An error carries detail the user has to act on — a rejected save names every
+refused key and why — so it waits to be dismissed, as `alert()` did. Toasts
+stack rather than replace, so several failures in a row each stay readable
+instead of overwriting one another. A bulk dismiss appears once three are
+showing.
+
+Surviving an open modal `<dialog>` takes two separate things, and several
+callers report from inside one — the MCAP file browser and the play options
+modal among them.
+
+*Painting.* A modal dialog renders in the browser's top layer, above every
+ordinary stacking context, so a plain fixed toast is painted behind it whatever
+its `z-index`. The container is a **popover**, which shares that top layer.
+
+*Interaction.* `showModal()` additionally makes everything outside the dialog's
+subtree **inert**, and inert content cannot be clicked. A popover parented to
+`<body>` is therefore visible above an open dialog but its dismiss button does
+nothing — which strands an error toast, because errors wait to be dismissed.
+The container instead follows the topmost modal dialog, moving inside it while
+one is open and back to `<body>` when it closes, so it stays in the non-inert
+subtree. A `MutationObserver` on the `open` attribute catches a dialog opened
+*after* a toast is already showing, and re-enters the top layer so the dialog
+does not paint over it.
+
+Browsers without popover support fall back to fixed positioning, correct
+everywhere except on top of an open dialog.
+
+Styling lives in `css/theme.css` and uses the existing `--color-status-*`
+tokens, so toasts follow light, dark and auto themes with no extra work.
+
 ## Theme System
 
 The WebUI supports light and dark themes via CSS custom properties:
@@ -253,6 +334,8 @@ Theme selection follows priority: user preference > system preference > default 
 - **WebGL 2.0** - Three.js rendering
 - **WebSockets** - Real-time streaming
 - **ES6 Modules** - Native module support
+- **Popover API** - Toast notifications above modal dialogs (Chrome 114+, Edge
+  114+); older browsers fall back to fixed positioning
 
 ## Deployment
 

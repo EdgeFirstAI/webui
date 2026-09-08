@@ -783,3 +783,165 @@
 .widget-scrollable::-webkit-scrollbar-thumb:hover {
   background-color: var(--color-scrollbar-thumb-hover);
 }
+
+/* -----------------------------------------------------------------------------
+   Toast Notifications
+   Shared feedback surface, driven by window.showToast() in js/toast.js.
+   The container is a popover so it shares the browser's top layer with modal
+   <dialog> elements; without that it would be painted behind any open dialog.
+   ----------------------------------------------------------------------------- */
+.toast-container {
+  /* Clears the navbar so a toast never covers the recording controls. */
+  position: fixed;
+  inset: auto;
+  top: 4.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(34rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 6rem);
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  z-index: 9999;
+  /* The container spans a wide strip; only the cards themselves take clicks. */
+  pointer-events: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-scrollbar-thumb) transparent;
+}
+
+.toast-container:popover-open,
+.toast-container--fixed {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
+.toast-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  padding: 0.75rem 0.75rem 0.75rem 0.875rem;
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--toast-accent, var(--color-status-info));
+  border-radius: 0.5rem;
+  background-color: var(--color-bg-elevated);
+  color: var(--color-text-primary);
+  box-shadow: 0 8px 24px var(--color-shadow), 0 2px 6px var(--color-shadow);
+  pointer-events: auto;
+  /* A CSS animation rather than a class toggled on the next frame:
+     requestAnimationFrame does not run in a background tab, which would leave
+     a toast raised there stuck at zero opacity. */
+  animation: toast-in 0.2s ease-out both;
+}
+
+.toast-item--leaving {
+  animation: toast-out 0.18s ease-in both;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-0.5rem); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes toast-out {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-0.5rem); }
+}
+
+.toast-item--success {
+  --toast-accent: var(--color-status-success);
+}
+
+.toast-item--info {
+  --toast-accent: var(--color-status-info);
+}
+
+.toast-item--warning {
+  --toast-accent: var(--color-status-warning);
+}
+
+.toast-item--error {
+  --toast-accent: var(--color-status-error);
+}
+
+.toast-item__icon {
+  flex: 0 0 auto;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-top: 0.0625rem;
+  color: var(--toast-accent);
+}
+
+.toast-item__text {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  /* Server messages are multi-line: a rejected save lists each refused key on
+     its own line, separated from the summary by a blank line. */
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  /* A long list scrolls inside the card rather than filling the viewport. */
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.toast-item__close {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: none;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background-color 0.15s ease-out, color 0.15s ease-out;
+}
+
+.toast-item__close svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.toast-item__close:hover {
+  background-color: var(--color-border);
+  color: var(--color-text-primary);
+}
+
+.toast-item__close:focus-visible {
+  outline: 2px solid var(--toast-accent);
+  outline-offset: 1px;
+}
+
+.toast-dismiss-all {
+  align-self: flex-end;
+  padding: 0.25rem 0.625rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.375rem;
+  background-color: var(--color-bg-elevated);
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  pointer-events: auto;
+  box-shadow: 0 2px 6px var(--color-shadow);
+}
+
+.toast-dismiss-all:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-border-hover);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast-item,
+  .toast-item--leaving {
+    animation-duration: 0.01ms;
+  }
+}
