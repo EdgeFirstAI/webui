@@ -458,6 +458,16 @@
                 <h2>Additional LiDAR Settings</h2>
 
                 <div class="form-group">
+                    <label for="sensor_type">Sensor Type:</label>
+                    <select id="sensor_type" name="sensor_type">
+                        <option value="ouster" selected>Ouster</option>
+                        <option value="robosense">Robosense</option>
+                    </select>
+                    <div class="comment">Field of View, LiDAR Mode and Timestamp Mode apply to Ouster sensors;
+                        the Robosense section below applies to Robosense sensors.</div>
+                </div>
+
+                <div class="form-group">
                     <label for="log_level">Log Level:</label>
                     <select id="log_level" name="log_level">
                         <option value="info">Info</option>
@@ -508,6 +518,101 @@
                     <input type="text" id="tf_quat" name="tf_quat" value="0 0 -0.9998157 0.0191974"
                         pattern="-?\d*\.?\d+\s+-?\d*\.?\d+\s+-?\d*\.?\d+\s+-?\d*\.?\d+">
                     <div class="comment">LiDAR frame rotation quaternion (X Y Z W) from the base_link</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="mirror">Mirror:</label>
+                    <select id="mirror" name="mirror">
+                        <option value="" selected>None</option>
+                        <option value="horizontal">Horizontal</option>
+                        <option value="vertical">Vertical</option>
+                        <option value="both">Both</option>
+                    </select>
+                    <div class="comment">Mirror the point cloud when the sensor's coordinate frame does not
+                        match the expected orientation</div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <h2>Ground Filtering</h2>
+
+                <div class="form-group">
+                    <label for="ground_filter">Ground Filter:</label>
+                    <input type="checkbox" id="ground_filter" name="ground_filter">
+                    <label for="ground_filter">Enabled</label>
+                    <div class="comment">IMU-guided ground plane removal before clustering. Requires IMU data,
+                        either Robosense built-in or external.</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="ground_thickness">Ground Thickness (mm):</label>
+                    <input type="number" id="ground_thickness" name="ground_thickness" min="0" placeholder="150">
+                    <div class="comment">Points within this distance above the detected ground plane are
+                        removed (default: 150)</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="sensor_height">Sensor Height (mm):</label>
+                    <input type="number" id="sensor_height" name="sensor_height" min="0" placeholder="auto-detect">
+                    <div class="comment">Known height above ground. When set, skips automatic ground detection
+                        and uses this fixed height instead.</div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <h2>Clustering</h2>
+
+                <div class="form-group">
+                    <label for="clustering">Clustering Algorithm:</label>
+                    <select id="clustering" name="clustering">
+                        <option value="" selected>Disabled</option>
+                        <option value="dbscan">DBSCAN</option>
+                        <option value="voxel">Voxel</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="clustering_eps">Clustering Distance (mm):</label>
+                    <input type="number" id="clustering_eps" name="clustering_eps" min="1" placeholder="200">
+                    <div class="comment">3D Euclidean distance threshold for clustering (default: 200)</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="clustering_minpts">Clustering Minimum Points:</label>
+                    <input type="number" id="clustering_minpts" name="clustering_minpts" min="1" placeholder="4">
+                    <div class="comment">Minimum number of points to form a cluster (default: 4)</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="clustering_bridge">Clustering Bridge:</label>
+                    <input type="number" id="clustering_bridge" name="clustering_bridge" min="0" placeholder="0">
+                    <div class="comment">Minimum neighbours for a point to propagate during cluster expansion.
+                        Higher values stop thin structures such as ropes and wires from merging separate
+                        objects. 0 means the same as Clustering Minimum Points, which is standard DBSCAN.</div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <h2>Robosense Settings</h2>
+
+                <div class="form-group">
+                    <label for="msop_port">MSOP Port:</label>
+                    <input type="number" id="msop_port" name="msop_port" min="1" max="65535" placeholder="6699">
+                    <div class="comment">Main data Stream Output Protocol port (default: 6699)</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="difop_port">DIFOP Port:</label>
+                    <input type="number" id="difop_port" name="difop_port" min="1" max="65535" placeholder="7788">
+                    <div class="comment">Device Information Output Protocol port (default: 7788)</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="include_noisy">Include Noisy Points:</label>
+                    <input type="checkbox" id="include_noisy" name="include_noisy">
+                    <label for="include_noisy">Enabled</label>
+                    <div class="comment">Keep points the sensor flags as noisy. They are filtered out by
+                        default.</div>
                 </div>
             </div>
 
@@ -889,6 +994,18 @@
                     document.getElementById('timestamp_mode').value = data.TIMESTAMP_MODE || 'ptp1588';
                     document.getElementById('tf_vec').value = Array.isArray(data.TF_VEC) ? data.TF_VEC.join(' ') : (data.TF_VEC || '0 0 -0.19');
                     document.getElementById('tf_quat').value = Array.isArray(data.TF_QUAT) ? data.TF_QUAT.join(' ') : (data.TF_QUAT || '0 0 -0.9998157 0.0191974');
+                    document.getElementById('sensor_type').value = data.SENSOR_TYPE || 'ouster';
+                    document.getElementById('mirror').value = data.MIRROR || '';
+                    document.getElementById('ground_filter').checked = data.GROUND_FILTER === 'true';
+                    document.getElementById('ground_thickness').value = data.GROUND_THICKNESS || '';
+                    document.getElementById('sensor_height').value = data.SENSOR_HEIGHT || '';
+                    document.getElementById('clustering').value = data.CLUSTERING || '';
+                    document.getElementById('clustering_eps').value = data.CLUSTERING_EPS || '';
+                    document.getElementById('clustering_minpts').value = data.CLUSTERING_MINPTS || '';
+                    document.getElementById('clustering_bridge').value = data.CLUSTERING_BRIDGE || '';
+                    document.getElementById('msop_port').value = data.MSOP_PORT || '';
+                    document.getElementById('difop_port').value = data.DIFOP_PORT || '';
+                    document.getElementById('include_noisy').checked = data.INCLUDE_NOISY === 'true';
 
                     if (data.AZIMUTH) {
                         const angles = Array.isArray(data.AZIMUTH) ? data.AZIMUTH : data.AZIMUTH.trim().split(/\s+/);
@@ -923,7 +1040,19 @@
                     LIDAR_MODE: document.getElementById('lidar_mode').value,
                     TIMESTAMP_MODE: document.getElementById('timestamp_mode').value,
                     TF_VEC: document.getElementById('tf_vec').value,
-                    TF_QUAT: document.getElementById('tf_quat').value
+                    TF_QUAT: document.getElementById('tf_quat').value,
+                    SENSOR_TYPE: document.getElementById('sensor_type').value,
+                    MIRROR: document.getElementById('mirror').value,
+                    GROUND_FILTER: document.getElementById('ground_filter').checked ? 'true' : 'false',
+                    GROUND_THICKNESS: document.getElementById('ground_thickness').value,
+                    SENSOR_HEIGHT: document.getElementById('sensor_height').value,
+                    CLUSTERING: document.getElementById('clustering').value,
+                    CLUSTERING_EPS: document.getElementById('clustering_eps').value,
+                    CLUSTERING_MINPTS: document.getElementById('clustering_minpts').value,
+                    CLUSTERING_BRIDGE: document.getElementById('clustering_bridge').value,
+                    MSOP_PORT: document.getElementById('msop_port').value,
+                    DIFOP_PORT: document.getElementById('difop_port').value,
+                    INCLUDE_NOISY: document.getElementById('include_noisy').checked ? 'true' : 'false'
                 };
 
                 saveServiceConfig('lidarpub', configData).then(result => {
