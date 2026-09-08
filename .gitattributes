@@ -1,0 +1,13 @@
+# Normalise line endings. The repository had drifted to a mix of CRLF and LF
+# — 18 files against 69 — which made whole-file rewrites appear in diffs
+# whenever an editor rewrote one on save. Text is stored as LF and checked
+# out as LF on every platform, so a file's endings no longer depend on who
+# last touched it.
+* text=auto eol=lf
+
+# Binary assets must never be touched.
+*.png binary
+*.stl binary
+
+# Shell scripts break if they are ever checked out with CRLF.
+*.sh text eol=lf
