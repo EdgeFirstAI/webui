@@ -5,9 +5,9 @@
 //
 // Replaces alert() as the way pages report an outcome. alert() blocks the
 // page until it is acknowledged, renders unstyled, and cannot show two
-// results at once — during a bulk delete of twenty recordings it produced
-// twenty modal prompts in sequence. Toasts are non-blocking and stack, so a
-// batch that partly failed shows one entry per failure.
+// results at once: a second failure had to wait for the first to be
+// clicked away. Toasts are non-blocking and stack, so several failures in
+// a row each get their own entry.
 //
 // Two things are needed to survive an open modal <dialog>, and they are not
 // the same problem:

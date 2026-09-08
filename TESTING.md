@@ -423,8 +423,8 @@ data-testid="<page>-<element>-<name>"
 
 Success and info toasts clear themselves after 5 seconds and warnings after
 10, so a test that asserts on one should read it promptly. Errors stay until
-dismissed. Toasts stack rather than replace: a bulk delete where four files
-fail leaves four `toast-message` elements.
+dismissed. Toasts stack rather than replace: four failures in a row leave
+four `toast-message` elements.
 
 ```js
 // Save a configuration and read the outcome

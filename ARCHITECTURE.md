@@ -271,8 +271,8 @@ stateDiagram-v2
 Every page reports outcomes through `window.showToast(message, level)`, defined
 in `js/toast.js` and loaded ahead of `navbar.js` on all pages. It replaced
 `alert()`, which blocked the page until acknowledged, rendered unstyled and
-outside the theme, and could show only one result at a time — a bulk delete of
-twenty recordings produced twenty modal prompts in sequence.
+outside the theme, and could show only one result at a time — a second failure
+had to wait for the first to be clicked away.
 
 Four levels drive the accent colour, the ARIA role and how long a toast lives:
 
@@ -285,8 +285,9 @@ Four levels drive the accent colour, the ARIA role and how long a toast lives:
 
 An error carries detail the user has to act on — a rejected save names every
 refused key and why — so it waits to be dismissed, as `alert()` did. Toasts
-stack rather than replace, which is what makes a partly failed batch legible:
-one entry per failure. A bulk dismiss appears once three are showing.
+stack rather than replace, so several failures in a row each stay readable
+instead of overwriting one another. A bulk dismiss appears once three are
+showing.
 
 Surviving an open modal `<dialog>` takes two separate things, and several
 callers report from inside one — the MCAP file browser and the play options
