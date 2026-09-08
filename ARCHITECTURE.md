@@ -187,6 +187,43 @@ Located under `/config/`:
 | `services.html` | Service status and control |
 | `settings.html` | General settings hub |
 
+#### Which Options a Page Exposes
+
+A page exposes exactly the options its service accepts, minus the Zenoh
+transport settings (`CONNECT`, `LISTEN`, `MODE`, `NO_MULTICAST_SCOUTING`),
+which are deployment topology rather than user configuration and are managed
+outside the web UI.
+
+The authority is the service's own `clap` argument definitions — every
+control's key, type, allowed values and documented default comes from there,
+not from the shipped `.default` file, which may lag. A control whose key the
+service does not accept is worse than useless: since WebSRV 4.2.0 appends
+keys that are absent from the file, it writes a dead line into
+`/etc/default/*` on every save. Before then such a key was silently dropped,
+which is how nine of them survived unnoticed.
+
+Topic names (`*_TOPIC`), frame IDs, profiling switches (`TRACY`,
+`TOKIO_CONSOLE`) and replay/debug paths are deliberately not exposed. They
+are pipeline plumbing or developer tooling, not operator settings.
+
+`gpsd.html` is the exception: gpsd is a Debian package rather than an
+EdgeFirst service, so its options cannot be checked against source in this
+tree.
+
+**A blank control means "use the service default."** It posts `KEY=""`, and
+every service scrubs empty environment variables bound to its own arguments
+before `clap` sees them, so the default applies. This is load-bearing: clap
+treats a present-but-empty variable as a supplied value, so without the
+scrub `JPEG=""` would be "a value is required" and `MIRROR=""` an invalid
+enum, and a page of untouched controls would stop the service from starting.
+
+The exception is a variable on a service's `KEEP` list, where `""` is the
+documented "leave empty to disable" sentinel and is preserved rather than
+scrubbed. All four of fusion's — `LIDAR_OUTPUT_TOPIC`, `RADAR_OUTPUT_TOPIC`,
+`VISION_MODEL_TOPIC`, `MODEL_INFO_TOPIC` — are topics, and so are not
+exposed. Any future control for a `KEEP` variable must treat blank as
+*disabled*, not as *default*.
+
 #### Saving a Configuration
 
 The seven service pages save through `js/configSave.js`, which owns the whole
