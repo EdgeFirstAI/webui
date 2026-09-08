@@ -132,26 +132,38 @@ async function saveServiceConfig(service, values) {
     }
 }
 
+/**
+ * Describe an exchange that gave no usable answer. Neither a timeout nor a
+ * transport failure says whether websrv wrote the file, so neither may claim
+ * it did or did not.
+ */
+function indeterminate(service, error) {
+    const reason = error.name === 'AbortError'
+        ? `The server did not answer within ${SAVE_TIMEOUT_MS / 1000} seconds.`
+        : 'The server could not be reached.';
+    return {
+        ok: false,
+        level: 'error',
+        message: `Could not save the ${service} configuration. ${reason} It may or may not have been written; reload the page to see the current values.`,
+        body: null
+    };
+}
+
 async function requestSave(service, values, signal) {
     let response;
     try {
         response = await fetch(`/api/config/${service}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fileName: service, ...values }),
+            // Spread first so the derived fileName wins: a caller passing its
+            // own would otherwise recreate the URL/body mismatch this helper
+            // exists to prevent, which websrv rejects with 400.
+            body: JSON.stringify({ ...values, fileName: service }),
             signal
         });
     } catch (error) {
         console.error(`Error saving ${service} configuration:`, error);
-        const reason = error.name === 'AbortError'
-            ? `The server did not answer within ${SAVE_TIMEOUT_MS / 1000} seconds.`
-            : 'The server could not be reached.';
-        return {
-            ok: false,
-            level: 'error',
-            message: `Could not save the ${service} configuration. ${reason} It may or may not have been written; reload the page to see the current values.`,
-            body: null
-        };
+        return indeterminate(service, error);
     }
 
     // websrv answers in JSON for every outcome, including the 400 and 415
@@ -162,6 +174,12 @@ async function requestSave(service, values, signal) {
         body = await response.json();
     } catch (error) {
         console.error(`Unparseable response saving ${service} configuration:`, error);
+        // The deadline covers the whole exchange, so it can fire after the
+        // headers have arrived but while the body is still being read.
+        // Falling through would report that 200 as a probable success.
+        if (error.name === 'AbortError') {
+            return indeterminate(service, error);
+        }
     }
 
     if (!response.ok) {

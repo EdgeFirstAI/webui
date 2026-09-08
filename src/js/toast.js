@@ -69,12 +69,29 @@ function supportsPopover() {
  * point everything outside that dialog stops responding to clicks.
  */
 function hostFor() {
+    let modals;
     try {
-        return document.querySelector('dialog:modal') || document.body;
+        modals = document.querySelectorAll('dialog:modal');
     } catch {
         // An unsupported selector must not take the notification with it.
         return document.body;
     }
+    if (modals.length === 0) {
+        return document.body;
+    }
+    // Only the topmost modal escapes inertness, and dialogs nest here: the
+    // MCAP browser stays open underneath the play options modal, so the
+    // first match in document order can be the lower, inert one.
+    // showModal() moves focus into the dialog it opens, so the one holding
+    // focus is the live one.
+    for (let i = modals.length - 1; i >= 0; i -= 1) {
+        if (modals[i].contains(document.activeElement)) {
+            return modals[i];
+        }
+    }
+    // Nothing focused — fall back to document order. These dialogs are
+    // appended to <body> as they are first opened, so the newest is last.
+    return modals[modals.length - 1];
 }
 
 /**
@@ -311,13 +328,18 @@ function showToast(message, level, options) {
 // popover="manual" does not light-dismiss, so Escape is wired up by hand.
 // Only the newest toast goes, matching how a stack of dialogs unwinds.
 document.addEventListener('keydown', (event) => {
-    if (event.key !== 'Escape') {
+    if (event.key !== 'Escape' || event.defaultPrevented) {
         return;
     }
     const toasts = toastElements();
-    if (toasts.length > 0) {
-        removeToast(toasts[toasts.length - 1]);
+    if (toasts.length === 0) {
+        return;
     }
+    removeToast(toasts[toasts.length - 1]);
+    // Escape on an open modal <dialog> is a close request. Without this the
+    // one keystroke both dismisses the toast and closes the dialog under it,
+    // discarding whatever the user had open.
+    event.preventDefault();
 });
 
 window.showToast = showToast;

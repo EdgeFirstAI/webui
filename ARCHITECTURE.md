@@ -278,8 +278,8 @@ Four levels drive the accent colour, the ARIA role and how long a toast lives:
 
 | Level | Lifetime | Role | Used for |
 |-------|----------|------|----------|
-| `success` | 5 s | `status` | A save applied, a recording deleted |
-| `info` | 5 s | `status` | Nothing to do — no changes to save, no files selected |
+| `success` | 5 s | `status` | A save applied, signing out of Studio |
+| `info` | 5 s | `status` | Nothing to do — the file already held these values |
 | `warning` | 10 s | `alert` | Applied with a caveat — saved but the unit did not restart |
 | `error` | until dismissed | `alert` | Nothing was applied, or the request failed |
 

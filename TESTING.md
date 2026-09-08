@@ -413,11 +413,15 @@ data-testid="<page>-<element>-<name>"
 - `settings-card-studio`
 
 **Toasts (every page):**
-- `toast-container` - Notification container, present only while a toast is
-  showing. It is a popover, so it renders in the browser's top layer and is
-  visible above an open modal `<dialog>`.
-- `toast-message` - One notification. Carries `data-level` of `success`,
-  `info`, `warning` or `error`.
+- `toast-container` - Notification container. Created on the first toast and
+  then left in the DOM; it is hidden rather than removed once the last toast
+  goes, so **do not wait for it to disappear** — count `toast-message`
+  instead. It is a popover, so it renders in the browser's top layer and
+  stays visible and clickable above an open modal `<dialog>`; while one is
+  open the container is reparented inside it, so do not assume it is a child
+  of `<body>`.
+- `toast-message` - One notification, and the element to assert on. Carries
+  `data-level` of `success`, `info`, `warning` or `error`.
 - `toast-close` - Dismiss button on a notification.
 - `toast-dismiss-all` - Bulk dismiss, shown once three or more are stacked.
 
