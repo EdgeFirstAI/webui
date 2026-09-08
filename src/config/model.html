@@ -249,14 +249,6 @@
             <input type="number" id="label_offset" value="0">
         </div>
         <div class="form-group">
-            <label for="engine">ENGINE:</label>
-            <select id="engine">
-                <option value="NPU">NPU</option>
-                <option value="CPU">CPU</option>
-                <option value="GPU">GPU</option>
-            </select>
-        </div>
-        <div class="form-group">
             <label for="track">TRACK:</label>
             <select id="track">
                 <option value="true">True</option>
@@ -268,31 +260,12 @@
             <input type="text" id="trackExtraLifespan" name="trackExtraLifespan" placeholder="2.0">
         </div>
         <div class="form-group">
-            <label for="track_high_conf">TRACK_HIGH_CONF:</label>
-            <input type="number" id="track_high_conf" value="0.4" step="0.01">
-        </div>
-        <div class="form-group">
             <label for="track_iou">TRACK_IOU:</label>
             <input type="number" id="track_iou" value="0.25" step="0.01">
         </div>
         <div class="form-group">
             <label for="track_update">TRACK_UPDATE:</label>
             <input type="number" id="track_update" value="0.25" step="0.01">
-        </div>
-        <div class="form-group">
-            <label for="mask_compression">MASK_COMPRESSION:</label>
-            <select id="mask_compression">
-                <option value="true">True</option>
-                <option value="false">False</option>
-            </select>
-        </div>
-        <div class="form-group">
-            <label for="viv_vx_enable_cache">VIV_VX_ENABLE_CACHE_GRAPH_BINARY:</label>
-            <input type="number" id="viv_vx_enable_cache" value="0">
-        </div>
-        <div class="form-group">
-            <label for="viv_vx_cache_dir">VIV_VX_CACHE_BINARY_GRAPH_DIR:</label>
-            <input type="text" id="viv_vx_cache_dir" value="/var/cache">
         </div>
         <div class="button-container">
             <button id="saveConfig" class="btn-primary btn-block">
@@ -338,15 +311,10 @@
                     setInputValue('iou', data.IOU, 0.2);
                     setInputValue('max_boxes', data.MAX_BOXES, 50);
                     setInputValue('label_offset', data.LABEL_OFFSET, 0);
-                    setInputValue('engine', data.ENGINE, 'NPU');
                     setInputValue('track', data.TRACK, 'true');
                     setInputValue('trackExtraLifespan', data.TRACK_EXTRA_LIFESPAN, 0.5);
-                    setInputValue('track_high_conf', data.TRACK_HIGH_CONF, 0.4);
                     setInputValue('track_iou', data.TRACK_IOU, 0.25);
                     setInputValue('track_update', data.TRACK_UPDATE, 0.25);
-                    setInputValue('mask_compression', data.MASK_COMPRESSION, 'true');
-                    setInputValue('viv_vx_enable_cache', data.VIV_VX_ENABLE_CACHE_GRAPH_BINARY, 0);
-                    setInputValue('viv_vx_cache_dir', data.VIV_VX_CACHE_BINARY_GRAPH_DIR, '/var/cache');
                 })
                 .catch(error => console.error('Error fetching configuration:', error));
         });
@@ -363,15 +331,10 @@
                 IOU: document.getElementById('iou')?.value,
                 MAX_BOXES: document.getElementById('max_boxes')?.value,
                 LABEL_OFFSET: document.getElementById('label_offset')?.value,
-                ENGINE: document.getElementById('engine')?.value,
                 TRACK: document.getElementById('track')?.value,
                 TRACK_EXTRA_LIFESPAN: document.getElementById('trackExtraLifespan')?.value,
-                TRACK_HIGH_CONF: document.getElementById('track_high_conf')?.value,
                 TRACK_IOU: document.getElementById('track_iou')?.value,
-                TRACK_UPDATE: document.getElementById('track_update')?.value,
-                MASK_COMPRESSION: document.getElementById('mask_compression')?.value,
-                VIV_VX_ENABLE_CACHE_GRAPH_BINARY: document.getElementById('viv_vx_enable_cache')?.value,
-                VIV_VX_CACHE_BINARY_GRAPH_DIR: document.getElementById('viv_vx_cache_dir')?.value
+                TRACK_UPDATE: document.getElementById('track_update')?.value
             };
             Object.keys(configData).forEach(key => {
                 if (configData[key] === undefined) {

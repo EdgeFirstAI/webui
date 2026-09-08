@@ -470,13 +470,6 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="zenoh_timeout">Zenoh Wait Before Drop (μs):</label>
-                    <input type="number" id="zenoh_timeout" name="zenoh_timeout" value="100000">
-                    <div class="comment">Microsecond timeout before dropping a Zenoh message (default: 100000 for 10Hz)
-                    </div>
-                </div>
-
-                <div class="form-group">
                     <label for="target">Target Device:</label>
                     <input type="text" id="target" name="target" placeholder="os-xxxxxxxxxx.local">
                     <div class="comment">Hostname or IP address of the LiDAR target device</div>
@@ -891,7 +884,6 @@
                     // Set values for all form fields
                     console.log(data);
                     document.getElementById('log_level').value = data.RUST_LOG || 'info';
-                    document.getElementById('zenoh_timeout').value = data.ZENOH_WAIT_BEFORE_DROP || '100000';
                     document.getElementById('target').value = (data.TARGET !== undefined && data.TARGET !== null) ? data.TARGET : '';
                     document.getElementById('lidar_mode').value = data.LIDAR_MODE || '1024x10';
                     document.getElementById('timestamp_mode').value = data.TIMESTAMP_MODE || 'ptp1588';
@@ -926,7 +918,6 @@
 
                 const configData = {
                     RUST_LOG: document.getElementById('log_level').value,
-                    ZENOH_WAIT_BEFORE_DROP: document.getElementById('zenoh_timeout').value,
                     TARGET: document.getElementById('target').value,
                     AZIMUTH: `${startAngle} ${stopAngle}`,
                     LIDAR_MODE: document.getElementById('lidar_mode').value,
