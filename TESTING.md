@@ -412,6 +412,27 @@ data-testid="<page>-<element>-<name>"
 - `settings-card-services`
 - `settings-card-studio`
 
+**Toasts (every page):**
+- `toast-container` - Notification container, present only while a toast is
+  showing. It is a popover, so it renders in the browser's top layer and is
+  visible above an open modal `<dialog>`.
+- `toast-message` - One notification. Carries `data-level` of `success`,
+  `info`, `warning` or `error`.
+- `toast-close` - Dismiss button on a notification.
+- `toast-dismiss-all` - Bulk dismiss, shown once three or more are stacked.
+
+Success and info toasts clear themselves after 5 seconds and warnings after
+10, so a test that asserts on one should read it promptly. Errors stay until
+dismissed. Toasts stack rather than replace: a bulk delete where four files
+fail leaves four `toast-message` elements.
+
+```js
+// Save a configuration and read the outcome
+await page.click('#saveConfig');   // config pages have no test IDs yet
+const toast = page.locator('[data-testid="toast-message"]');
+await expect(toast).toHaveAttribute('data-level', 'success');
+```
+
 ### Selenium Example
 
 ```python

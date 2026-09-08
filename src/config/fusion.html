@@ -15,6 +15,7 @@
     <script src="../js/tailwind.js"></script>
     <script src="../js/theme.js"></script>
     <script src="../js/neuralMesh.js"></script>
+    <script src="../js/toast.js"></script>
     <script src="../js/navbar.js"></script>
     <script src="../js/serviceCache.js"></script>
     <script src="../js/configSave.js"></script>
@@ -327,7 +328,7 @@
 
             saveServiceConfig('fusion', configData).then(result => {
                 loadingOverlay.style.display = 'none';
-                alert(result.message);
+                window.showToast(result.message, result.level);
             });
         });
 

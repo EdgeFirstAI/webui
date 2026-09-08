@@ -613,20 +613,6 @@ window.showMcapDialog = async function () {
                 return row && row.style.display !== 'none';
             });
         }
-        function showToast(msg) {
-            let toast = document.getElementById('mcap-toast');
-            if (!toast) {
-                toast = document.createElement('div');
-                toast.id = 'mcap-toast';
-                toast.className = 'mcap-toast';
-                document.body.appendChild(toast);
-            }
-            toast.textContent = msg;
-            toast.style.opacity = '0.97';
-            toast.style.display = 'block';
-            setTimeout(() => { toast.style.opacity = '0'; }, 1800);
-            setTimeout(() => { toast.style.display = 'none'; }, 2200);
-        }
         function showSpinner() {
             let overlay = document.getElementById('mcap-spinner-overlay');
             if (!overlay) {
@@ -683,7 +669,7 @@ window.showMcapDialog = async function () {
             deleteBtn.onclick = async function () {
                 const selected = visibleCheckboxes().filter(cb => cb.checked).map(cb => cb.getAttribute('data-filename'));
                 if (selected.length === 0) {
-                    alert('No files selected.');
+                    window.showToast('No files selected.', 'info');
                     return;
                 }
                 if (!confirm(`Delete ${selected.length} selected file(s)?`)) return;
@@ -697,7 +683,7 @@ window.showMcapDialog = async function () {
                 window.confirm = originalConfirm;
                 setTimeout(() => {
                     hideSpinner();
-                    showToast(`${selected.length} file${selected.length > 1 ? 's' : ''} deleted.`);
+                    window.showToast(`${selected.length} file${selected.length > 1 ? 's' : ''} deleted.`, 'success');
                     if (typeof showMcapDialog === 'function') showMcapDialog();
                 }, 400);
             };
@@ -965,7 +951,7 @@ window.startPlaybackFromModal = function () {
         })
         .catch(error => {
             console.error('Error starting playback:', error);
-            alert(`Error starting playback: ${error.message}`);
+            window.showToast(`Error starting playback: ${error.message}`, 'error');
         });
 };
 
@@ -1475,23 +1461,6 @@ window.startPlaybackFromModal = function () {
     background: #d4a41c !important;
     color: #222 !important;
 }
-.mcap-toast {
-    position: fixed;
-    left: 50%;
-    bottom: 2.5rem;
-    transform: translateX(-50%);
-    background: #222;
-    color: #fff;
-    padding: 0.9rem 2.2rem;
-    border-radius: 1.2rem;
-    font-size: 1.08rem;
-    font-weight: 500;
-    box-shadow: 0 4px 24px rgba(0,0,0,0.18);
-    z-index: 9999;
-    opacity: 0.97;
-    pointer-events: none;
-    transition: opacity 0.3s;
-}
 .mcap-spinner-overlay {
     position: fixed;
     left: 0; top: 0; right: 0; bottom: 0;
@@ -1854,7 +1823,7 @@ window.togglePlayMcap = function (fileName, directory, options = null) {
             })
             .catch(error => {
                 console.error('Error stopping replay:', error);
-                alert(`Error stopping replay: ${error.message}`);
+                window.showToast(`Error stopping replay: ${error.message}`, 'error');
                 refreshTable();
             });
     } else if (!window.isPlaying) {
@@ -1866,7 +1835,7 @@ window.togglePlayMcap = function (fileName, directory, options = null) {
 function deleteFile(fileName, directory) {
     console.log('deleteFile called', fileName, directory); // Debug log
     if (fileName === window.currentRecordingFile) {
-        alert('Cannot delete file while it is being recorded');
+        window.showToast('Cannot delete file while it is being recorded', 'warning');
         return;
     }
     const confirmDelete = confirm(`Are you sure you want to delete: ${fileName}?`);
@@ -1896,7 +1865,7 @@ function deleteFile(fileName, directory) {
             if (typeof startPolling === 'function') startPolling();
         }).catch(error => {
             console.error('Error deleting file:', error);
-            alert(`Error deleting file: ${error.message}`);
+            window.showToast(`Error deleting file ${fileName}: ${error.message}`, 'error');
         });
     }
 }
@@ -2080,7 +2049,7 @@ window.switchToLive = async function () {
         }, maxWait);
     } catch (error) {
         loadingDialog.close();
-        alert('Error turning on all or some services but device is switched to live mode.');
+        window.showToast('Error turning on all or some services but device is switched to live mode.', 'warning');
     }
 };
 
@@ -2229,12 +2198,7 @@ window.showStudioLoginDialog = async function(onSuccess) {
     const closeHandler = () => {
         // Check if user cancelled (dialog closed without successful login and callback was expected)
         if (!window.studioAuth.isLoggedIn && hadCallback) {
-            const msg = 'Authentication cancelled. Upload cannot proceed without signing in.';
-            if (typeof window.showToast === 'function') {
-                window.showToast(msg);
-            } else {
-                console.log(msg);
-            }
+            window.showToast('Authentication cancelled. Upload cannot proceed without signing in.', 'warning');
         }
     };
     dialog.addEventListener('close', closeHandler, { once: true });

@@ -266,6 +266,52 @@ stateDiagram-v2
 - **Blue** - Replay Mode (MCAP playback active)
 - **Red** - Stopped (all sensors stopped)
 
+## Notifications
+
+Every page reports outcomes through `window.showToast(message, level)`, defined
+in `js/toast.js` and loaded ahead of `navbar.js` on all pages. It replaced
+`alert()`, which blocked the page until acknowledged, rendered unstyled and
+outside the theme, and could show only one result at a time — a bulk delete of
+twenty recordings produced twenty modal prompts in sequence.
+
+Four levels drive the accent colour, the ARIA role and how long a toast lives:
+
+| Level | Lifetime | Role | Used for |
+|-------|----------|------|----------|
+| `success` | 5 s | `status` | A save applied, a recording deleted |
+| `info` | 5 s | `status` | Nothing to do — no changes to save, no files selected |
+| `warning` | 10 s | `alert` | Applied with a caveat — saved but the unit did not restart |
+| `error` | until dismissed | `alert` | Nothing was applied, or the request failed |
+
+An error carries detail the user has to act on — a rejected save names every
+refused key and why — so it waits to be dismissed, as `alert()` did. Toasts
+stack rather than replace, which is what makes a partly failed batch legible:
+one entry per failure. A bulk dismiss appears once three are showing.
+
+Surviving an open modal `<dialog>` takes two separate things, and several
+callers report from inside one — the MCAP file browser and the play options
+modal among them.
+
+*Painting.* A modal dialog renders in the browser's top layer, above every
+ordinary stacking context, so a plain fixed toast is painted behind it whatever
+its `z-index`. The container is a **popover**, which shares that top layer.
+
+*Interaction.* `showModal()` additionally makes everything outside the dialog's
+subtree **inert**, and inert content cannot be clicked. A popover parented to
+`<body>` is therefore visible above an open dialog but its dismiss button does
+nothing — which strands an error toast, because errors wait to be dismissed.
+The container instead follows the topmost modal dialog, moving inside it while
+one is open and back to `<body>` when it closes, so it stays in the non-inert
+subtree. A `MutationObserver` on the `open` attribute catches a dialog opened
+*after* a toast is already showing, and re-enters the top layer so the dialog
+does not paint over it.
+
+Browsers without popover support fall back to fixed positioning, correct
+everywhere except on top of an open dialog.
+
+Styling lives in `css/theme.css` and uses the existing `--color-status-*`
+tokens, so toasts follow light, dark and auto themes with no extra work.
+
 ## Theme System
 
 The WebUI supports light and dark themes via CSS custom properties:
@@ -287,6 +333,8 @@ Theme selection follows priority: user preference > system preference > default 
 - **WebGL 2.0** - Three.js rendering
 - **WebSockets** - Real-time streaming
 - **ES6 Modules** - Native module support
+- **Popover API** - Toast notifications above modal dialogs (Chrome 114+, Edge
+  114+); older browsers fall back to fixed positioning
 
 ## Deployment
 

@@ -40,12 +40,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   configuration file, active or commented, are named in the save message.
   A key that matches nothing usually means the settings page and the service
   disagree about a variable's name.
+- `js/toast.js`, a shared notification bar used across the whole WebUI.
+  `window.showToast(message, level)` shows a card below the navbar in one of
+  four levels: `success` and `info` clear after 5 seconds, `warning` after
+  10, and `error` stays until dismissed, since a failed save names the keys
+  the user has to correct. Toasts stack rather than replace, so a bulk
+  operation that partly failed shows one entry per failure, and a bulk
+  dismiss appears once three are showing. Styling follows the existing
+  `--color-status-*` theme tokens, so it tracks light, dark and auto.
 
 ### Changed
 
 - The pages no longer send `fileName` themselves. `saveServiceConfig` derives
   it from the service name it is already given, so it cannot disagree with
   the `{service}` URL segment — a mismatch that WebSRV now rejects with 400.
+- Every `alert()` in the WebUI is now a toast. `alert()` blocked the page
+  until it was acknowledged, rendered outside the theme, and could show only
+  one result at a time — deleting twenty recordings where several failed
+  produced a queue of modal prompts. This covers all seven configuration
+  pages, the services page, recording start and stop, MCAP playback and
+  deletion, and the switch back to live mode. `confirm()` is unchanged: it
+  asks a question the code branches on, which a toast cannot do.
+- Configuration pages now colour the save outcome by its severity. The
+  `level` that `saveServiceConfig` had been returning since it was added was
+  discarded by every caller, so a failed restart looked the same as a clean
+  save.
+- The MCAP dialog's own toast implementation is gone, replaced by the shared
+  one. It was bottom-centred, hardcoded to a dark palette regardless of
+  theme, and had no notion of severity.
+- Two messages were never shown at all: signing out of EdgeFirst Studio and
+  cancelling its login dialog both called `window.showToast` behind a
+  `typeof` guard, and nothing ever defined it. Both now appear.
+- A failed MCAP delete names the file. During a bulk delete the failures
+  stack, and "Error deleting file" alone did not say which one.
 
 ## [4.3.0] - 2026-09-02
 

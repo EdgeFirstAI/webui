@@ -15,6 +15,7 @@
     <script src="../js/theme.js"></script>
     <script src="../js/neuralMesh.js"></script>
     <script src="../js/serviceCache.js"></script>
+    <script src="../js/toast.js"></script>
     <script src="../js/navbar.js"></script>
     <script src="../js/configSave.js"></script>
     <script src="../js/status.js"></script>
@@ -862,7 +863,7 @@
                 cube_fps: cubeFps
             }).then(result => {
                 loadingOverlay.style.display = 'none';
-                alert(result.message);
+                window.showToast(result.message, result.level);
             });
         });
 
