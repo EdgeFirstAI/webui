@@ -210,11 +210,6 @@
             </div>
 
             <div class="form-group">
-                <label for="radar_input_topic">Radar Input Topic:</label>
-                <input type="text" id="radar_input_topic" name="radar_input_topic" value="radar/clusters">
-            </div>
-
-            <div class="form-group">
                 <label for="model">The Radar model</label>
                 <input type="text" id="model" name="model" value="/usr/share/fusion/radarexp-ultra-short.tflite">
             </div>
@@ -222,16 +217,6 @@
             <div class="form-group">
                 <label for="threshold">Threshold:</label>
                 <input type="number" id="threshold" name="threshold" min="1" value="3">
-            </div>
-
-            <div class="form-group">
-                <label for="occ_angle_limit">Occlusion Angle Limit:</label>
-                <input type="number" id="occ_angle_limit" name="occ_angle_limit" step="0.1" value="20.0">
-            </div>
-
-            <div class="form-group">
-                <label for="occ_range_limit">Occlusion Range Limit:</label>
-                <input type="number" id="occ_range_limit" name="occ_range_limit" step="0.1" value="1.0">
             </div>
 
             <div class="form-group">
@@ -289,11 +274,8 @@
                     return response.json();
                 }).then(data => {
                     document.getElementById('rust_log').value = data.RUST_LOG || '';
-                    document.getElementById('radar_input_topic').value = data.RADAR_INPUT_TOPIC || '';
                     document.getElementById('model').value = data.MODEL || '';
                     document.getElementById('threshold').value = data.THRESHOLD || '';
-                    document.getElementById('occ_angle_limit').value = data.OCC_ANGLE_LIMIT || '';
-                    document.getElementById('occ_range_limit').value = data.OCC_RANGE_LIMIT || '';
 
                     const rangeBinLimit = Array.isArray(data.RANGE_BIN_LIMIT) ? data.RANGE_BIN_LIMIT.join(' ') : (data.RANGE_BIN_LIMIT || '');
                     document.getElementById('range_bin_limit').value = rangeBinLimit.replace(/,/g, ' ');
@@ -314,11 +296,8 @@
 
             const configData = {
                 rust_log: document.getElementById('rust_log').value,
-                radar_input_topic: document.getElementById('radar_input_topic').value,
                 model: document.getElementById('model').value,
                 threshold: document.getElementById('threshold').value,
-                occ_angle_limit: document.getElementById('occ_angle_limit').value,
-                occ_range_limit: document.getElementById('occ_range_limit').value,
                 range_bin_limit: document.getElementById('range_bin_limit').value,
                 range_bin_width: document.getElementById('range_bin_width').value,
                 angle_bin_limit: document.getElementById('angle_bin_limit').value,
