@@ -35,27 +35,32 @@
             padding: 20px;
             display: flex;
             justify-content: center;
-            align-items: center;
             background-color: var(--color-card-bg);
             overflow-y: auto;
         }
 
         .container {
             width: 100%;
-            max-width: 600px;
+            max-width: 720px;
             padding: 20px;
+            padding-bottom: 100px;
             border-radius: 8px;
             box-shadow: 0 4px 8px var(--color-shadow);
             background-color: var(--color-card-bg);
-            max-height: auto;
-            margin-top: auto;
+            margin: auto 0;
         }
 
         h2 {
             text-align: center;
-            margin-bottom: 20px;
+            margin-bottom: 8px;
             color: var(--color-text-primary);
             font-size: 24px;
+        }
+
+        h3 {
+            margin: 0 0 12px;
+            color: var(--color-text-primary);
+            font-size: 18px;
         }
 
         label {
@@ -68,12 +73,12 @@
         .comment {
             font-style: italic;
             color: var(--color-text-muted);
-            margin-bottom: 20px;
+            margin-bottom: 16px;
             font-size: 14px;
         }
 
         .form-group {
-            margin-bottom: 20px;
+            margin-bottom: 16px;
         }
 
         .form-group input,
@@ -93,46 +98,43 @@
             outline: none;
         }
 
-        .form-group input[type="checkbox"] {
-            width: auto;
-            margin-right: 10px;
+        .warning-banner {
+            display: none;
+            padding: 12px;
+            margin-bottom: 16px;
+            border-radius: 6px;
+            background: rgba(234, 179, 8, 0.15);
+            border: 1px solid rgba(234, 179, 8, 0.4);
+            color: var(--color-text-primary);
+            font-size: 14px;
         }
 
-        .navbar-end .btn-circle svg {
-            width: 24px;
-            height: 24px;
-            color: white;
+        .warning-banner.visible {
+            display: block;
         }
 
-        .navbar-end .btn-circle:hover svg {
-            color: #e2e8f0;
+        details.config-section {
+            margin-bottom: 16px;
+            border: 1px solid var(--color-border);
+            border-radius: 8px;
+            padding: 12px 16px;
+            background: var(--color-bg-surface);
         }
 
-        .navbar-end .menu {
-            display: flex;
-            align-items: center;
+        details.config-section summary {
+            cursor: pointer;
+            font-weight: 600;
+            color: var(--color-text-primary);
+            list-style-position: outside;
         }
 
-        .navbar-end .btn-circle.btn-lg {
-            width: 3rem;
-            height: 3rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+        details.config-section[open] summary {
+            margin-bottom: 12px;
         }
 
-        .navbar-end .btn-circle.btn-lg svg {
-            margin-top: -5px;
-            width: 25px;
-            height: 25px;
-            color: white;
+        .model-gated-block.hidden {
+            display: none;
         }
-
-        .navbar-end .btn-circle.btn-lg:hover svg {
-            color: #e2e8f0;
-        }
-
-
 
         .loading-overlay {
             display: none;
@@ -168,16 +170,10 @@
         }
 
         @keyframes spin {
-            0% {
-                transform: rotate(0deg);
-            }
-
-            100% {
-                transform: rotate(360deg);
-            }
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
 
-        /* Save Button Container */
         .button-container {
             position: sticky;
             bottom: 20px;
@@ -188,13 +184,9 @@
             background: linear-gradient(to top, var(--color-card-bg) 60%, transparent);
         }
 
-        /* Save Button Style */
         button#saveConfig {
-            margin-top: 20px;
             width: 100%;
             max-width: 400px;
-            margin-left: auto;
-            margin-right: auto;
         }
     </style>
 </head>
@@ -203,66 +195,245 @@
     <main class="bg-neural">
         <div class="container">
             <h2>Fusion Configuration</h2>
+            <p class="comment">Service settings for late fusion and optional radar–camera fusion model. Viewer options
+                (colour mode, overlays) are on the live camera and radar pages, not here.</p>
 
-            <div class="form-group">
-                <label for="rust_log">Log Level:</label>
-                <input type="text" id="rust_log" name="rust_log" value="info">
+            <div id="lidar-warning" class="warning-banner" data-testid="fusion-lidar-warning">
+                LiDAR fusion is selected but the lidarpub service is not enabled. Enable lidarpub or choose a radar-only
+                input source.
             </div>
 
-            <div class="form-group">
-                <label for="radar_input_topic">Radar Input Topic:</label>
-                <input type="text" id="radar_input_topic" name="radar_input_topic" value="radar/clusters">
-            </div>
+            <details class="config-section" open>
+                <summary>Logging</summary>
+                <div class="form-group">
+                    <label for="RUST_LOG">RUST_LOG</label>
+                    <input type="text" id="RUST_LOG" name="RUST_LOG" value="info">
+                    <div class="comment">Log filter; sub-targets include zenoh and edgefirst_fusion.</div>
+                </div>
+            </details>
 
-            <div class="form-group">
-                <label for="model">The Radar model</label>
-                <input type="text" id="model" name="model" value="/usr/share/fusion/radarexp-ultra-short.tflite">
-            </div>
+            <details class="config-section" open>
+                <summary>Late fusion — sensor input</summary>
+                <div class="form-group">
+                    <label for="fusion-input-source">Late fusion input</label>
+                    <select id="fusion-input-source" data-testid="fusion-input-source">
+                        <option value="radar">Radar (default)</option>
+                        <option value="lidar">LiDAR</option>
+                        <option value="both">Radar and LiDAR</option>
+                        <option value="custom">Custom (manual topics)</option>
+                    </select>
+                    <div class="comment">Sets PCD input topics and 3D box source. Use Custom to edit topics directly.
+                        Typical LiDAR topics: lidar/clusters or lidar/points.</div>
+                </div>
+                <div class="form-group">
+                    <label for="RADAR_PCD_TOPIC">RADAR_PCD_TOPIC</label>
+                    <input type="text" id="RADAR_PCD_TOPIC" value="radar/clusters">
+                    <div class="comment">Empty disables radar late-fusion input.</div>
+                </div>
+                <div class="form-group">
+                    <label for="LIDAR_PCD_TOPIC">LIDAR_PCD_TOPIC</label>
+                    <input type="text" id="LIDAR_PCD_TOPIC" value="">
+                </div>
+                <div class="form-group">
+                    <label for="RADAR_OUTPUT_TOPIC">RADAR_OUTPUT_TOPIC</label>
+                    <input type="text" id="RADAR_OUTPUT_TOPIC" value="fusion/radar">
+                </div>
+                <div class="form-group">
+                    <label for="LIDAR_OUTPUT_TOPIC">LIDAR_OUTPUT_TOPIC</label>
+                    <input type="text" id="LIDAR_OUTPUT_TOPIC" value="fusion/lidar">
+                </div>
+                <div class="form-group">
+                    <label for="BBOX3D_SRC">BBOX3D_SRC</label>
+                    <select id="BBOX3D_SRC">
+                        <option value="radar">radar</option>
+                        <option value="lidar">lidar</option>
+                        <option value="disabled">disabled</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="BBOX3D_TOPIC">BBOX3D_TOPIC</label>
+                    <input type="text" id="BBOX3D_TOPIC" value="fusion/boxes3d">
+                </div>
+            </details>
 
-            <div class="form-group">
-                <label for="threshold">Threshold:</label>
-                <input type="number" id="threshold" name="threshold" min="1" value="3">
-            </div>
+            <details class="config-section">
+                <summary>Late fusion — vision</summary>
+                <div class="form-group">
+                    <label for="VISION_MODEL_TOPIC">VISION_MODEL_TOPIC</label>
+                    <input type="text" id="VISION_MODEL_TOPIC" value="model/output">
+                    <div class="comment">Empty disables vision fusion.</div>
+                </div>
+                <div class="form-group">
+                    <label for="MODEL_INFO_TOPIC">MODEL_INFO_TOPIC</label>
+                    <input type="text" id="MODEL_INFO_TOPIC" value="model/info">
+                </div>
+                <div class="form-group">
+                    <label for="INFO_TOPIC">INFO_TOPIC</label>
+                    <input type="text" id="INFO_TOPIC" value="camera/info">
+                </div>
+                <div class="form-group">
+                    <label for="MAX_MODEL_AGE">MAX_MODEL_AGE</label>
+                    <input type="text" id="MAX_MODEL_AGE" value="0.5">
+                    <div class="comment">Max age in seconds for model output; 0 disables staleness check.</div>
+                </div>
+                <div class="form-group">
+                    <label for="BACKGROUND_INDEX">BACKGROUND_INDEX</label>
+                    <input type="text" id="BACKGROUND_INDEX" value="-1">
+                    <div class="comment">-1 = last semantic channel; 0..N = explicit background class index.</div>
+                </div>
+            </details>
 
-            <div class="form-group">
-                <label for="occ_angle_limit">Occlusion Angle Limit:</label>
-                <input type="number" id="occ_angle_limit" name="occ_angle_limit" step="0.1" value="20.0">
-            </div>
+            <details class="config-section" open>
+                <summary>Fusion model path</summary>
+                <div class="form-group">
+                    <label for="MODEL">MODEL</label>
+                    <input type="text" id="MODEL" value="">
+                    <div class="comment">Path to radar–camera BEV fusion model (TFLite). Leave empty for late-fusion only
+                        (stock Phantom).</div>
+                </div>
+            </details>
 
-            <div class="form-group">
-                <label for="occ_range_limit">Occlusion Range Limit:</label>
-                <input type="number" id="occ_range_limit" name="occ_range_limit" step="0.1" value="1.0">
-            </div>
+            <details id="model-gated-section" class="config-section model-gated-block hidden">
+                <summary>Fusion model (early / mid)</summary>
+                <div class="form-group">
+                    <label for="MODEL_DECODER">MODEL_DECODER</label>
+                    <input type="text" id="MODEL_DECODER" class="model-gated-field" value="">
+                </div>
+                <div class="form-group">
+                    <label for="CAMERA_TOPIC">CAMERA_TOPIC</label>
+                    <input type="text" id="CAMERA_TOPIC" class="model-gated-field" value="camera/frame">
+                </div>
+                <div class="form-group">
+                    <label for="RADARCUBE_TOPIC">RADARCUBE_TOPIC</label>
+                    <input type="text" id="RADARCUBE_TOPIC" class="model-gated-field" value="radar/cube">
+                </div>
+                <div class="form-group">
+                    <label for="MODEL_OUTPUT_TOPIC">MODEL_OUTPUT_TOPIC</label>
+                    <input type="text" id="MODEL_OUTPUT_TOPIC" class="model-gated-field" value="fusion/model_output">
+                </div>
+                <div class="form-group">
+                    <label for="MODEL_POLAR">MODEL_POLAR</label>
+                    <select id="MODEL_POLAR" class="model-gated-field">
+                        <option value="false">false</option>
+                        <option value="true">true</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="MODEL_THRESHOLD">MODEL_THRESHOLD</label>
+                    <input type="text" id="MODEL_THRESHOLD" class="model-gated-field" value="0.5">
+                </div>
+                <div class="form-group">
+                    <label for="MODEL_GRID_SIZE">MODEL_GRID_SIZE</label>
+                    <input type="text" id="MODEL_GRID_SIZE" class="model-gated-field" value="1 1">
+                </div>
+                <div class="form-group">
+                    <label for="LOGITS">LOGITS</label>
+                    <select id="LOGITS" class="model-gated-field">
+                        <option value="true">true</option>
+                        <option value="false">false</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="ENGINE">ENGINE</label>
+                    <select id="ENGINE" class="model-gated-field">
+                        <option value="npu">npu</option>
+                        <option value="cpu">cpu</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="GRID_TOPIC">GRID_TOPIC</label>
+                    <input type="text" id="GRID_TOPIC" class="model-gated-field" value="fusion/occupancy">
+                </div>
+                <div class="form-group">
+                    <label for="GRID_SRC">GRID_SRC</label>
+                    <select id="GRID_SRC" class="model-gated-field">
+                        <option value="radar">radar</option>
+                        <option value="lidar">lidar</option>
+                        <option value="disabled">disabled</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="TRACK">TRACK</label>
+                    <select id="TRACK" class="model-gated-field">
+                        <option value="false">false</option>
+                        <option value="true">true</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="TRACK_EXTRA_LIFESPAN">TRACK_EXTRA_LIFESPAN</label>
+                    <input type="text" id="TRACK_EXTRA_LIFESPAN" class="model-gated-field" value="0.5">
+                </div>
+                <div class="form-group">
+                    <label for="TRACK_IOU">TRACK_IOU</label>
+                    <input type="text" id="TRACK_IOU" class="model-gated-field" value="0.1">
+                </div>
+                <div class="form-group">
+                    <label for="TRACK_UPDATE">TRACK_UPDATE</label>
+                    <input type="text" id="TRACK_UPDATE" class="model-gated-field" value="0.4">
+                </div>
+                <div class="form-group">
+                    <label for="RANGE_BIN_LIMIT">RANGE_BIN_LIMIT</label>
+                    <input type="text" id="RANGE_BIN_LIMIT" class="model-gated-field" value="0 16">
+                </div>
+                <div class="form-group">
+                    <label for="RANGE_BIN_WIDTH">RANGE_BIN_WIDTH</label>
+                    <input type="text" id="RANGE_BIN_WIDTH" class="model-gated-field" value="1.0">
+                </div>
+                <div class="form-group">
+                    <label for="ANGLE_BIN_LIMIT">ANGLE_BIN_LIMIT</label>
+                    <input type="text" id="ANGLE_BIN_LIMIT" class="model-gated-field" value="-55 55">
+                </div>
+                <div class="form-group">
+                    <label for="ANGLE_BIN_WIDTH">ANGLE_BIN_WIDTH</label>
+                    <input type="text" id="ANGLE_BIN_WIDTH" class="model-gated-field" value="6.875">
+                </div>
+                <div class="form-group">
+                    <label for="THRESHOLD">THRESHOLD</label>
+                    <input type="text" id="THRESHOLD" class="model-gated-field" value="1">
+                </div>
+                <div class="form-group">
+                    <label for="BIN_DELAY">BIN_DELAY</label>
+                    <input type="text" id="BIN_DELAY" class="model-gated-field" value="3">
+                </div>
+            </details>
 
-            <div class="form-group">
-                <label for="range_bin_limit">Range Bin Limit:</label>
-                <input type="text" id="range_bin_limit" name="range_bin_limit" value="0.0 20.0">
-            </div>
-
-            <div class="form-group">
-                <label for="range_bin_width">Range Bin Width:</label>
-                <input type="number" id="range_bin_width" name="range_bin_width" step="0.1" value="0.5">
-            </div>
-
-            <div class="form-group">
-                <label for="angle_bin_limit">Angle Bin Limit:</label>
-                <input type="text" id="angle_bin_limit" name="angle_bin_limit" value="-70.0 70.0">
-            </div>
-
-            <div class="form-group">
-                <label for="angle_bin_width">Angle Bin Width:</label>
-                <input type="number" id="angle_bin_width" name="angle_bin_width" step="0.1" value="10.0">
-            </div>
-
-            <div class="form-group">
-                <label for="bin_delay">Bin Delay:</label>
-                <input type="number" id="bin_delay" name="bin_delay" min="1" value="3">
-            </div>
+            <details class="config-section">
+                <summary>Zenoh (advanced)</summary>
+                <div class="form-group">
+                    <label for="MODE">MODE</label>
+                    <select id="MODE">
+                        <option value="peer">peer</option>
+                        <option value="client">client</option>
+                        <option value="router">router</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="CONNECT">CONNECT</label>
+                    <input type="text" id="CONNECT" value="">
+                    <div class="comment">Space-separated Zenoh endpoints; empty for multicast discovery.</div>
+                </div>
+                <div class="form-group">
+                    <label for="LISTEN">LISTEN</label>
+                    <input type="text" id="LISTEN" value="">
+                </div>
+                <div class="form-group">
+                    <label for="NO_MULTICAST_SCOUTING">NO_MULTICAST_SCOUTING</label>
+                    <select id="NO_MULTICAST_SCOUTING">
+                        <option value="false">false</option>
+                        <option value="true">true</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="TRACY">TRACY</label>
+                    <select id="TRACY">
+                        <option value="false">false</option>
+                        <option value="true">true</option>
+                    </select>
+                </div>
+            </details>
 
             <div class="button-container">
-                <button id="saveConfig" class="btn-primary btn-block">
-                    Save Configuration
-                </button>
+                <button id="saveConfig" class="btn-primary btn-block">Save Configuration</button>
             </div>
         </div>
     </main>
@@ -275,60 +446,180 @@
     </div>
 
     <script>
+        const MODEL_GATED_KEYS = [
+            'MODEL_DECODER', 'CAMERA_TOPIC', 'RADARCUBE_TOPIC', 'MODEL_OUTPUT_TOPIC',
+            'MODEL_POLAR', 'MODEL_THRESHOLD', 'MODEL_GRID_SIZE', 'LOGITS', 'ENGINE',
+            'GRID_TOPIC', 'GRID_SRC', 'TRACK', 'TRACK_EXTRA_LIFESPAN', 'TRACK_IOU', 'TRACK_UPDATE',
+            'RANGE_BIN_LIMIT', 'RANGE_BIN_WIDTH', 'ANGLE_BIN_LIMIT', 'ANGLE_BIN_WIDTH',
+            'THRESHOLD', 'BIN_DELAY'
+        ];
+
+        const LATE_FUSION_KEYS = [
+            'RUST_LOG', 'RADAR_PCD_TOPIC', 'LIDAR_PCD_TOPIC', 'RADAR_OUTPUT_TOPIC', 'LIDAR_OUTPUT_TOPIC',
+            'BBOX3D_SRC', 'BBOX3D_TOPIC', 'VISION_MODEL_TOPIC', 'MODEL_INFO_TOPIC', 'INFO_TOPIC',
+            'MAX_MODEL_AGE', 'BACKGROUND_INDEX', 'MODEL'
+        ];
+
+        const ZENOH_KEYS = ['MODE', 'CONNECT', 'LISTEN', 'NO_MULTICAST_SCOUTING', 'TRACY'];
+
+        function fieldValue(key) {
+            const el = document.getElementById(key);
+            if (!el) return '';
+            return el.value.trim();
+        }
+
+        function setFieldValue(key, raw) {
+            const el = document.getElementById(key);
+            if (!el) return;
+            if (raw === undefined || raw === null) return;
+            let value = raw;
+            if (typeof raw === 'boolean') {
+                value = raw ? 'true' : 'false';
+            } else if (Array.isArray(raw)) {
+                value = raw.join(' ');
+            } else if (typeof raw === 'string') {
+                value = raw.replace(/,/g, ' ');
+            }
+            el.value = value;
+        }
+
+        function normalizeTopic(s) {
+            return (s || '').trim();
+        }
+
+        function modelPathActive() {
+            return fieldValue('MODEL').length > 0;
+        }
+
+        function updateModelSectionVisibility() {
+            const block = document.getElementById('model-gated-section');
+            const active = modelPathActive();
+            block.classList.toggle('hidden', !active);
+        }
+
+        function inferInputSource() {
+            const radar = normalizeTopic(fieldValue('RADAR_PCD_TOPIC'));
+            const lidar = normalizeTopic(fieldValue('LIDAR_PCD_TOPIC'));
+            const hasRadar = radar.length > 0;
+            const hasLidar = lidar.length > 0;
+            if (hasRadar && !hasLidar) return 'radar';
+            if (!hasRadar && hasLidar) return 'lidar';
+            if (hasRadar && hasLidar) return 'both';
+            return 'custom';
+        }
+
+        function syncInputSourceSelect() {
+            const select = document.getElementById('fusion-input-source');
+            select.value = inferInputSource();
+        }
+
+        function pcdSourceForPreset(preset) {
+            if (preset === 'lidar') return 'lidar';
+            return 'radar';
+        }
+
+        function applyInputSourcePreset(source) {
+            if (source === 'custom') {
+                updateLidarWarning();
+                return;
+            }
+            const src = pcdSourceForPreset(source);
+            if (source === 'radar') {
+                setFieldValue('RADAR_PCD_TOPIC', 'radar/clusters');
+                setFieldValue('LIDAR_PCD_TOPIC', '');
+                setFieldValue('BBOX3D_SRC', 'radar');
+            } else if (source === 'lidar') {
+                setFieldValue('RADAR_PCD_TOPIC', '');
+                setFieldValue('LIDAR_PCD_TOPIC', 'lidar/clusters');
+                setFieldValue('BBOX3D_SRC', 'lidar');
+            } else if (source === 'both') {
+                setFieldValue('RADAR_PCD_TOPIC', 'radar/clusters');
+                setFieldValue('LIDAR_PCD_TOPIC', 'lidar/clusters');
+            }
+            if (modelPathActive()) {
+                setFieldValue('GRID_SRC', src);
+            }
+            updateLidarWarning();
+        }
+
+        function updateLidarWarning() {
+            const banner = document.getElementById('lidar-warning');
+            const source = document.getElementById('fusion-input-source').value;
+            const needsLidar = source === 'lidar' || source === 'both' ||
+                (source === 'custom' && normalizeTopic(fieldValue('LIDAR_PCD_TOPIC')).length > 0);
+            let lidarEnabled = true;
+            if (window.serviceCache && typeof window.serviceCache.isServiceEnabled === 'function') {
+                lidarEnabled = window.serviceCache.isServiceEnabled('lidarpub');
+            }
+            banner.classList.toggle('visible', needsLidar && !lidarEnabled);
+        }
+
+        function buildConfigData() {
+            const configData = {};
+            for (const key of LATE_FUSION_KEYS) {
+                configData[key] = fieldValue(key);
+            }
+            if (modelPathActive()) {
+                for (const key of MODEL_GATED_KEYS) {
+                    configData[key] = fieldValue(key);
+                }
+            }
+            for (const key of ZENOH_KEYS) {
+                configData[key] = fieldValue(key);
+            }
+            return configData;
+        }
+
         document.addEventListener('DOMContentLoaded', function () {
+            const inputSource = document.getElementById('fusion-input-source');
+            inputSource.addEventListener('change', function () {
+                applyInputSourcePreset(this.value);
+            });
+
+            document.getElementById('MODEL').addEventListener('input', function () {
+                updateModelSectionVisibility();
+                updateLidarWarning();
+            });
+
+            ['RADAR_PCD_TOPIC', 'LIDAR_PCD_TOPIC'].forEach(id => {
+                document.getElementById(id).addEventListener('input', function () {
+                    syncInputSourceSelect();
+                    updateLidarWarning();
+                });
+            });
+
             fetch('/api/config/fusion', {
                 method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
+                headers: { 'Content-Type': 'application/json' }
             })
                 .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
+                    if (!response.ok) throw new Error('Network response was not ok');
                     return response.json();
-                }).then(data => {
-                    document.getElementById('rust_log').value = data.RUST_LOG || '';
-                    document.getElementById('radar_input_topic').value = data.RADAR_INPUT_TOPIC || '';
-                    document.getElementById('model').value = data.MODEL || '';
-                    document.getElementById('threshold').value = data.THRESHOLD || '';
-                    document.getElementById('occ_angle_limit').value = data.OCC_ANGLE_LIMIT || '';
-                    document.getElementById('occ_range_limit').value = data.OCC_RANGE_LIMIT || '';
-
-                    const rangeBinLimit = Array.isArray(data.RANGE_BIN_LIMIT) ? data.RANGE_BIN_LIMIT.join(' ') : (data.RANGE_BIN_LIMIT || '');
-                    document.getElementById('range_bin_limit').value = rangeBinLimit.replace(/,/g, ' ');
-
-                    document.getElementById('range_bin_width').value = data.RANGE_BIN_WIDTH || '';
-
-                    const angleBinLimit = Array.isArray(data.ANGLE_BIN_LIMIT) ? data.ANGLE_BIN_LIMIT.join(' ') : (data.ANGLE_BIN_LIMIT || '');
-                    document.getElementById('angle_bin_limit').value = angleBinLimit.replace(/,/g, ' ');
-
-                    document.getElementById('angle_bin_width').value = data.ANGLE_BIN_WIDTH || '';
-                    document.getElementById('bin_delay').value = data.BIN_DELAY || '';
+                })
+                .then(data => {
+                    const allKeys = [...LATE_FUSION_KEYS, ...MODEL_GATED_KEYS, ...ZENOH_KEYS];
+                    for (const key of allKeys) {
+                        if (data[key] !== undefined) {
+                            setFieldValue(key, data[key]);
+                        }
+                    }
+                    updateModelSectionVisibility();
+                    syncInputSourceSelect();
+                    updateLidarWarning();
                 })
                 .catch(error => console.error('Error fetching configuration:', error));
-        });
-        document.getElementById('saveConfig').addEventListener('click', function () {
-            const loadingOverlay = document.getElementById('loadingOverlay');
-            loadingOverlay.style.display = 'block';
 
-            const configData = {
-                rust_log: document.getElementById('rust_log').value,
-                radar_input_topic: document.getElementById('radar_input_topic').value,
-                model: document.getElementById('model').value,
-                threshold: document.getElementById('threshold').value,
-                occ_angle_limit: document.getElementById('occ_angle_limit').value,
-                occ_range_limit: document.getElementById('occ_range_limit').value,
-                range_bin_limit: document.getElementById('range_bin_limit').value,
-                range_bin_width: document.getElementById('range_bin_width').value,
-                angle_bin_limit: document.getElementById('angle_bin_limit').value,
-                angle_bin_width: document.getElementById('angle_bin_width').value,
-                bin_delay: document.getElementById('bin_delay').value
-            };
+            if (window.serviceCache && typeof window.serviceCache.registerUpdateCallback === 'function') {
+                window.serviceCache.registerUpdateCallback(updateLidarWarning);
+            }
 
-            saveServiceConfig('fusion', configData).then(result => {
-                loadingOverlay.style.display = 'none';
-                window.showToast(result.message, result.level);
+            document.getElementById('saveConfig').addEventListener('click', function () {
+                const loadingOverlay = document.getElementById('loadingOverlay');
+                loadingOverlay.style.display = 'block';
+                saveServiceConfig('fusion', buildConfigData()).then(result => {
+                    loadingOverlay.style.display = 'none';
+                    window.showToast(result.message, result.level);
+                });
             });
         });
 

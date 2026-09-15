@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Fusion settings page (`config/fusion`) now matches the fusion service
+  environment file: late-fusion PCD and vision topics, optional BEV fusion
+  model pipeline (shown only when `MODEL` is set), and Zenoh options. A single
+  **Late fusion input** control sets radar vs LiDAR PCD topics and
+  `BBOX3D_SRC` (EDGEAI-733). Removed invalid occlusion limits and the
+  nonexistent `RADAR_INPUT_TOPIC` field; saves use correct env key names for
+  WebSRV.
+
 ## [4.4.0] - 2026-09-07
 
 ### Fixed

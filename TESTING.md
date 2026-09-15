@@ -412,6 +412,15 @@ data-testid="<page>-<element>-<name>"
 - `settings-card-services`
 - `settings-card-studio`
 
+**Fusion Configuration Page (`config/fusion.html`):**
+- `fusion-input-source` - Late fusion input preset (radar, LiDAR, both, custom)
+- `fusion-lidar-warning` - Banner when LiDAR fusion is selected but `lidarpub` is not enabled
+- `#saveConfig` - Save button (same as other config pages)
+
+Manual checks: load `/config/fusion` with fusion enabled; confirm GET fills
+`RADAR_PCD_TOPIC` and vision topics; switch input source to LiDAR, save, reload;
+enter a non-empty `MODEL` path to reveal the early/mid fusion model section.
+
 **Toasts (every page):**
 - `toast-container` - Notification container. Created on the first toast and
   then left in the DOM; it is hidden rather than removed once the last toast
