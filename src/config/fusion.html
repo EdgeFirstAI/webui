@@ -338,6 +338,7 @@
                     <select id="ENGINE" class="model-gated-field">
                         <option value="npu">npu</option>
                         <option value="cpu">cpu</option>
+                        <option value="gpu">gpu</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -477,10 +478,20 @@
                 value = raw ? 'true' : 'false';
             } else if (Array.isArray(raw)) {
                 value = raw.join(' ');
-            } else if (typeof raw === 'string') {
-                value = raw.replace(/,/g, ' ');
+            } else if (typeof raw === 'number') {
+                value = String(raw);
             }
             el.value = value;
+            if (el.tagName === 'SELECT' && value !== '') {
+                const hasOption = [...el.options].some((opt) => opt.value === value);
+                if (!hasOption) {
+                    const opt = document.createElement('option');
+                    opt.value = value;
+                    opt.textContent = value;
+                    el.appendChild(opt);
+                }
+                el.value = value;
+            }
         }
 
         function normalizeTopic(s) {
@@ -535,6 +546,7 @@
             } else if (source === 'both') {
                 setFieldValue('RADAR_PCD_TOPIC', 'radar/clusters');
                 setFieldValue('LIDAR_PCD_TOPIC', 'lidar/clusters');
+                setFieldValue('BBOX3D_SRC', 'radar');
             }
             if (modelPathActive()) {
                 setFieldValue('GRID_SRC', src);
