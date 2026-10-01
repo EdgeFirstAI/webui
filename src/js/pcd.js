@@ -1,6 +1,7 @@
 // Copyright (C) 2025 Au-Zone Technologies Inc. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 import { parsePointCloud2, toPointArray } from './pointcloud2.js'
+import { readHeaderStampMs } from './stamp.js'
 
 export function quaternionToEuler(x, y, z, w) {
     const roll = Math.atan2(2.0 * (w * x + y * z), 1.0 - 2.0 * (x * x + y * y)) * (180 / Math.PI);
@@ -34,10 +35,13 @@ export default async function pcdStream(socketUrl, onMessage) {
     };
 
     socket.onmessage = function (event) {
+        let points
+        let stampMs
         try {
             const parsed = parsePointCloud2(event.data)
-            radar_data.points = toPointArray(parsed)
-            for (let p of radar_data.points) {
+            stampMs = readHeaderStampMs(event.data)
+            points = toPointArray(parsed)
+            for (let p of points) {
                 if (typeof p.range === "undefined") {
                     p.range = Math.sqrt(p.x * p.x + p.y * p.y + p.z * p.z)
                 }
@@ -47,9 +51,11 @@ export default async function pcdStream(socketUrl, onMessage) {
             }
         } catch (error) {
             console.error("Failed to deserialize PCD data:", error)
+            return
         }
-        if (onMessage) onMessage()
+        radar_data.points = points
         radar_data.needsUpdate = true
+        if (onMessage) onMessage({ stampMs, points })
     };
 
     socket.onerror = function (error) {

@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Camera, segmentation and combined pages draw each overlay for the frame it belongs to: model results by exact frame stamp (held across frames the model skipped), LiDAR and radar by nearest acquisition stamp. The video waits only as long as the slowest enabled overlay needs (at most 1 s), and the camera page returns to live when its overlays are off.
+- 4K tile mode builds each frame from the four tiles of the same frame.
+
+### Fixed
+
+- Decoded video frames could carry the next frame's timestamp when the decoder had more than one frame in flight.
+- Bounding boxes and LiDAR dots no longer stay on screen after detections or points stop.
+- Overlays recover without a reload after the device clock is stepped.
+- Radar distance and speed labels on the combined page follow the radar sample matched to the displayed frame.
+
+### Added
+
+- Recording details show the duration without clock steps and how many were excluded.
+- `window.overlaySync` reports the displayed frame stamp, playout delay and per-overlay stamp offsets on the camera, segmentation and combined pages for automated checks.
+- Unit tests for the stamp, buffer, playout, frame and tile modules, run with `node --test "tests/unit/*.test.mjs"`.
+
+### Removed
+
+- `TemporalSync.js`, replaced by `FrameSync.js` and `PlayoutClock.js`.
+
 ## [4.5.0] - 2026-09-16
 
 ### Removed

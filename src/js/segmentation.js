@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 import * as THREE from './three.js'
 import ProjectedMaterial from './ProjectedMaterial.js'
-import h264Stream from './stream.js'
-import SmartVideoManager from './SmartVideoManager.js'
 import modelstream from './model.js'
 import ModelInfo from './modelInfo.js'
 import { createSegOverlay, clusterColor, trackIdToHash } from './segOverlay.js'
 import Stats, { fpsUpdate } from './Stats.js'
 import droppedframes from './droppedframes.js'
+import createSyncedVideo from './SyncedVideo.js'
+import StampBuffer, { selectDerived } from './StampBuffer.js'
+import { stampToMs } from './stamp.js'
 
 const PI = Math.PI
 
@@ -37,11 +38,9 @@ boxCanvas.width = width
 boxCanvas.height = height
 const boxCtx = boxCanvas.getContext('2d')
 
-let texture_camera
 let material_proj
 let modelData = null
 
-// Note: H.264 stream URLs are owned by SmartVideoManager (tiles + fallback).
 const socketUrlModel = '/api/rt/model/output/'
 const socketUrlModelInfo = '/api/rt/model/info/'
 const socketUrlErrors = '/api/ws/dropped'
@@ -53,39 +52,41 @@ droppedframes(socketUrlErrors, playerCanvas)
 
 THREE.Cache.enabled = true
 
-const quad = new THREE.PlaneGeometry(width / height * 500, 500)
-
 const cameraUpdate = fpsUpdate(cameraPanel)
-const videoManager = new SmartVideoManager()
-
-videoManager.init(() => {
-    cameraUpdate()
-    resetTimeout()
-    if (!videoManager.loggedMode && videoManager.mode) {
-        console.log(`Video Mode: ${videoManager.mode === 'tiles' ? '4K Tiles' : 'H.264 Fallback'}`)
-        videoManager.loggedMode = true
-    }
-}, h264Stream).then((tex) => {
-    texture_camera = tex
-    material_proj = new ProjectedMaterial({
-        camera: camera,
-        texture: texture_camera,
-        color: '#000',
-        transparent: true,
-    })
-    const mesh_cam = new THREE.Mesh(quad, material_proj)
-    mesh_cam.needsUpdate = true
-    mesh_cam.position.z = 50
-    mesh_cam.rotation.x = PI
-    mesh_cam.renderOrder = 0
-    scene.add(mesh_cam)
+const video = createSyncedVideo({
+    onFrame: () => {
+        cameraUpdate()
+        resetTimeout()
+    },
+    onTexture: (tex) => {
+        if (material_proj) {
+            material_proj.uniforms.tex.value = tex
+            material_proj.needsUpdate = true
+            return
+        }
+        const quad = new THREE.PlaneGeometry(width / height * 500, 500)
+        material_proj = new ProjectedMaterial({
+            camera: camera,
+            texture: tex,
+            color: '#000',
+            transparent: true,
+        })
+        const mesh_cam = new THREE.Mesh(quad, material_proj)
+        mesh_cam.position.z = 50
+        mesh_cam.rotation.x = PI
+        mesh_cam.renderOrder = 0
+        scene.add(mesh_cam)
+    },
 })
 
 const segOverlay = createSegOverlay(scene, camera)
 
+const modelBuffer = new StampBuffer({ capacity: 32 })
 const modelFPSUpdate = fpsUpdate(modelPanel)
 modelstream(socketUrlModel, (msg) => {
-    modelData = msg
+    const stampMs = stampToMs(msg.header.time.sec, msg.header.time.nanosec)
+    video.clock.observe('model', stampMs, performance.now())
+    modelBuffer.push(stampMs, msg)
     modelFPSUpdate()
 })
 
@@ -128,14 +129,13 @@ function renderBoxes() {
 }
 
 renderer.setAnimationLoop(() => {
-    if (texture_camera) {
-        texture_camera.needsUpdate = true
-    }
-    if (modelData) {
-        segOverlay.update(modelData)
-        renderBoxes()
-    }
+    const displayed = video.tick()
+    const model = selectDerived(modelBuffer, displayed)
+    modelData = model ? model.value : null
+    segOverlay.update(modelData)
+    renderBoxes()
     renderer.render(scene, camera)
+    video.reportSync({ model })
 })
 
 let timeoutId

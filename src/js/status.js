@@ -470,7 +470,12 @@ window.showMcapDialog = async function () {
                         const safeName = escapeHtml(file.name);
                         const safeDir = escapeHtml(dirName);
                         const safeTopics = escapeHtml(JSON.stringify(file.topics));
-                        const safeFileinfo = escapeHtml(JSON.stringify({ name: file.name, size: file.size }));
+                        const safeFileinfo = escapeHtml(JSON.stringify({
+                            name: file.name,
+                            size: file.size,
+                            duration: file.average_video_length,
+                            clockSteps: file.clock_steps ?? 0,
+                        }));
                         const downloadHref = `/api/recordings/download/${encodeURIComponent(dirName)}/${encodeURIComponent(file.name)}`;
                         return `
                                 <tr class="mcap-row-card" data-filename="${safeName}">
@@ -1719,6 +1724,10 @@ function showModal(topics, fileInfo = {}) {
             }
         });
     });
+    if (typeof fileInfo.duration === 'number') {
+        totalDuration = fileInfo.duration;
+    }
+    const clockSteps = Number(fileInfo.clockSteps) || 0;
     const durationStr = totalDuration > 0 ? `${totalDuration.toLocaleString(undefined, { maximumFractionDigits: 2 })} s` : '--';
     modalDetails.innerHTML = `
 <style>
@@ -1746,6 +1755,7 @@ function showModal(topics, fileInfo = {}) {
     <div class="fd-summary-item"><span class="fd-summary-icon">📄</span><span class="fd-summary-label">File Name:</span> <span class="fd-summary-value" title="${fileName}">${fileName.length > 24 ? fileName.slice(0, 21) + '...' : fileName}</span> <button class="fd-summary-copy" title="Copy file name" onclick="navigator.clipboard.writeText('${fileName.replace(/'/g, '\'')}')">⧉</button></div>
     <div class="fd-summary-item"><span class="fd-summary-icon">📦</span><span class="fd-summary-label">File Size:</span> <span class="fd-summary-value">${fileSize}</span></div>
     <div class="fd-summary-item"><span class="fd-summary-icon">⏱️</span><span class="fd-summary-label">Total Duration:</span> <span class="fd-summary-value">${durationStr}</span></div>
+    ${clockSteps > 0 ? `<div class="fd-summary-item" data-testid="recordings-details-clock-steps"><span class="fd-summary-icon">🕒</span><span class="fd-summary-label">Clock steps:</span> <span class="fd-summary-value" title="Duration and FPS exclude wall-clock corrections made during the recording">${clockSteps} excluded</span></div>` : ''}
 </div>
 <div class="fd-grid">
     ${Object.entries(topics).map(([topic, details]) => {
