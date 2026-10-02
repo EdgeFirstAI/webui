@@ -305,9 +305,8 @@ function stopMcapScanRefresh() {
  * MCAP_SCAN_REFRESH_MS. A missing `scanning` field means not scanning.
  * @returns {Promise<boolean>} false when the server reported an error
  */
-async function renderMcapList(dialog, content, { keepSearch = false } = {}) {
+async function renderMcapList(dialog, content, { refresh = false } = {}) {
     stopMcapScanRefresh();
-    const previousSearch = keepSearch ? (document.getElementById('mcap-search')?.value || '') : '';
     try {
         const data = await listMcapFiles();
         if (data.error) {
@@ -362,8 +361,9 @@ async function renderMcapList(dialog, content, { keepSearch = false } = {}) {
             if (headerControls) headerControls.innerHTML = '';
         } else {
             files.sort((a, b) => new Date(b.created) - new Date(a.created));
-            // Populate header controls
-            if (headerControls) {
+            // Populate header controls; a refresh keeps the existing search box
+            // so its text, focus and caret survive.
+            if (headerControls && !(refresh && document.getElementById('mcap-search'))) {
                 headerControls.innerHTML = `
                             <div class="mcap-header-toolbar">
                                 <div class="mcap-search-wrap mcap-search-compact">
@@ -457,15 +457,12 @@ async function renderMcapList(dialog, content, { keepSearch = false } = {}) {
         content.innerHTML = tableHTML;
         attachMcapTableListeners();
         const searchInput = document.getElementById('mcap-search');
-        if (previousSearch && searchInput) {
-            searchInput.value = previousSearch;
-            searchInput.oninput();
-        }
+        if (searchInput && searchInput.value) searchInput.oninput();
         stopMcapScanRefresh();
         if (dialog.open && files.some((file) => file.scanning === true)) {
             mcapScanTimer = setTimeout(() => {
                 mcapScanTimer = null;
-                if (dialog.open) renderMcapList(dialog, content, { keepSearch: true });
+                if (dialog.open) renderMcapList(dialog, content, { refresh: true });
             }, MCAP_SCAN_REFRESH_MS);
         }
     } catch (error) {
