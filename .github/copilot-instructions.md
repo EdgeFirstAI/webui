@@ -52,7 +52,7 @@ The WebSRV backend subscribes to Zenoh topics and bridges them to WebSocket endp
 | Module | Role |
 |--------|------|
 | `stream.js` | H.264 WebSocket → WebCodecs VideoDecoder → Three.js CanvasTexture pipeline. Handles reconnection with exponential backoff. |
-| `SmartVideoManager.js` | Tiled 4K video: probes 4 tile endpoints, falls back to single stream, upgrades seamlessly via `onUpgrade` callback. Decodes tiles to bitmaps, merges only tiles with the same `header.stamp` (via `TileAssembler`, at most 15 fps) and delivers `onMergedFrame(stampMs, bitmap)`. |
+| `SmartVideoManager.js` | Tiled 4K video: probes 4 tile endpoints, falls back to single stream, upgrades seamlessly via `onUpgrade` callback. Decodes tiles to bitmaps, merges only tiles with the same `header.stamp` (via `TileAssembler`, at most one merge per 60 ms, i.e. 15 fps) and delivers `onMergedFrame(stampMs, bitmap)`. |
 | `stamp.js` | `header.stamp` to milliseconds, CDR header stamp reader, `StampTracker` (chunk sequence to stamp), `DISCONTINUITY_MS` (2 s). Pure. |
 | `StampBuffer.js` | Stamp-ordered sample buffer with exact/nearest lookups; `selectDerived` (model: exact stamp, bounded hold) and `selectSensor` (LiDAR/radar: nearest within half a period). Pure. |
 | `PlayoutClock.js` | Learns per-stream arrival lag and derives the playout delay (max 1 s; streams over 2 s off are ignored). Pure. |

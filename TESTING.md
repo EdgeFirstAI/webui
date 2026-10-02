@@ -146,7 +146,7 @@ Accept the self-signed certificate when prompted.
 - LiDAR points in cluster mode: noise (id=0) renders grey, not a hue color
 - In non-cluster modes, noise/ground points are NOT filtered even if checkboxes were unchecked
 - If tiles are available, video upgrades to 4K and the old fallback texture is disposed
-- In 4K tile mode the video keeps moving (up to the 15 fps merge limit) even when tiles are lost; a lost tile leaves its quadrant showing the previous picture for that frame
+- In 4K tile mode the video keeps moving (up to the merge limit of one frame per 60 ms, 15 fps from 30 fps tiles) even when tiles are lost; a lost tile leaves its quadrant showing the previous picture for that frame
 
 ### Combined View Testing
 

@@ -23,7 +23,9 @@ class SmartVideoManager {
         this.tileProbeTimeout = 5000; // 5 seconds to detect tiles
 
         this.assembler = null;
-        this.minMergeIntervalMs = 67; // 15fps max
+        // At most one merge per 60 ms: every second 33.3 ms tile frame (15 fps),
+        // with margin for arrival jitter. 1000 / 15 would miss every second slot.
+        this.minMergeIntervalMs = 60;
 
         // Optional callback for consumers that control display timing (SyncedVideo).
         // When set, drawGroup() produces an ImageBitmap instead of updating
