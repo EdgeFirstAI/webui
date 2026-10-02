@@ -11,6 +11,17 @@ function bitmap(id) {
     return { id, closed: false, close() { this.closed = true } }
 }
 
+function strictBitmap(id) {
+    return {
+        id,
+        closes: 0,
+        get closed() { return this.closes > 0 },
+        close() {
+            if (this.closes++) throw new Error(`bitmap ${id} closed twice`)
+        },
+    }
+}
+
 function fixedDelay(ms) {
     return { observe() {}, delayMs: () => ms }
 }
@@ -117,7 +128,7 @@ test('a delay longer than the queue can hold degrades instead of freezing', () =
     const shown = []
     for (let i = 0; i < 100; i++) {
         const arrival = i * 67
-        const b = bitmap(i)
+        const b = strictBitmap(i)
         all.push(b)
         sync.pushFrame(T + i * 67, b, arrival)
         assert.ok(sync.depth <= capacity, `depth ${sync.depth} at frame ${i}`)
@@ -130,6 +141,6 @@ test('a delay longer than the queue can hold degrades instead of freezing', () =
     }
     assert.ok(shown.length >= 100 - capacity, `only ${shown.length} frames shown`)
     for (let i = 1; i < shown.length; i++) assert.ok(shown[i] > shown[i - 1], 'stamp order')
-    assert.ok(all.slice(0, all.length - sync.depth).every((b) => b.closed))
-    assert.ok(all.slice(all.length - sync.depth).every((b) => !b.closed))
+    assert.ok(all.slice(0, all.length - sync.depth).every((b) => b.closes === 1))
+    assert.ok(all.slice(all.length - sync.depth).every((b) => b.closes === 0))
 })
