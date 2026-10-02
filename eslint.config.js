@@ -18,4 +18,8 @@ export default [
     },
   },
   pluginJs.configs.recommended,
+  {
+    files: ["tests/**/*.mjs"],
+    languageOptions: { globals: globals.node, sourceType: "module" },
+  },
 ];

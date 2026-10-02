@@ -152,8 +152,78 @@ The SmartVideoManager handles tile detection and synchronization:
 - 5-second detection timeout
 - Minimum 2 tiles required for tile mode
 - Falls back to single stream if unavailable
-- Frame sync at 15fps minimum with 500ms max wait
+- Tiles are decoded to bitmaps and grouped by `header.stamp` by `TileAssembler`; a merged frame is built only from tiles of the same frame and takes that frame's stamp. A group is merged once all tiles have arrived or, with the tiles it has, 100 ms (three tile periods at 30 fps) after its first tile; the merged canvas is persistent, so a lost tile leaves the previous picture in its quadrant. Only the newest ready group is merged, older ones are closed, and late tiles of an already merged stamp are discarded. Merging is limited to one merged frame per 60 ms, which is 15 fps from 30 fps tiles; a group ready sooner is held and merged on the first tile after the interval unless a newer group is ready by then. A tile more than 2 s from the last merged stamp counts as a clock step only once most tile streams show the new time, or once no tile of the old time has arrived for 100 ms (so a step is still followed when some tile streams have stopped), so one lagging stream cannot reset the merge while the others keep delivering
+- Merged frames are delivered as `onMergedFrame(stampMs, bitmap)`
 - Callback-based upgrade: `onUpgrade(tileTexture)` swaps the material texture and disposes the fallback
+
+## Temporal Synchronization
+
+The camera, segmentation and combined pages draw each overlay for the camera frame it belongs to instead of the newest sample received. Frames are held briefly so the overlays for a frame have arrived by the time it is shown.
+
+### Stamp Contract
+
+- Acquisition time is carried in `header.stamp` (`sec` and `nanosec`, both uint32) and equals the Zenoh sample timestamp to within NTP64 resolution. The UI reads the CDR header, so the WebSocket protocol carries no separate timestamp.
+- Camera-derived outputs (`model/output`, `model/info`) carry the exact `header.stamp` of the camera frame they were computed from.
+- LiDAR and radar carry their own acquisition stamps, which never equal a camera stamp.
+- `stampToMs(sec, nanosec)` in `stamp.js` converts a stamp to milliseconds since the Unix epoch; identical stamps give identical numbers, so the value is safe as an exact-match key.
+- H.264 chunks are tagged with a sequence number and `StampTracker` recovers the stamp from `VideoFrame.timestamp`, so each decoded frame carries its own stamp however many frames the decoder holds in flight.
+
+### Modules
+
+| Module | Role |
+|--------|------|
+| `stamp.js` | `stampToMs`, `readHeaderStampMs`, `StampTracker` and the `DISCONTINUITY_MS` constant (2000 ms). |
+| `StampBuffer.js` | Per-stream buffer ordered by stamp with `exact`, `atOrBefore` and `nearest` lookups, plus the `selectDerived` and `selectSensor` policies. |
+| `PlayoutClock.js` | Learns how late each stream arrives and derives the playout delay. |
+| `FrameSync.js` | Holds decoded camera frames until the playout delay has passed and releases the frame that is due; never releases a frame older than the last one released. |
+| `TileAssembler.js` | Groups decoded 4K tiles by exact `header.stamp` and emits complete groups, or partial groups after 100 ms, at most one per `minIntervalMs`. |
+| `SyncedVideo.js` | `createSyncedVideo()` wires `SmartVideoManager`, `FrameSync` and `PlayoutClock`; `tick()` draws the due frame and returns its stamp. |
+
+The stamp, buffer, clock, frame and tile modules import nothing that touches the DOM, WebGL or Three.js, so they are unit tested with `node --test`.
+
+### Overlay Selection Policy
+
+Each animation frame the page calls `video.tick()`, which returns the stamp of the frame now on screen, and selects every enabled overlay against that stamp.
+
+| Stream | Pages | Buffer capacity | Selection |
+|--------|-------|-----------------|-----------|
+| Model output | camera, segmentation, combined | 32 | The result with the exact frame stamp; otherwise the newest earlier result, held for up to two model periods (clamped to 50-250 ms, 250 ms when the period is unknown). Never a result newer than the frame. |
+| LiDAR points and clusters | camera | 32 | The sample nearest the frame stamp within half the sensor period plus 10 ms (60 ms until the period is known). No sample inside the tolerance means no overlay. |
+| Radar | combined | 64 | The same nearest-sample rule as LiDAR. The larger buffer covers the lag of the displayed video behind radar, which arrives earlier than the video. |
+
+The model runs slower than the camera, so a frame the model did not process shows the held result of the last processed frame. Overlays disappear once nothing inside the window remains, so boxes and points do not stay on screen after detections or points stop. On `/combined` the distance and speed labels on each box follow the radar sample selected for the displayed frame. The bird's-eye radar grid on `/combined` shows the latest radar data.
+
+`lidar.html` and `grid.html` are single-sensor views with no video to align to, so they intentionally show the latest sample.
+
+### Playout Delay
+
+`PlayoutClock` records `arrival - stamp` for every message of each observed stream over a window of 60 samples. The offsets mix the browser clock with the device clock, but only differences between streams are used, so the clock skew cancels.
+
+```text
+lag(stream)   = p95(offsets of stream) - median(offsets of camera)
+delay         = clamp(0, 1000 ms, max over enabled overlay streams of (lag + tolerance + 10 ms))
+```
+
+`tolerance` is the sensor selection tolerance for LiDAR and radar and 0 for the model. `FrameSync` releases the newest queued frame that has waited at least `delay` since it arrived and drops older frames. Its queue holds 30 frames (12 in 4K tile mode, where frames are large); when the queue is full its oldest frame is released even if not yet due, so a delay longer than the queue spans (12 frames at 15 merged frames per second is about 800 ms) shortens the effective delay instead of freezing the video. A frame is dropped for capacity only when another arrives while the queue is full, that is when no `tick()` ran in between. A frame whose stamp is at or before the last released one (decoded frames can reach the page out of order on a loaded client) is closed on arrival, so displayed stamps never go backwards. The cost is bounded by `DISCONTINUITY_MS`: after a released frame up to 2 s ahead of the stream, or a real backward step smaller than 2 s, no frame is shown until the stream passes the last shown stamp, for at most 2 s.
+
+- A stream with no arrival for more than 2 s is ignored.
+- A stream whose lag against the camera exceeds 2 s (`DISCONTINUITY_MS`) is treated as being in another clock domain, which is what a clock step looks like until the camera catches up. It is reported in the statistics but does not contribute to the delay. The trade-off is that a stream that is genuinely more than 2 s late contributes no delay.
+- The delay is capped at 1000 ms.
+- On `/camera`, turning an overlay off removes its stream from the clock, so with every overlay off the delay is 0 and the video is live. `/segmentation` and `/combined` observe the model (and radar) stream for as long as it arrives, so their delay follows that stream's lag and falls to 0 only after the stream has been silent for more than 2 s.
+
+### Discontinuity Handling
+
+The device wall clock can step forward or backward at any moment. Stamps further than `DISCONTINUITY_MS` (2 s) from the previous sample of the same stream are a step, not data:
+
+- `StampBuffer` and `FrameSync` flush what they hold and start again from the new stamp; `FrameSync` also treats a frame more than 2 s from the last released stamp as a step.
+- `TileAssembler` restarts once most tile streams have delivered a tile of the new time, or once no tile of the old time has arrived for 100 ms; until then those tiles are held aside.
+- `PlayoutClock` discards a stream's offsets when a new offset is more than 2 s from their median and relearns.
+
+Overlays recover without a page reload.
+
+### Diagnostics
+
+`createSyncedVideo().reportSync(selections)` publishes `window.overlaySync` every animation frame: `displayedStampMs`, `delayMs`, `streams` (per-stream `lagMs` and `samples`) and, for each selection the page reports, `modelDeltaMs`, `lidarDeltaMs` or `radarDeltaMs`. A delta is the displayed stamp minus the selected sample's stamp, or `null` when no sample is selected. `/camera` also shows the delay and per-stream lag in a statistics box.
 
 ## Visualization Pages
 

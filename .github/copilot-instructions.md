@@ -12,7 +12,11 @@ WebSRV is a Rust native server built with `cargo-zigbuild` for cross-compilation
 
 ```bash
 # Lint (requires Node.js + npm dependencies installed)
-npx eslint src/
+npx eslint src/ tests/
+# (reports existing findings in older vendored/page files; the synchronization modules and tests/ lint clean)
+
+# Unit tests for the pure modules (Node.js 22+, no npm install; quote the glob)
+node --test "tests/unit/*.test.mjs"
 
 # Deploy to device for testing (target has ~/webui cloned)
 # No restart needed — WebSRV serves static files directly, changes are immediate
@@ -48,7 +52,13 @@ The WebSRV backend subscribes to Zenoh topics and bridges them to WebSocket endp
 | Module | Role |
 |--------|------|
 | `stream.js` | H.264 WebSocket → WebCodecs VideoDecoder → Three.js CanvasTexture pipeline. Handles reconnection with exponential backoff. |
-| `SmartVideoManager.js` | Tiled 4K video: probes 4 tile endpoints, falls back to single stream, upgrades seamlessly via `onUpgrade` callback. Frame sync at 15fps. |
+| `SmartVideoManager.js` | Tiled 4K video: probes 4 tile endpoints, falls back to single stream, upgrades seamlessly via `onUpgrade` callback. Decodes tiles to bitmaps, merges only tiles with the same `header.stamp` (via `TileAssembler`, at most one merge per 60 ms, i.e. 15 fps) and delivers `onMergedFrame(stampMs, bitmap)`. |
+| `stamp.js` | `header.stamp` to milliseconds, CDR header stamp reader, `StampTracker` (chunk sequence to stamp), `DISCONTINUITY_MS` (2 s). Pure. |
+| `StampBuffer.js` | Stamp-ordered sample buffer with exact/nearest lookups; `selectDerived` (model: exact stamp, bounded hold) and `selectSensor` (LiDAR/radar: nearest within half a period). Pure. |
+| `PlayoutClock.js` | Learns per-stream arrival lag and derives the playout delay (max 1 s; streams over 2 s off are ignored). Pure. |
+| `FrameSync.js` | Holds decoded camera frames for the playout delay and releases the frame that is due; a full queue releases its oldest frame; never goes back to an older stamp. Pure. |
+| `TileAssembler.js` | Groups 4K tiles by exact stamp; emits complete groups, or partial groups after 100 ms, holding a group that is ready inside the merge interval. Pure. |
+| `SyncedVideo.js` | `createSyncedVideo()`: video playout for the camera, segmentation and combined pages; `tick()` returns the displayed stamp, `reportSync()` publishes `window.overlaySync`. |
 | `serviceCache.js` | Global `window.serviceCache` singleton. Polls `/api/services/status` every 5s, caches in localStorage, notifies listeners via callbacks. Use `isServiceEnabled(name)` / `isServiceRunning(name)` to gate UI features. |
 | `status.js` | Navbar status indicators (Live/Degraded/Replay/Stopped). Recorder status polling. Service status dialog. |
 | `navbar.js` | Shared navbar component injected via `createNavbar()`. Recording button, MCAP dialog, mode indicator, theme toggle. |
@@ -76,7 +86,7 @@ The canonical service list lives in `serviceCache.js` as `ALL_SERVICES`. Don't d
 
 ### Rendering Stack (Camera Page)
 
-Four composited layers, bottom to top:
+Four composited layers, bottom to top, each drawn for the stamp of the displayed video frame (see Temporal Synchronization in ARCHITECTURE.md):
 1. **Video texture** — WebGL `ProjectedMaterial` on Three.js plane
 2. **Segmentation overlay** — WebGL shader with Zstandard-decompressed mask
 3. **Bounding boxes** — Canvas 2D overlay

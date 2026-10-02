@@ -289,6 +289,272 @@ async function listMcapFiles() {
     return response.json();
 }
 
+/** Interval between listing refreshes while a recording is being scanned. */
+const MCAP_SCAN_REFRESH_MS = 2000;
+let mcapScanTimer = null;
+let mcapListingHasScanning = false;
+
+function stopMcapScanRefresh() {
+    clearTimeout(mcapScanTimer);
+    mcapScanTimer = null;
+}
+
+function scheduleMcapScanRefresh(dialog, content) {
+    stopMcapScanRefresh();
+    if (!dialog.open) return;
+    mcapScanTimer = setTimeout(() => {
+        mcapScanTimer = null;
+        if (dialog.open) renderMcapList(dialog, content, { refresh: true });
+    }, MCAP_SCAN_REFRESH_MS);
+}
+
+/**
+ * Fetch and render the recordings table. Entries with `scanning: true` are
+ * still being read by the server (no duration or topics yet); while any is
+ * listed and the dialog is open, the listing is fetched again every
+ * MCAP_SCAN_REFRESH_MS. A missing `scanning` field means not scanning.
+ * A refresh that fails keeps the last listing on screen and tries again.
+ * @returns {Promise<boolean>} false when the server reported an error
+ */
+async function renderMcapList(dialog, content, { refresh = false } = {}) {
+    stopMcapScanRefresh();
+    const retry = refresh && mcapListingHasScanning;
+    try {
+        const data = await listMcapFiles();
+        if (data.error && retry) {
+            scheduleMcapScanRefresh(dialog, content);
+            return true;
+        }
+        if (data.error) {
+            mcapListingHasScanning = false;
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'text-red-600';
+            errorDiv.textContent = `Error: ${data.error}`;
+            content.replaceChildren(errorDiv);
+            return false;
+        }
+        const files = data.files || [];
+        const dirName = data.dir_name || '';
+        // Add a custom CSS rule to force no margin/padding above the directory label
+        if (!document.getElementById('mcap-dir-label-style')) {
+            const style = document.createElement('style');
+            style.id = 'mcap-dir-label-style';
+            style.innerHTML = `
+                .mcap-dir-label { margin-top: 0 !important; padding-top: 0 !important; margin-bottom: 0.25rem !important; font-size: 1.08rem !important; font-weight: 500 !important; }
+                #mcapDialogContent { margin-top: 0 !important; padding-top: 0 !important; }
+            `;
+            document.head.appendChild(style);
+        }
+        const header = dialog.querySelector('div[style*="border-bottom"]');
+        if (header) {
+            header.style.paddingBottom = '0';
+            header.style.marginBottom = '0';
+        }
+        content.style.marginTop = '0';
+        content.style.paddingTop = '0';
+        // Update directory path in header
+        const dirPathElement = document.querySelector('.mcap-dir-path');
+        if (dirPathElement && dirName) {
+            dirPathElement.textContent = dirName;
+        }
+
+        // Setup directory copy button
+        const dirCopyBtn = document.querySelector('.mcap-dir-copy-btn');
+        if (dirCopyBtn && dirName) {
+            dirCopyBtn.onclick = () => {
+                navigator.clipboard.writeText(dirName);
+                // Show brief feedback
+                const originalText = dirCopyBtn.innerHTML;
+                dirCopyBtn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>';
+                setTimeout(() => {
+                    dirCopyBtn.innerHTML = originalText;
+                }, 1000);
+            };
+        }
+        let tableHTML = '';
+        const headerControls = document.getElementById('mcapHeaderControls');
+        if (files.length === 0) {
+            tableHTML = `<div class="text-gray-600 text-center py-4">No MCAP recordings found</div>`;
+            if (headerControls) headerControls.innerHTML = '';
+        } else {
+            files.sort((a, b) => new Date(b.created) - new Date(a.created));
+            // Populate header controls; a refresh keeps the existing search box
+            // so its text, focus and caret survive.
+            if (headerControls && !(refresh && document.getElementById('mcap-search'))) {
+                headerControls.innerHTML = `
+                            <div class="mcap-header-toolbar">
+                                <div class="mcap-search-wrap mcap-search-compact">
+                                    <svg class="mcap-search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                                    </svg>
+                                    <input type="text" id="mcap-search" class="mcap-search" placeholder="Search...">
+                                    <button id="mcap-search-clear" class="mcap-search-clear" title="Clear search">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                                <button onclick="switchToLive()" class="mcap-btn-primary mcap-btn-sm" title="Switch to Live Mode (restarts device)">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                                    </svg>
+                                    <span>Live Mode</span>
+                                </button>
+                            </div>
+                        `;
+                    }
+                    tableHTML = `
+                        <table class="mcap-table">
+                            <thead>
+                                <tr>
+                                    <th style="width:3.5rem;">Play</th>
+                                    <th>File Name</th>
+                                    <th style="width:6rem;">Size</th>
+                                    <th style="width:10rem;">Date/Time</th>
+                                    <th style="text-align:center; width:10rem;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="mcap-table-body">
+                                ${files.map(file => {
+                        const date = file.created ? new Date(file.created) : null;
+                        const dateStr = date ? date.toLocaleDateString() : '--';
+                        const timeStr = date ? date.toLocaleTimeString() : '';
+                        const scanning = file.scanning === true;
+                        const isCurrentlyPlaying = window.currentPlayingFile === file.name && window.isPlaying;
+                        const safeName = escapeHtml(file.name);
+                        const safeDir = escapeHtml(dirName);
+                        const safeTopics = escapeHtml(JSON.stringify(file.topics));
+                        const safeFileinfo = escapeHtml(JSON.stringify({
+                            name: file.name,
+                            size: file.size,
+                            duration: file.average_video_length,
+                            clockSteps: file.clock_steps ?? 0,
+                            scanning,
+                        }));
+                        const downloadHref = `/api/recordings/download/${encodeURIComponent(dirName)}/${encodeURIComponent(file.name)}`;
+                        return `
+                                <tr class="mcap-row-card" data-filename="${safeName}">
+                                    <td style="text-align:center; width:3.5rem;">
+                                        <button class="mcap-action-btn mcap-play-btn ${isCurrentlyPlaying ? 'mcap-btn-red' : 'mcap-btn-blue'}" title="${isCurrentlyPlaying ? 'Stop' : 'Play'}" data-filename="${safeName}" data-dirname="${safeDir}">
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" style="width: 1.25rem; height: 1.25rem;">
+                                                ${isCurrentlyPlaying
+                                ? '<rect x="7" y="7" width="10" height="10" rx="2"/>'
+                                : '<path d="M8 5v14l11-7z"/>'}
+                                            </svg>
+                                        </button>
+                                    </td>
+                                    ${scanning
+                                ? `<td style="max-width:320px; color:#222; font-weight:600;"><div style="display:flex; align-items:center; gap:0.5rem;"><span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${safeName}</span><span data-testid="recordings-list-scanning" title="Reading the recording's contents; duration and topics follow when done" style="flex-shrink:0; padding:0 0.5rem; border-radius:9999px; background:#fef3c7; color:#92400e; font-size:0.8rem; font-weight:500;">Scanning…</span></div></td>`
+                                : `<td style="max-width:320px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#222; font-weight:600;">${safeName}</td>`}
+                                    <td style="color:#555;">${escapeHtml(String(file.size))} MB</td>
+                                    <td style="color:#555;">${escapeHtml(dateStr)} <span style='color:#888;'>${escapeHtml(timeStr)}</span></td>
+                                    <td style="text-align:center;">
+                                        <div style="display:flex; gap:0.5rem; justify-content:center; align-items:center;">
+                                            <button class="mcap-action-btn mcap-info-btn mcap-btn-blue" title="Info" data-topics='${safeTopics}' data-fileinfo='${safeFileinfo}'>
+                                                <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" style="width: 1.15rem; height: 1.15rem;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+                                            </button>
+                                            <a class="mcap-action-btn mcap-btn-green" href="${downloadHref}" title="Download">
+                                                <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" style="width: 1.25rem; height: 1.25rem;"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                                            </a>
+                                            <button class="mcap-action-btn mcap-upload-btn mcap-btn-purple" title="Upload to Studio" data-filename="${safeName}" data-dirname="${safeDir}">
+                                                <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" style="width: 1.25rem; height: 1.25rem;"><path d="M9 16h6v-6h4l-7-7-7 7h4v6zm-4 2h14v2H5v-2z"/></svg>
+                                            </button>
+                                            <button class="mcap-action-btn mcap-delete-btn mcap-btn-red" title="Delete" data-filename="${safeName}" data-dirname="${safeDir}">
+                                                <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" style="width: 1.25rem; height: 1.25rem;"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                `;
+                    }).join('')}
+                            </tbody>
+                        </table>
+                    `;
+                }
+        content.innerHTML = tableHTML;
+        attachMcapTableListeners();
+        const searchInput = document.getElementById('mcap-search');
+        if (searchInput && searchInput.value) searchInput.oninput();
+        mcapListingHasScanning = files.some((file) => file.scanning === true);
+        if (mcapListingHasScanning) scheduleMcapScanRefresh(dialog, content);
+        else stopMcapScanRefresh();
+    } catch (error) {
+        if (retry) {
+            scheduleMcapScanRefresh(dialog, content);
+            return true;
+        }
+        mcapListingHasScanning = false;
+        content.innerHTML = `<div class="text-red-600">Error connecting to server</div>`;
+    }
+    return true;
+}
+
+function attachMcapTableListeners() {
+    const tableBody = document.getElementById('mcap-table-body');
+    const searchInput = document.getElementById('mcap-search');
+    const searchClear = document.getElementById('mcap-search-clear');
+    if (searchInput && searchClear) {
+        searchInput.oninput = function () {
+            const val = this.value.toLowerCase();
+            Array.from(document.querySelectorAll('.mcap-row-card')).forEach(row => {
+                const filename = row.getAttribute('data-filename') || '';
+                row.style.display = filename.toLowerCase().includes(val) ? '' : 'none';
+            });
+            searchClear.style.display = val ? 'block' : 'none';
+        };
+        searchClear.onclick = function () {
+            searchInput.value = '';
+            searchInput.oninput();
+            searchClear.style.display = 'none';
+        };
+    }
+    
+    // Event delegation for action buttons (XSS protection)
+    if (tableBody) {
+        tableBody.addEventListener('click', (e) => {
+            const btn = e.target.closest('button');
+            if (!btn) return;
+            
+            // Play/Stop button
+            if (btn.classList.contains('mcap-play-btn')) {
+                const filename = btn.getAttribute('data-filename');
+                const dirname = btn.getAttribute('data-dirname');
+                if (filename && dirname) {
+                    togglePlayMcap(filename, dirname);
+                }
+            }
+            // Info button
+            else if (btn.classList.contains('mcap-info-btn')) {
+                const topics = btn.getAttribute('data-topics');
+                const fileinfo = btn.getAttribute('data-fileinfo');
+                if (topics && fileinfo) {
+                    try {
+                        showModal(JSON.parse(topics), JSON.parse(fileinfo));
+                    } catch (e) {
+                        console.error('Error parsing button data:', e);
+                    }
+                }
+            }
+            // Upload button
+            else if (btn.classList.contains('mcap-upload-btn')) {
+                const filename = btn.getAttribute('data-filename');
+                const dirname = btn.getAttribute('data-dirname');
+                if (filename && dirname) {
+                    showUploadOptionsDialog(filename, dirname);
+                }
+            }
+            // Delete button
+            else if (btn.classList.contains('mcap-delete-btn')) {
+                const filename = btn.getAttribute('data-filename');
+                const dirname = btn.getAttribute('data-dirname');
+                if (filename && dirname) {
+                    deleteFile(filename, dirname);
+                }
+            }
+        });
+    }
+}
+
 window.showMcapDialog = async function () {
     let dialog = document.getElementById('mcapDialog');
     if (!dialog) {
@@ -317,9 +583,10 @@ window.showMcapDialog = async function () {
                 <div id="mcapDialogContent" class="mcap-scroll-container"></div>
             </div>
         `;
+        dialog.addEventListener('close', stopMcapScanRefresh);
         document.body.appendChild(dialog);
     }
-    dialog.showModal();
+    if (!dialog.open) dialog.showModal();
     const content = document.getElementById('mcapDialogContent');
 
     // Reset MCAP button tooltip when modal is opened
@@ -372,148 +639,7 @@ window.showMcapDialog = async function () {
         // Fallback to current global state
     }
 
-    try {
-        const data = await listMcapFiles();
-        if (data.error) {
-            const errorDiv = document.createElement('div');
-            errorDiv.className = 'text-red-600';
-            errorDiv.textContent = `Error: ${data.error}`;
-            content.replaceChildren(errorDiv);
-            return;
-        }
-        const files = data.files || [];
-        const dirName = data.dir_name || '';
-        // Add a custom CSS rule to force no margin/padding above the directory label
-        if (!document.getElementById('mcap-dir-label-style')) {
-            const style = document.createElement('style');
-            style.id = 'mcap-dir-label-style';
-            style.innerHTML = `
-                .mcap-dir-label { margin-top: 0 !important; padding-top: 0 !important; margin-bottom: 0.25rem !important; font-size: 1.08rem !important; font-weight: 500 !important; }
-                #mcapDialogContent { margin-top: 0 !important; padding-top: 0 !important; }
-            `;
-            document.head.appendChild(style);
-        }
-        const header = dialog.querySelector('div[style*="border-bottom"]');
-        if (header) {
-            header.style.paddingBottom = '0';
-            header.style.marginBottom = '0';
-        }
-        content.style.marginTop = '0';
-        content.style.paddingTop = '0';
-        // Update directory path in header
-        const dirPathElement = document.querySelector('.mcap-dir-path');
-        if (dirPathElement && dirName) {
-            dirPathElement.textContent = dirName;
-        }
-
-        // Setup directory copy button
-        const dirCopyBtn = document.querySelector('.mcap-dir-copy-btn');
-        if (dirCopyBtn && dirName) {
-            dirCopyBtn.onclick = () => {
-                navigator.clipboard.writeText(dirName);
-                // Show brief feedback
-                const originalText = dirCopyBtn.innerHTML;
-                dirCopyBtn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>';
-                setTimeout(() => {
-                    dirCopyBtn.innerHTML = originalText;
-                }, 1000);
-            };
-        }
-        let tableHTML = '';
-        const headerControls = document.getElementById('mcapHeaderControls');
-        if (files.length === 0) {
-            tableHTML = `<div class="text-gray-600 text-center py-4">No MCAP recordings found</div>`;
-            if (headerControls) headerControls.innerHTML = '';
-        } else {
-            files.sort((a, b) => new Date(b.created) - new Date(a.created));
-            // Populate header controls
-            if (headerControls) {
-                headerControls.innerHTML = `
-                            <div class="mcap-header-toolbar">
-                                <div class="mcap-search-wrap mcap-search-compact">
-                                    <svg class="mcap-search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                                    </svg>
-                                    <input type="text" id="mcap-search" class="mcap-search" placeholder="Search...">
-                                    <button id="mcap-search-clear" class="mcap-search-clear" title="Clear search">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                                        </svg>
-                                    </button>
-                                </div>
-                                <button onclick="switchToLive()" class="mcap-btn-primary mcap-btn-sm" title="Switch to Live Mode (restarts device)">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                                    </svg>
-                                    <span>Live Mode</span>
-                                </button>
-                            </div>
-                        `;
-                    }
-                    tableHTML = `
-                        <table class="mcap-table">
-                            <thead>
-                                <tr>
-                                    <th style="width:3.5rem;">Play</th>
-                                    <th>File Name</th>
-                                    <th style="width:6rem;">Size</th>
-                                    <th style="width:10rem;">Date/Time</th>
-                                    <th style="text-align:center; width:10rem;">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="mcap-table-body">
-                                ${files.map(file => {
-                        const date = file.created ? new Date(file.created) : null;
-                        const dateStr = date ? date.toLocaleDateString() : '--';
-                        const timeStr = date ? date.toLocaleTimeString() : '';
-                        const isCurrentlyPlaying = window.currentPlayingFile === file.name && window.isPlaying;
-                        const safeName = escapeHtml(file.name);
-                        const safeDir = escapeHtml(dirName);
-                        const safeTopics = escapeHtml(JSON.stringify(file.topics));
-                        const safeFileinfo = escapeHtml(JSON.stringify({ name: file.name, size: file.size }));
-                        const downloadHref = `/api/recordings/download/${encodeURIComponent(dirName)}/${encodeURIComponent(file.name)}`;
-                        return `
-                                <tr class="mcap-row-card" data-filename="${safeName}">
-                                    <td style="text-align:center; width:3.5rem;">
-                                        <button class="mcap-action-btn mcap-play-btn ${isCurrentlyPlaying ? 'mcap-btn-red' : 'mcap-btn-blue'}" title="${isCurrentlyPlaying ? 'Stop' : 'Play'}" data-filename="${safeName}" data-dirname="${safeDir}">
-                                            <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" style="width: 1.25rem; height: 1.25rem;">
-                                                ${isCurrentlyPlaying
-                                ? '<rect x="7" y="7" width="10" height="10" rx="2"/>'
-                                : '<path d="M8 5v14l11-7z"/>'}
-                                            </svg>
-                                        </button>
-                                    </td>
-                                    <td style="max-width:320px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#222; font-weight:600;">${safeName}</td>
-                                    <td style="color:#555;">${escapeHtml(String(file.size))} MB</td>
-                                    <td style="color:#555;">${escapeHtml(dateStr)} <span style='color:#888;'>${escapeHtml(timeStr)}</span></td>
-                                    <td style="text-align:center;">
-                                        <div style="display:flex; gap:0.5rem; justify-content:center; align-items:center;">
-                                            <button class="mcap-action-btn mcap-info-btn mcap-btn-blue" title="Info" data-topics='${safeTopics}' data-fileinfo='${safeFileinfo}'>
-                                                <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" style="width: 1.15rem; height: 1.15rem;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
-                                            </button>
-                                            <a class="mcap-action-btn mcap-btn-green" href="${downloadHref}" title="Download">
-                                                <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" style="width: 1.25rem; height: 1.25rem;"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
-                                            </a>
-                                            <button class="mcap-action-btn mcap-upload-btn mcap-btn-purple" title="Upload to Studio" data-filename="${safeName}" data-dirname="${safeDir}">
-                                                <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" style="width: 1.25rem; height: 1.25rem;"><path d="M9 16h6v-6h4l-7-7-7 7h4v6zm-4 2h14v2H5v-2z"/></svg>
-                                            </button>
-                                            <button class="mcap-action-btn mcap-delete-btn mcap-btn-red" title="Delete" data-filename="${safeName}" data-dirname="${safeDir}">
-                                                <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" style="width: 1.25rem; height: 1.25rem;"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                                `;
-                    }).join('')}
-                            </tbody>
-                        </table>
-                    `;
-                }
-        content.innerHTML = tableHTML;
-        attachMcapTableListeners();
-    } catch (error) {
-        content.innerHTML = `<div class="text-red-600">Error connecting to server</div>`;
-    }
+    if (!(await renderMcapList(dialog, content))) return;
 
     // --- Storage Info Bar Logic ---
     async function fetchStorageInfo() {
@@ -586,75 +712,10 @@ window.showMcapDialog = async function () {
     const info = await fetchStorageInfo();
     renderStorageBar(info);
     // --- End Storage Info Bar Logic ---
-
-    function attachMcapTableListeners() {
-        const tableBody = document.getElementById('mcap-table-body');
-        const searchInput = document.getElementById('mcap-search');
-        const searchClear = document.getElementById('mcap-search-clear');
-        if (searchInput && searchClear) {
-            searchInput.oninput = function () {
-                const val = this.value.toLowerCase();
-                Array.from(document.querySelectorAll('.mcap-row-card')).forEach(row => {
-                    const filename = row.getAttribute('data-filename') || '';
-                    row.style.display = filename.toLowerCase().includes(val) ? '' : 'none';
-                });
-                searchClear.style.display = val ? 'block' : 'none';
-            };
-            searchClear.onclick = function () {
-                searchInput.value = '';
-                searchInput.oninput();
-                searchClear.style.display = 'none';
-            };
-        }
-        
-        // Event delegation for action buttons (XSS protection)
-        if (tableBody) {
-            tableBody.addEventListener('click', (e) => {
-                const btn = e.target.closest('button');
-                if (!btn) return;
-                
-                // Play/Stop button
-                if (btn.classList.contains('mcap-play-btn')) {
-                    const filename = btn.getAttribute('data-filename');
-                    const dirname = btn.getAttribute('data-dirname');
-                    if (filename && dirname) {
-                        togglePlayMcap(filename, dirname);
-                    }
-                }
-                // Info button
-                else if (btn.classList.contains('mcap-info-btn')) {
-                    const topics = btn.getAttribute('data-topics');
-                    const fileinfo = btn.getAttribute('data-fileinfo');
-                    if (topics && fileinfo) {
-                        try {
-                            showModal(JSON.parse(topics), JSON.parse(fileinfo));
-                        } catch (e) {
-                            console.error('Error parsing button data:', e);
-                        }
-                    }
-                }
-                // Upload button
-                else if (btn.classList.contains('mcap-upload-btn')) {
-                    const filename = btn.getAttribute('data-filename');
-                    const dirname = btn.getAttribute('data-dirname');
-                    if (filename && dirname) {
-                        showUploadOptionsDialog(filename, dirname);
-                    }
-                }
-                // Delete button
-                else if (btn.classList.contains('mcap-delete-btn')) {
-                    const filename = btn.getAttribute('data-filename');
-                    const dirname = btn.getAttribute('data-dirname');
-                    if (filename && dirname) {
-                        deleteFile(filename, dirname);
-                    }
-                }
-            });
-        }
-    }
 };
 
 window.hideMcapDialog = function () {
+    stopMcapScanRefresh();
     const dialog = document.getElementById('mcapDialog');
     if (dialog) {
         dialog.close();
@@ -1719,6 +1780,11 @@ function showModal(topics, fileInfo = {}) {
             }
         });
     });
+    if (typeof fileInfo.duration === 'number') {
+        totalDuration = fileInfo.duration;
+    }
+    const clockSteps = Number(fileInfo.clockSteps) || 0;
+    const scanning = fileInfo.scanning === true;
     const durationStr = totalDuration > 0 ? `${totalDuration.toLocaleString(undefined, { maximumFractionDigits: 2 })} s` : '--';
     modalDetails.innerHTML = `
 <style>
@@ -1745,8 +1811,10 @@ function showModal(topics, fileInfo = {}) {
 <div class="fd-summary-card">
     <div class="fd-summary-item"><span class="fd-summary-icon">📄</span><span class="fd-summary-label">File Name:</span> <span class="fd-summary-value" title="${fileName}">${fileName.length > 24 ? fileName.slice(0, 21) + '...' : fileName}</span> <button class="fd-summary-copy" title="Copy file name" onclick="navigator.clipboard.writeText('${fileName.replace(/'/g, '\'')}')">⧉</button></div>
     <div class="fd-summary-item"><span class="fd-summary-icon">📦</span><span class="fd-summary-label">File Size:</span> <span class="fd-summary-value">${fileSize}</span></div>
-    <div class="fd-summary-item"><span class="fd-summary-icon">⏱️</span><span class="fd-summary-label">Total Duration:</span> <span class="fd-summary-value">${durationStr}</span></div>
+    <div class="fd-summary-item"><span class="fd-summary-icon">⏱️</span><span class="fd-summary-label">Total Duration:</span> ${scanning ? '<span class="fd-summary-value" data-testid="recordings-details-scanning">Scanning…</span>' : `<span class="fd-summary-value">${durationStr}</span>`}</div>
+    ${clockSteps > 0 ? `<div class="fd-summary-item" data-testid="recordings-details-clock-steps"><span class="fd-summary-icon">🕒</span><span class="fd-summary-label">Clock steps:</span> <span class="fd-summary-value" title="Duration and FPS exclude wall-clock corrections made during the recording">${clockSteps} excluded</span></div>` : ''}
 </div>
+${scanning ? '<div class="fd-subheader">Scanning… duration and topics appear in the recordings list when the scan finishes.</div>' : ''}
 <div class="fd-grid">
     ${Object.entries(topics).map(([topic, details]) => {
         const filtered = Object.entries(details)

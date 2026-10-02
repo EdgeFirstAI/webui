@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import * as THREE from './three.js';
 import { CdrReader } from './Cdr.js';
+import { StampTracker, stampToMs } from './stamp.js';
 
 const RECONNECT_MIN_MS = 1000;
 const RECONNECT_MAX_MS = 8000;
@@ -10,9 +11,12 @@ const RECONNECT_MAX_MS = 8000;
  * @param {string} socketUrl - WebSocket URL for the H.264 stream
  * @param {number} width - Initial video width
  * @param {number} height - Initial video height
- * @param {number} fps - Frames per second for timestamp calculation
- * @param {function} onMessage - Callback receiving a timing object. When captureFrames=true,
- *     timing.bitmap is an ImageBitmap that the consumer is responsible for closing via bitmap.close().
+ * @param {number} fps - Unused; kept for signature compatibility. Frame timing comes from each message's `header.stamp`
+ * @param {function} onMessage - Called once per decoded frame with a timing object
+ *     `{ rosTimeSec, rosTimeNsec, stampMs, arrivalMs, decode_time, bitmap? }`: the frame's
+ *     `header.stamp` (seconds, nanoseconds, and milliseconds), the `performance.now()` time its
+ *     message arrived, the milliseconds from arrival to decode, and, when captureFrames=true,
+ *     an ImageBitmap that the consumer is responsible for closing via bitmap.close().
  * @param {boolean} [captureFrames=false] - When true, produce ImageBitmap frames instead of
  *     drawing to the canvas texture. The consumer handles display.
  */
@@ -29,8 +33,16 @@ export default async function h264stream(socketUrl, width, height, fps, onMessag
 
     const texture_canvas = new THREE.CanvasTexture(canvas);
     texture_canvas.needsUpdate = false
-    let start = performance.now()
-    function handleVideoFrame(videoFrame, ctx, canvas, texture_canvas, frameTiming, frameStart, onMessage) {
+    const tracker = new StampTracker()
+
+    function handleVideoFrame(videoFrame, ctx, canvas, texture_canvas, onMessage) {
+        const timing = tracker.take(videoFrame.timestamp)
+        if (!timing) {
+            videoFrame.close()
+            return
+        }
+        timing.decode_time = performance.now() - timing.arrivalMs
+
         if (captureFrames) {
             const width = videoFrame.displayWidth || videoFrame.codedWidth || 0
             const height = videoFrame.displayHeight || videoFrame.codedHeight || 0
@@ -41,12 +53,11 @@ export default async function h264stream(socketUrl, width, height, fps, onMessag
                 return
             }
 
-            // frameTiming is already a per-frame snapshot; frameStart is captured at message arrival
             createImageBitmap(videoFrame).then((bitmap) => {
-                frameTiming.decode_time = performance.now() - frameStart
-                frameTiming.bitmap = bitmap
+                timing.decode_time = performance.now() - timing.arrivalMs
+                timing.bitmap = bitmap
                 if (onMessage) {
-                    onMessage(frameTiming)
+                    onMessage(timing)
                 }
                 videoFrame.close()
             }).catch((err) => {
@@ -70,8 +81,7 @@ export default async function h264stream(socketUrl, width, height, fps, onMessag
                     texture_canvas.needsUpdate = true;
 
                     if (onMessage) {
-                        frameTiming.decode_time = performance.now() - frameStart;
-                        onMessage(frameTiming);
+                        onMessage(timing);
                     }
                 } else {
                     console.warn('Invalid video frame dimensions:', width, height);
@@ -84,7 +94,7 @@ export default async function h264stream(socketUrl, width, height, fps, onMessag
     }
 
     let h264decoder = new VideoDecoder({
-        output: (videoFrame) => handleVideoFrame(videoFrame, ctx, canvas, texture_canvas, latestFrameTiming, latestFrameStart, onMessage),
+        output: (videoFrame) => handleVideoFrame(videoFrame, ctx, canvas, texture_canvas, onMessage),
         error: e => console.error(e)
     });
 
@@ -95,14 +105,6 @@ export default async function h264stream(socketUrl, width, height, fps, onMessag
         optimizeForLatency: true
     });
 
-    let framesProcessed = 0;
-    const timing = {}
-    // Per-frame snapshot variables consumed by the VideoDecoder output callback.
-    // In captureFrames mode these hold a fresh object per frame to avoid race
-    // conditions with the async ImageBitmap path; in default mode they reference
-    // the shared timing object.
-    let latestFrameTiming = timing
-    let latestFrameStart = start
     let stopped = false;
     let reconnectDelay = RECONNECT_MIN_MS;
     let reconnectTimer = null;
@@ -123,41 +125,37 @@ export default async function h264stream(socketUrl, width, height, fps, onMessag
 
         socket.onmessage = (event) => {
             if (event.data instanceof ArrayBuffer) {
-                start = performance.now()
                 const arrayBuffer = event.data;
                 const dataView = new DataView(arrayBuffer);
                 const reader = new CdrReader(dataView);
                 let image_data;
+                let header_stamp;
                 try {
                     const header_stamp_sec = reader.uint32(); // Read header.stamp.sec
                     const header_stamp_nsec = reader.uint32(); // Read header.stamp.nsec
                     const header_frame_id = reader.string(); // Read header.frame_id
                     image_data = reader.uint8Array(); // Read image data
-                    timing.rosTimeSec = header_stamp_sec
-                    timing.rosTimeNsec = header_stamp_nsec
+                    header_stamp = { sec: header_stamp_sec, nsec: header_stamp_nsec }
                 } catch (error) {
                     console.error("Failed to deserialize image data:", error);
                     return;
                 }
 
-                // In captureFrames mode, create a per-frame timing snapshot and
-                // capture start so the async .then() sees stable values even if
-                // the next message arrives before the promise resolves.
-                latestFrameTiming = captureFrames
-                    ? { rosTimeSec: timing.rosTimeSec, rosTimeNsec: timing.rosTimeNsec }
-                    : timing
-                latestFrameStart = start
-
+                const seq = tracker.enqueue({
+                    rosTimeSec: header_stamp.sec,
+                    rosTimeNsec: header_stamp.nsec,
+                    stampMs: stampToMs(header_stamp.sec, header_stamp.nsec),
+                    arrivalMs: performance.now(),
+                })
                 const chunk = new EncodedVideoChunk({
                     type: "key",
-                    timestamp: framesProcessed * (1000 / fps),
+                    timestamp: seq,
                     data: image_data
                 });
-                framesProcessed++;
                 if (h264decoder.state == "closed") {
                     console.error("decoder state:", h264decoder.state);
                     h264decoder = new VideoDecoder({
-                        output: (videoFrame) => handleVideoFrame(videoFrame, ctx, canvas, texture_canvas, latestFrameTiming, latestFrameStart, onMessage),
+                        output: (videoFrame) => handleVideoFrame(videoFrame, ctx, canvas, texture_canvas, onMessage),
                         error: e => console.error(e)
                     });
 
