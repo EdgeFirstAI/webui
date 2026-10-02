@@ -20,6 +20,11 @@ export default class FrameSync {
         return this.frames.length
     }
 
+    /**
+     * Queues a frame. If more than `capacity` frames are queued, which only
+     * happens when `release()` is not called between pushes, the oldest is
+     * closed.
+     */
     pushFrame(stampMs, bitmap, arrivalMs = performance.now()) {
         this.clock.observe(this.reference, stampMs, arrivalMs)
         const newest = this.frames[this.frames.length - 1]
@@ -34,15 +39,19 @@ export default class FrameSync {
 
     /**
      * Releases the newest frame whose playout delay has passed and closes
-     * the older due frames it supersedes. Frames not yet due stay queued.
+     * the older due frames it supersedes. Frames not yet due stay queued,
+     * except that a full queue always releases its oldest frame: when the
+     * delay is longer than `capacity` frames span, the effective delay
+     * shrinks to what the queue holds instead of frames being evicted
+     * before they are due.
      * The caller owns the returned bitmap and must `close()` it.
      * @returns {{stampMs: number, bitmap: ImageBitmap} | null} null when no frame is due
      */
     release(nowMs = performance.now()) {
         const delay = this.clock.delayMs(this.reference, nowMs)
-        let due = -1
+        let due = this.frames.length - this.capacity
         for (let i = 0; i < this.frames.length; i++) {
-            if (nowMs - this.frames[i].arrivalMs >= delay) due = i
+            if (nowMs - this.frames[i].arrivalMs >= delay) due = Math.max(due, i)
         }
         if (due < 0) return null
         const released = this.frames.splice(0, due + 1)

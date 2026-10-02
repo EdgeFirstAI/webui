@@ -109,3 +109,27 @@ test('a clock step in either direction closes the old frames only', () => {
         assert.ok(!after.closed)
     }
 })
+
+test('a delay longer than the queue can hold degrades instead of freezing', () => {
+    const capacity = 12
+    const sync = new FrameSync({ clock: fixedDelay(1000), capacity })
+    const all = []
+    const shown = []
+    for (let i = 0; i < 100; i++) {
+        const arrival = i * 67
+        const b = bitmap(i)
+        all.push(b)
+        sync.pushFrame(T + i * 67, b, arrival)
+        assert.ok(sync.depth <= capacity, `depth ${sync.depth} at frame ${i}`)
+        for (let now = arrival; now < arrival + 67; now += 16) {
+            const out = sync.release(now)
+            if (!out) continue
+            shown.push(out.stampMs)
+            out.bitmap.close()
+        }
+    }
+    assert.ok(shown.length >= 100 - capacity, `only ${shown.length} frames shown`)
+    for (let i = 1; i < shown.length; i++) assert.ok(shown[i] > shown[i - 1], 'stamp order')
+    assert.ok(all.slice(0, all.length - sync.depth).every((b) => b.closed))
+    assert.ok(all.slice(all.length - sync.depth).every((b) => !b.closed))
+})
