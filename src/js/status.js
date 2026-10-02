@@ -289,89 +289,25 @@ async function listMcapFiles() {
     return response.json();
 }
 
-window.showMcapDialog = async function () {
-    let dialog = document.getElementById('mcapDialog');
-    if (!dialog) {
-        dialog = document.createElement('dialog');
-        dialog.id = 'mcapDialog';
-        dialog.className = 'modal';
-        dialog.innerHTML = `
-            <div class="modal-box" style="padding: 0; min-width: 60vw; max-width: 90vw; width: 100%; display: flex; flex-direction: column; max-height: 85vh;">
-                <div class="mcap-header">
-                    <div class="mcap-header-left">
-                        <h2 class="mcap-title">MCAP Recordings</h2>
-                    </div>
-                    <div class="mcap-header-center" id="mcapHeaderControls">
-                        <!-- Controls will be populated when files are loaded -->
-                    </div>
-                    <div class="mcap-header-right">
-                        <div id="mcapStorageInfoBar" class="mcap-storage-info"></div>
-                        <button onclick="hideMcapDialog()" class="mcap-close-btn">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                            </svg>
-                        </button>
-                    </div>
-                </div>
+/** Interval between listing refreshes while a recording is being scanned. */
+const MCAP_SCAN_REFRESH_MS = 2000;
+let mcapScanTimer = null;
 
-                <div id="mcapDialogContent" class="mcap-scroll-container"></div>
-            </div>
-        `;
-        document.body.appendChild(dialog);
-    }
-    dialog.showModal();
-    const content = document.getElementById('mcapDialogContent');
+function stopMcapScanRefresh() {
+    clearTimeout(mcapScanTimer);
+    mcapScanTimer = null;
+}
 
-    // Reset MCAP button tooltip when modal is opened
-    const mcapButton = document.getElementById('mcapDialogBtn');
-    if (mcapButton) {
-        const mcapTooltip = mcapButton.querySelector('.mcap-tooltip');
-        if (mcapTooltip) {
-            mcapTooltip.classList.remove('show');
-        }
-    }
-
-    // Synchronize replay status with server and localStorage before showing content
-    try {
-        const replayResponse = await fetch('/api/replay/status');
-        const statusText = await replayResponse.text();
-        const isReplayRunning = statusText.trim() === "Replay is running";
-
-        // Load state from localStorage
-        const savedState = localStorage.getItem('mcapReplayState');
-        if (savedState) {
-            try {
-                const state = JSON.parse(savedState);
-                // If server says replay is running, use the saved file name
-                if (isReplayRunning && state.isPlaying && state.currentPlayingFile) {
-                    window.isPlaying = true;
-                    window.currentPlayingFile = state.currentPlayingFile;
-                } else if (!isReplayRunning) {
-                    // If server says replay is not running, clear the state
-                    window.isPlaying = false;
-                    window.currentPlayingFile = null;
-                    localStorage.removeItem('mcapReplayState');
-                }
-            } catch (error) {
-                console.error('Error parsing saved replay state:', error);
-                // Fallback to server state
-                window.isPlaying = isReplayRunning;
-                if (!isReplayRunning) {
-                    window.currentPlayingFile = null;
-                }
-            }
-        } else {
-            // No saved state, use server state
-            window.isPlaying = isReplayRunning;
-            if (!isReplayRunning) {
-                window.currentPlayingFile = null;
-            }
-        }
-    } catch (error) {
-        console.error('Error checking replay status:', error);
-        // Fallback to current global state
-    }
-
+/**
+ * Fetch and render the recordings table. Entries with `scanning: true` are
+ * still being read by the server (no duration or topics yet); while any is
+ * listed and the dialog is open, the listing is fetched again every
+ * MCAP_SCAN_REFRESH_MS. A missing `scanning` field means not scanning.
+ * @returns {Promise<boolean>} false when the server reported an error
+ */
+async function renderMcapList(dialog, content, { keepSearch = false } = {}) {
+    stopMcapScanRefresh();
+    const previousSearch = keepSearch ? (document.getElementById('mcap-search')?.value || '') : '';
     try {
         const data = await listMcapFiles();
         if (data.error) {
@@ -379,7 +315,7 @@ window.showMcapDialog = async function () {
             errorDiv.className = 'text-red-600';
             errorDiv.textContent = `Error: ${data.error}`;
             content.replaceChildren(errorDiv);
-            return;
+            return false;
         }
         const files = data.files || [];
         const dirName = data.dir_name || '';
@@ -466,6 +402,7 @@ window.showMcapDialog = async function () {
                         const date = file.created ? new Date(file.created) : null;
                         const dateStr = date ? date.toLocaleDateString() : '--';
                         const timeStr = date ? date.toLocaleTimeString() : '';
+                        const scanning = file.scanning === true;
                         const isCurrentlyPlaying = window.currentPlayingFile === file.name && window.isPlaying;
                         const safeName = escapeHtml(file.name);
                         const safeDir = escapeHtml(dirName);
@@ -475,6 +412,7 @@ window.showMcapDialog = async function () {
                             size: file.size,
                             duration: file.average_video_length,
                             clockSteps: file.clock_steps ?? 0,
+                            scanning,
                         }));
                         const downloadHref = `/api/recordings/download/${encodeURIComponent(dirName)}/${encodeURIComponent(file.name)}`;
                         return `
@@ -488,7 +426,9 @@ window.showMcapDialog = async function () {
                                             </svg>
                                         </button>
                                     </td>
-                                    <td style="max-width:320px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#222; font-weight:600;">${safeName}</td>
+                                    ${scanning
+                                ? `<td style="max-width:320px; color:#222; font-weight:600;"><div style="display:flex; align-items:center; gap:0.5rem;"><span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${safeName}</span><span data-testid="recordings-list-scanning" title="Reading the recording's contents; duration and topics follow when done" style="flex-shrink:0; padding:0 0.5rem; border-radius:9999px; background:#fef3c7; color:#92400e; font-size:0.8rem; font-weight:500;">Scanning…</span></div></td>`
+                                : `<td style="max-width:320px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#222; font-weight:600;">${safeName}</td>`}
                                     <td style="color:#555;">${escapeHtml(String(file.size))} MB</td>
                                     <td style="color:#555;">${escapeHtml(dateStr)} <span style='color:#888;'>${escapeHtml(timeStr)}</span></td>
                                     <td style="text-align:center;">
@@ -516,9 +456,175 @@ window.showMcapDialog = async function () {
                 }
         content.innerHTML = tableHTML;
         attachMcapTableListeners();
+        const searchInput = document.getElementById('mcap-search');
+        if (previousSearch && searchInput) {
+            searchInput.value = previousSearch;
+            searchInput.oninput();
+        }
+        stopMcapScanRefresh();
+        if (dialog.open && files.some((file) => file.scanning === true)) {
+            mcapScanTimer = setTimeout(() => {
+                mcapScanTimer = null;
+                if (dialog.open) renderMcapList(dialog, content, { keepSearch: true });
+            }, MCAP_SCAN_REFRESH_MS);
+        }
     } catch (error) {
         content.innerHTML = `<div class="text-red-600">Error connecting to server</div>`;
     }
+    return true;
+}
+
+function attachMcapTableListeners() {
+    const tableBody = document.getElementById('mcap-table-body');
+    const searchInput = document.getElementById('mcap-search');
+    const searchClear = document.getElementById('mcap-search-clear');
+    if (searchInput && searchClear) {
+        searchInput.oninput = function () {
+            const val = this.value.toLowerCase();
+            Array.from(document.querySelectorAll('.mcap-row-card')).forEach(row => {
+                const filename = row.getAttribute('data-filename') || '';
+                row.style.display = filename.toLowerCase().includes(val) ? '' : 'none';
+            });
+            searchClear.style.display = val ? 'block' : 'none';
+        };
+        searchClear.onclick = function () {
+            searchInput.value = '';
+            searchInput.oninput();
+            searchClear.style.display = 'none';
+        };
+    }
+    
+    // Event delegation for action buttons (XSS protection)
+    if (tableBody) {
+        tableBody.addEventListener('click', (e) => {
+            const btn = e.target.closest('button');
+            if (!btn) return;
+            
+            // Play/Stop button
+            if (btn.classList.contains('mcap-play-btn')) {
+                const filename = btn.getAttribute('data-filename');
+                const dirname = btn.getAttribute('data-dirname');
+                if (filename && dirname) {
+                    togglePlayMcap(filename, dirname);
+                }
+            }
+            // Info button
+            else if (btn.classList.contains('mcap-info-btn')) {
+                const topics = btn.getAttribute('data-topics');
+                const fileinfo = btn.getAttribute('data-fileinfo');
+                if (topics && fileinfo) {
+                    try {
+                        showModal(JSON.parse(topics), JSON.parse(fileinfo));
+                    } catch (e) {
+                        console.error('Error parsing button data:', e);
+                    }
+                }
+            }
+            // Upload button
+            else if (btn.classList.contains('mcap-upload-btn')) {
+                const filename = btn.getAttribute('data-filename');
+                const dirname = btn.getAttribute('data-dirname');
+                if (filename && dirname) {
+                    showUploadOptionsDialog(filename, dirname);
+                }
+            }
+            // Delete button
+            else if (btn.classList.contains('mcap-delete-btn')) {
+                const filename = btn.getAttribute('data-filename');
+                const dirname = btn.getAttribute('data-dirname');
+                if (filename && dirname) {
+                    deleteFile(filename, dirname);
+                }
+            }
+        });
+    }
+}
+
+window.showMcapDialog = async function () {
+    let dialog = document.getElementById('mcapDialog');
+    if (!dialog) {
+        dialog = document.createElement('dialog');
+        dialog.id = 'mcapDialog';
+        dialog.className = 'modal';
+        dialog.innerHTML = `
+            <div class="modal-box" style="padding: 0; min-width: 60vw; max-width: 90vw; width: 100%; display: flex; flex-direction: column; max-height: 85vh;">
+                <div class="mcap-header">
+                    <div class="mcap-header-left">
+                        <h2 class="mcap-title">MCAP Recordings</h2>
+                    </div>
+                    <div class="mcap-header-center" id="mcapHeaderControls">
+                        <!-- Controls will be populated when files are loaded -->
+                    </div>
+                    <div class="mcap-header-right">
+                        <div id="mcapStorageInfoBar" class="mcap-storage-info"></div>
+                        <button onclick="hideMcapDialog()" class="mcap-close-btn">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="mcapDialogContent" class="mcap-scroll-container"></div>
+            </div>
+        `;
+        dialog.addEventListener('close', stopMcapScanRefresh);
+        document.body.appendChild(dialog);
+    }
+    if (!dialog.open) dialog.showModal();
+    const content = document.getElementById('mcapDialogContent');
+
+    // Reset MCAP button tooltip when modal is opened
+    const mcapButton = document.getElementById('mcapDialogBtn');
+    if (mcapButton) {
+        const mcapTooltip = mcapButton.querySelector('.mcap-tooltip');
+        if (mcapTooltip) {
+            mcapTooltip.classList.remove('show');
+        }
+    }
+
+    // Synchronize replay status with server and localStorage before showing content
+    try {
+        const replayResponse = await fetch('/api/replay/status');
+        const statusText = await replayResponse.text();
+        const isReplayRunning = statusText.trim() === "Replay is running";
+
+        // Load state from localStorage
+        const savedState = localStorage.getItem('mcapReplayState');
+        if (savedState) {
+            try {
+                const state = JSON.parse(savedState);
+                // If server says replay is running, use the saved file name
+                if (isReplayRunning && state.isPlaying && state.currentPlayingFile) {
+                    window.isPlaying = true;
+                    window.currentPlayingFile = state.currentPlayingFile;
+                } else if (!isReplayRunning) {
+                    // If server says replay is not running, clear the state
+                    window.isPlaying = false;
+                    window.currentPlayingFile = null;
+                    localStorage.removeItem('mcapReplayState');
+                }
+            } catch (error) {
+                console.error('Error parsing saved replay state:', error);
+                // Fallback to server state
+                window.isPlaying = isReplayRunning;
+                if (!isReplayRunning) {
+                    window.currentPlayingFile = null;
+                }
+            }
+        } else {
+            // No saved state, use server state
+            window.isPlaying = isReplayRunning;
+            if (!isReplayRunning) {
+                window.currentPlayingFile = null;
+            }
+        }
+    } catch (error) {
+        console.error('Error checking replay status:', error);
+        // Fallback to current global state
+    }
+
+    if (!(await renderMcapList(dialog, content))) return;
 
     // --- Storage Info Bar Logic ---
     async function fetchStorageInfo() {
@@ -591,75 +697,10 @@ window.showMcapDialog = async function () {
     const info = await fetchStorageInfo();
     renderStorageBar(info);
     // --- End Storage Info Bar Logic ---
-
-    function attachMcapTableListeners() {
-        const tableBody = document.getElementById('mcap-table-body');
-        const searchInput = document.getElementById('mcap-search');
-        const searchClear = document.getElementById('mcap-search-clear');
-        if (searchInput && searchClear) {
-            searchInput.oninput = function () {
-                const val = this.value.toLowerCase();
-                Array.from(document.querySelectorAll('.mcap-row-card')).forEach(row => {
-                    const filename = row.getAttribute('data-filename') || '';
-                    row.style.display = filename.toLowerCase().includes(val) ? '' : 'none';
-                });
-                searchClear.style.display = val ? 'block' : 'none';
-            };
-            searchClear.onclick = function () {
-                searchInput.value = '';
-                searchInput.oninput();
-                searchClear.style.display = 'none';
-            };
-        }
-        
-        // Event delegation for action buttons (XSS protection)
-        if (tableBody) {
-            tableBody.addEventListener('click', (e) => {
-                const btn = e.target.closest('button');
-                if (!btn) return;
-                
-                // Play/Stop button
-                if (btn.classList.contains('mcap-play-btn')) {
-                    const filename = btn.getAttribute('data-filename');
-                    const dirname = btn.getAttribute('data-dirname');
-                    if (filename && dirname) {
-                        togglePlayMcap(filename, dirname);
-                    }
-                }
-                // Info button
-                else if (btn.classList.contains('mcap-info-btn')) {
-                    const topics = btn.getAttribute('data-topics');
-                    const fileinfo = btn.getAttribute('data-fileinfo');
-                    if (topics && fileinfo) {
-                        try {
-                            showModal(JSON.parse(topics), JSON.parse(fileinfo));
-                        } catch (e) {
-                            console.error('Error parsing button data:', e);
-                        }
-                    }
-                }
-                // Upload button
-                else if (btn.classList.contains('mcap-upload-btn')) {
-                    const filename = btn.getAttribute('data-filename');
-                    const dirname = btn.getAttribute('data-dirname');
-                    if (filename && dirname) {
-                        showUploadOptionsDialog(filename, dirname);
-                    }
-                }
-                // Delete button
-                else if (btn.classList.contains('mcap-delete-btn')) {
-                    const filename = btn.getAttribute('data-filename');
-                    const dirname = btn.getAttribute('data-dirname');
-                    if (filename && dirname) {
-                        deleteFile(filename, dirname);
-                    }
-                }
-            });
-        }
-    }
 };
 
 window.hideMcapDialog = function () {
+    stopMcapScanRefresh();
     const dialog = document.getElementById('mcapDialog');
     if (dialog) {
         dialog.close();
@@ -1728,6 +1769,7 @@ function showModal(topics, fileInfo = {}) {
         totalDuration = fileInfo.duration;
     }
     const clockSteps = Number(fileInfo.clockSteps) || 0;
+    const scanning = fileInfo.scanning === true;
     const durationStr = totalDuration > 0 ? `${totalDuration.toLocaleString(undefined, { maximumFractionDigits: 2 })} s` : '--';
     modalDetails.innerHTML = `
 <style>
@@ -1754,9 +1796,10 @@ function showModal(topics, fileInfo = {}) {
 <div class="fd-summary-card">
     <div class="fd-summary-item"><span class="fd-summary-icon">📄</span><span class="fd-summary-label">File Name:</span> <span class="fd-summary-value" title="${fileName}">${fileName.length > 24 ? fileName.slice(0, 21) + '...' : fileName}</span> <button class="fd-summary-copy" title="Copy file name" onclick="navigator.clipboard.writeText('${fileName.replace(/'/g, '\'')}')">⧉</button></div>
     <div class="fd-summary-item"><span class="fd-summary-icon">📦</span><span class="fd-summary-label">File Size:</span> <span class="fd-summary-value">${fileSize}</span></div>
-    <div class="fd-summary-item"><span class="fd-summary-icon">⏱️</span><span class="fd-summary-label">Total Duration:</span> <span class="fd-summary-value">${durationStr}</span></div>
+    <div class="fd-summary-item"><span class="fd-summary-icon">⏱️</span><span class="fd-summary-label">Total Duration:</span> ${scanning ? '<span class="fd-summary-value" data-testid="recordings-details-scanning">Scanning…</span>' : `<span class="fd-summary-value">${durationStr}</span>`}</div>
     ${clockSteps > 0 ? `<div class="fd-summary-item" data-testid="recordings-details-clock-steps"><span class="fd-summary-icon">🕒</span><span class="fd-summary-label">Clock steps:</span> <span class="fd-summary-value" title="Duration and FPS exclude wall-clock corrections made during the recording">${clockSteps} excluded</span></div>` : ''}
 </div>
+${scanning ? '<div class="fd-subheader">Scanning… duration and topics appear in the recordings list when the scan finishes.</div>' : ''}
 <div class="fd-grid">
     ${Object.entries(topics).map(([topic, details]) => {
         const filtered = Object.entries(details)
