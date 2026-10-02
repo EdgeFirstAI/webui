@@ -135,3 +135,71 @@ test('every bitmap is closed exactly once across emission, supersession and rese
     a.reset()
     assert.deepEqual(all.filter((b) => b.closes !== 1), [])
 })
+
+function lagRun(lagMs) {
+    const a = new TileAssembler({ tiles: TILES })
+    let resets = 0
+    const reset = a.reset.bind(a)
+    a.reset = () => { resets++; reset() }
+    const P = 1000 / 30
+    const ev = []
+    for (let f = 0; f < 900; f++) {
+        for (const [i, t] of TILES.entries()) {
+            ev.push({ t, stamp: T + f * P, now: f * P + (t === 'bottomRight' ? lagMs : 0) + i * 0.7 })
+        }
+    }
+    ev.sort((x, y) => x.now - y.now)
+    let emitted = 0, back = 0, last = -Infinity
+    const all = []
+    for (const e of ev) {
+        const b = strict()
+        all.push(b)
+        const g = a.add(e.t, e.stamp, b, e.now)
+        if (!g) continue
+        emitted++
+        if (g.stampMs <= last) back++
+        last = g.stampMs
+        for (const x of Object.values(g.bitmaps)) x.close()
+    }
+    a.reset()
+    return { resets, emitted, back, leaked: all.filter((b) => b.closes !== 1).length }
+}
+
+test('one tile stream lagging more than DISCONTINUITY_MS is not taken for a clock step', () => {
+    const r = lagRun(2500)
+    assert.equal(r.resets, 1, 'only the final reset')
+    assert.equal(r.back, 0)
+    assert.ok(r.emitted >= 850, `emitted ${r.emitted}`)
+    assert.equal(r.leaked, 0)
+})
+
+test('a far stamp from one stream does not close the other streams\' groups', () => {
+    const a = new TileAssembler({ tiles: TILES, maxWaitMs: 100 })
+    for (const t of TILES) a.add(t, T, strict(), 0)
+    const pending = [strict(), strict(), strict()]
+    TILES.slice(0, 3).forEach((t, i) => a.add(t, T + 33, pending[i], 30))
+    const far = [strict(), strict()]
+    assert.equal(a.add('bottomRight', T - 3600000, far[0], 31), null)
+    assert.equal(a.add('bottomRight', T + 3600000, far[1], 32), null)
+    assert.ok(pending.every((b) => b.closes === 0))
+    const g = a.add('topLeft', T + 66, strict(), 131)
+    assert.equal(g.stampMs, T + 33)
+    assert.ok(!Object.values(g.bitmaps).some((b) => far.includes(b)))
+    a.reset()
+    assert.ok(far.every((b) => b.closes === 1))
+})
+
+test('a clock step seen on most streams restarts with the tiles of the new time', () => {
+    const a = new TileAssembler({ tiles: TILES, maxWaitMs: 100 })
+    for (const t of TILES) a.add(t, T, strict(), 0)
+    const old = strict()
+    a.add('topLeft', T + 33, old, 30)
+    const back = T - 3600000
+    const tiles = TILES.map(() => strict())
+    let g = null
+    TILES.forEach((t, i) => { g = a.add(t, back, tiles[i], 40 + i) || g })
+    assert.equal(g.stampMs, back)
+    assert.deepEqual(Object.values(g.bitmaps), tiles)
+    assert.equal(old.closes, 1)
+    assert.ok(tiles.every((b) => b.closes === 0))
+})
