@@ -24,7 +24,6 @@ class SmartVideoManager {
 
         this.assembler = null;
         this.minMergeIntervalMs = 67; // 15fps max
-        this.lastMergeMs = 0;
 
         // Optional callback for consumers that control display timing (SyncedVideo).
         // When set, drawGroup() produces an ImageBitmap instead of updating
@@ -188,7 +187,10 @@ class SmartVideoManager {
             throw new Error('No tiles could be initialized successfully');
         }
 
-        this.assembler = new TileAssembler({ tiles: Object.keys(this.tileCanvases) });
+        this.assembler = new TileAssembler({
+            tiles: Object.keys(this.tileCanvases),
+            minIntervalMs: this.minMergeIntervalMs,
+        });
 
         this.currentTexture = mergedTexture;
         return mergedTexture;
@@ -221,14 +223,7 @@ class SmartVideoManager {
             return;
         }
         const group = this.assembler.add(tileName, timing.stampMs, timing.bitmap);
-        if (!group) return;
-        const now = performance.now();
-        if (now - this.lastMergeMs < this.minMergeIntervalMs) {
-            for (const b of Object.values(group.bitmaps)) b.close();
-            return;
-        }
-        this.lastMergeMs = now;
-        this.drawGroup(group);
+        if (group) this.drawGroup(group);
     }
 
     drawGroup(group) {

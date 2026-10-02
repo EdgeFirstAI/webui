@@ -22,6 +22,12 @@ import { DISCONTINUITY_MS } from './stamp.js'
  * or before the last emitted one are closed on arrival, so emitted stamps
  * only move forward. The caller owns the bitmaps of a returned group.
  *
+ * `minIntervalMs` limits how often a group is returned. A group that
+ * becomes ready sooner is held rather than closed and returned on the
+ * first `add()` once the interval has passed, unless a newer group has
+ * become ready by then, in which case the newer one replaces it. A newer
+ * complete group therefore wins over an older partial one.
+ *
  * Each tile has its own stream, so one stream can fall behind the others.
  * A tile more than `DISCONTINUITY_MS` from the last emitted stamp is only
  * taken as a clock step once tiles of the new time have arrived on most
@@ -31,9 +37,11 @@ import { DISCONTINUITY_MS } from './stamp.js'
  * groups of the other streams.
  */
 export default class TileAssembler {
-    constructor({ tiles, maxWaitMs = 100 }) {
+    constructor({ tiles, maxWaitMs = 100, minIntervalMs = 0 }) {
         this.tiles = tiles
         this.maxWaitMs = maxWaitMs
+        this.minIntervalMs = minIntervalMs
+        this.lastReturnMs = null
         this.groups = new Map()
         this.lastEmittedMs = null
         this.step = null
@@ -83,11 +91,13 @@ export default class TileAssembler {
             if (ready && (emitMs === null || stamp > emitMs)) emitMs = stamp
         }
         if (emitMs === null) return null
-        const group = this.groups.get(emitMs)
-        this.groups.delete(emitMs)
         for (const stamp of [...this.groups.keys()]) {
             if (stamp < emitMs) this._drop(stamp)
         }
+        if (this.lastReturnMs !== null && nowMs - this.lastReturnMs < this.minIntervalMs) return null
+        const group = this.groups.get(emitMs)
+        this.groups.delete(emitMs)
+        this.lastReturnMs = nowMs
         this.lastEmittedMs = emitMs
         return { stampMs: emitMs, bitmaps: group.bitmaps }
     }

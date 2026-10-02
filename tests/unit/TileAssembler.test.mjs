@@ -203,3 +203,54 @@ test('a clock step seen on most streams restarts with the tiles of the new time'
     assert.equal(old.closes, 1)
     assert.ok(tiles.every((b) => b.closes === 0))
 })
+
+test('without minIntervalMs every ready group is returned at once', () => {
+    assert.equal(new TileAssembler({ tiles: TILES }).minIntervalMs, 0)
+})
+
+test('a group ready inside minIntervalMs is held, not closed, and returned at the next slot', () => {
+    const a = new TileAssembler({ tiles: TILES, maxWaitMs: 100, minIntervalMs: 60 })
+    const partial = strict()
+    a.add('topLeft', T, partial, 0)
+    assert.equal(a.add('topLeft', T + 100, strict(), 101).stampMs, T)
+    const complete = [strict(), strict(), strict()]
+    TILES.slice(1).forEach((t, i) => assert.equal(a.add(t, T + 100, complete[i], 104 + i), null))
+    assert.ok(complete.every((b) => b.closes === 0))
+    assert.equal(a.add('topLeft', T + 133, strict(), 135), null)
+    const g = a.add('topRight', T + 133, strict(), 162)
+    assert.equal(g.stampMs, T + 100)
+    assert.equal(Object.keys(g.bitmaps).length, 4)
+})
+
+test('a newer ready group replaces the held one, which is closed once', () => {
+    const a = new TileAssembler({ tiles: TILES, maxWaitMs: 100, minIntervalMs: 60 })
+    for (const t of TILES) a.add(t, T, strict(), 0)
+    const held = TILES.map(() => strict())
+    TILES.forEach((t, i) => a.add(t, T + 33, held[i], 33 + i))
+    const newer = TILES.map(() => strict())
+    TILES.forEach((t, i) => assert.equal(a.add(t, T + 66, newer[i], 40 + i), null))
+    assert.ok(held.every((b) => b.closes === 1))
+    const g = a.add('topLeft', T + 100, strict(), 70)
+    assert.equal(g.stampMs, T + 66)
+    assert.ok(held.every((b) => b.closes === 1))
+    assert.ok(newer.every((b) => b.closes === 0))
+})
+
+test('with no tile loss the merge rate follows minIntervalMs and every merge is complete', () => {
+    const a = new TileAssembler({ tiles: TILES, minIntervalMs: 60 })
+    const P = 1000 / 30
+    let merged = 0, partial = 0, last = -Infinity
+    for (let f = 0; f < 300; f++) {
+        TILES.forEach((t, i) => {
+            const g = a.add(t, T + f * P, strict(), f * P + i)
+            if (!g) return
+            merged++
+            if (Object.keys(g.bitmaps).length < 4) partial++
+            assert.ok(g.stampMs > last)
+            last = g.stampMs
+            for (const b of Object.values(g.bitmaps)) b.close()
+        })
+    }
+    assert.ok(merged >= 148, `merged ${merged} in 10 s`)
+    assert.equal(partial, 0)
+})
