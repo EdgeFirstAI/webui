@@ -10,7 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Camera, segmentation and combined pages draw each overlay for the frame it belongs to: model results by exact frame stamp (held across frames the model skipped), LiDAR and radar by nearest acquisition stamp. The video waits only as long as the slowest enabled overlay needs (at most 1 s), and the camera page returns to live when its overlays are off.
-- 4K tile mode builds each frame from the four tiles of the same frame.
+- 4K tile mode builds each frame only from tiles of the same frame; when a tile is lost the frame is shown after 100 ms with that quadrant keeping its previous picture, instead of the frame being dropped.
+- When the playout delay is longer than the held frames span, the video shows the oldest held frame instead of dropping it, so the effective delay shrinks rather than the video freezing.
 
 ### Fixed
 
@@ -22,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Recording details show the duration without clock steps and how many were excluded.
+- The recordings list marks recordings the server is still scanning with "Scanning…" (`recordings-list-scanning`) and refreshes every 2 s until the scan finishes; their details show "Scanning…" for the duration (`recordings-details-scanning`).
 - `window.overlaySync` reports the displayed frame stamp, playout delay and per-overlay stamp offsets on the camera, segmentation and combined pages for automated checks.
 - Unit tests for the stamp, buffer, playout, frame and tile modules, run with `node --test "tests/unit/*.test.mjs"`.
 

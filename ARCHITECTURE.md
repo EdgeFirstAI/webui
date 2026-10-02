@@ -152,7 +152,7 @@ The SmartVideoManager handles tile detection and synchronization:
 - 5-second detection timeout
 - Minimum 2 tiles required for tile mode
 - Falls back to single stream if unavailable
-- Tiles are decoded to bitmaps and grouped by `header.stamp` by `TileAssembler`; a merged frame is built only from tiles of the same frame, incomplete groups are dropped after 200 ms, and merging is limited to 15 fps
+- Tiles are decoded to bitmaps and grouped by `header.stamp` by `TileAssembler`; a merged frame is built only from tiles of the same frame and takes that frame's stamp. A group is merged once all tiles have arrived or, with the tiles it has, 100 ms (three tile periods at 30 fps) after its first tile; the merged canvas is persistent, so a lost tile leaves the previous picture in its quadrant. Only the newest ready group is merged, older ones are closed, and late tiles of an already merged stamp are discarded. Merging is limited to 15 fps
 - Merged frames are delivered as `onMergedFrame(stampMs, bitmap)`
 - Callback-based upgrade: `onUpgrade(tileTexture)` swaps the material texture and disposes the fallback
 
@@ -176,7 +176,7 @@ The camera, segmentation and combined pages draw each overlay for the camera fra
 | `StampBuffer.js` | Per-stream buffer ordered by stamp with `exact`, `atOrBefore` and `nearest` lookups, plus the `selectDerived` and `selectSensor` policies. |
 | `PlayoutClock.js` | Learns how late each stream arrives and derives the playout delay. |
 | `FrameSync.js` | Holds decoded camera frames until the playout delay has passed and releases the frame that is due. |
-| `TileAssembler.js` | Groups decoded 4K tiles by exact `header.stamp`. |
+| `TileAssembler.js` | Groups decoded 4K tiles by exact `header.stamp` and emits complete groups, or partial groups after 100 ms. |
 | `SyncedVideo.js` | `createSyncedVideo()` wires `SmartVideoManager`, `FrameSync` and `PlayoutClock`; `tick()` draws the due frame and returns its stamp. |
 
 The stamp, buffer, clock, frame and tile modules import nothing that touches the DOM, WebGL or Three.js, so they are unit tested with `node --test`.
@@ -204,7 +204,7 @@ lag(stream)   = p95(offsets of stream) - median(offsets of camera)
 delay         = clamp(0, 1000 ms, max over enabled overlay streams of (lag + tolerance + 10 ms))
 ```
 
-`tolerance` is the sensor selection tolerance for LiDAR and radar and 0 for the model. `FrameSync` releases the newest queued frame that has waited at least `delay` since it arrived and drops older frames.
+`tolerance` is the sensor selection tolerance for LiDAR and radar and 0 for the model. `FrameSync` releases the newest queued frame that has waited at least `delay` since it arrived and drops older frames. Its queue holds 30 frames (12 in 4K tile mode, where frames are large); when the queue is full its oldest frame is released even if not yet due, so a delay longer than the queue spans (12 frames at the 15 fps merge rate is about 800 ms) shortens the effective delay instead of freezing the video. A frame is dropped for capacity only when another arrives while the queue is full, that is when no `tick()` ran in between.
 
 - A stream with no arrival for more than 2 s is ignored.
 - A stream whose lag against the camera exceeds 2 s (`DISCONTINUITY_MS`) is treated as being in another clock domain, which is what a clock step looks like until the camera catches up. It is reported in the statistics but does not contribute to the delay. The trade-off is that a stream that is genuinely more than 2 s late contributes no delay.

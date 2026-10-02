@@ -56,8 +56,8 @@ The WebSRV backend subscribes to Zenoh topics and bridges them to WebSocket endp
 | `stamp.js` | `header.stamp` to milliseconds, CDR header stamp reader, `StampTracker` (chunk sequence to stamp), `DISCONTINUITY_MS` (2 s). Pure. |
 | `StampBuffer.js` | Stamp-ordered sample buffer with exact/nearest lookups; `selectDerived` (model: exact stamp, bounded hold) and `selectSensor` (LiDAR/radar: nearest within half a period). Pure. |
 | `PlayoutClock.js` | Learns per-stream arrival lag and derives the playout delay (max 1 s; streams over 2 s off are ignored). Pure. |
-| `FrameSync.js` | Holds decoded camera frames for the playout delay and releases the frame that is due. Pure. |
-| `TileAssembler.js` | Groups 4K tiles by exact stamp. Pure. |
+| `FrameSync.js` | Holds decoded camera frames for the playout delay and releases the frame that is due; a full queue releases its oldest frame. Pure. |
+| `TileAssembler.js` | Groups 4K tiles by exact stamp; emits complete groups, or partial groups after 100 ms. Pure. |
 | `SyncedVideo.js` | `createSyncedVideo()`: video playout for the camera, segmentation and combined pages; `tick()` returns the displayed stamp, `reportSync()` publishes `window.overlaySync`. |
 | `serviceCache.js` | Global `window.serviceCache` singleton. Polls `/api/services/status` every 5s, caches in localStorage, notifies listeners via callbacks. Use `isServiceEnabled(name)` / `isServiceRunning(name)` to gate UI features. |
 | `status.js` | Navbar status indicators (Live/Degraded/Replay/Stopped). Recorder status polling. Service status dialog. |

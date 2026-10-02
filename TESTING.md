@@ -146,6 +146,7 @@ Accept the self-signed certificate when prompted.
 - LiDAR points in cluster mode: noise (id=0) renders grey, not a hue color
 - In non-cluster modes, noise/ground points are NOT filtered even if checkboxes were unchecked
 - If tiles are available, video upgrades to 4K and the old fallback texture is disposed
+- In 4K tile mode the video keeps moving (up to the 15 fps merge limit) even when tiles are lost; a lost tile leaves its quadrant showing the previous picture for that frame
 
 ### Combined View Testing
 
@@ -449,6 +450,11 @@ enter a non-empty `MODEL` path to reveal the early/mid fusion model section.
   `data-level` of `success`, `info`, `warning` or `error`.
 - `toast-close` - Dismiss button on a notification.
 - `toast-dismiss-all` - Bulk dismiss, shown once three or more are stacked.
+
+**Recordings dialog (navbar, every page):**
+- `recordings-list-scanning` - "Scanning…" marker on a recording the server is still scanning (listed with `scanning: true`, no duration or topics yet). While one is shown the list refreshes every 2 s; the marker disappears when the scan finishes.
+- `recordings-details-scanning` - "Scanning…" in place of the duration in the details of a recording being scanned.
+- `recordings-details-clock-steps` - Number of clock steps excluded from the duration.
 
 Success and info toasts clear themselves after 5 seconds and warnings after
 10, so a test that asserts on one should read it promptly. Errors stay until
