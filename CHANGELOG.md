@@ -10,11 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Camera, segmentation and combined pages draw each overlay for the frame it belongs to: model results by exact frame stamp (held across frames the model skipped), LiDAR and radar by nearest acquisition stamp. The video waits only as long as the slowest enabled overlay needs (at most 1 s), and the camera page returns to live when its overlays are off.
-- 4K tile mode builds each frame only from tiles of the same frame; when a tile is lost the frame is shown after 100 ms with that quadrant keeping its previous picture, instead of the frame being dropped.
+- 4K tile mode builds each frame only from tiles of the same frame; when a tile is lost the frame is shown after 100 ms with that quadrant keeping its previous picture, instead of the frame being dropped. A frame that arrives while the 15 fps merge limit is in effect is held for the next slot instead of being dropped, so a newer complete frame is preferred over an older partial one, and the limit now gives 15 fps rather than about 11.
 - When the playout delay is longer than the held frames span, the video shows the oldest held frame instead of dropping it, so the effective delay shrinks rather than the video freezing.
 
 ### Fixed
 
+- The video could flicker between pictures about a second apart when decoded frames reached the page out of order; a frame older than the one shown is now discarded.
+- In 4K tile mode, one tile stream running more than 2 s behind the others was taken for a clock step and kept resetting the merge.
 - Decoded video frames could carry the next frame's timestamp when the decoder had more than one frame in flight.
 - Bounding boxes and LiDAR dots no longer stay on screen after detections or points stop.
 - Overlays recover without a reload after the device clock is stepped.
