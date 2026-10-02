@@ -10,7 +10,10 @@ import { DISCONTINUITY_MS } from './stamp.js'
  *
  * Displayed stamps never go backwards: a frame at or before the last
  * released stamp is closed on arrival, unless it is more than
- * `DISCONTINUITY_MS` away, which is a clock step and starts over.
+ * `DISCONTINUITY_MS` away, which is a clock step and starts over. So a
+ * released frame up to `DISCONTINUITY_MS` ahead of the stream, or a real
+ * backward step smaller than that, hides the following frames until the
+ * stream passes the last shown stamp, for at most `DISCONTINUITY_MS`.
  */
 export default class FrameSync {
     constructor({ clock, reference = 'camera', capacity = 30 }) {
