@@ -292,10 +292,20 @@ async function listMcapFiles() {
 /** Interval between listing refreshes while a recording is being scanned. */
 const MCAP_SCAN_REFRESH_MS = 2000;
 let mcapScanTimer = null;
+let mcapListingHasScanning = false;
 
 function stopMcapScanRefresh() {
     clearTimeout(mcapScanTimer);
     mcapScanTimer = null;
+}
+
+function scheduleMcapScanRefresh(dialog, content) {
+    stopMcapScanRefresh();
+    if (!dialog.open) return;
+    mcapScanTimer = setTimeout(() => {
+        mcapScanTimer = null;
+        if (dialog.open) renderMcapList(dialog, content, { refresh: true });
+    }, MCAP_SCAN_REFRESH_MS);
 }
 
 /**
@@ -303,13 +313,20 @@ function stopMcapScanRefresh() {
  * still being read by the server (no duration or topics yet); while any is
  * listed and the dialog is open, the listing is fetched again every
  * MCAP_SCAN_REFRESH_MS. A missing `scanning` field means not scanning.
+ * A refresh that fails keeps the last listing on screen and tries again.
  * @returns {Promise<boolean>} false when the server reported an error
  */
 async function renderMcapList(dialog, content, { refresh = false } = {}) {
     stopMcapScanRefresh();
+    const retry = refresh && mcapListingHasScanning;
     try {
         const data = await listMcapFiles();
+        if (data.error && retry) {
+            scheduleMcapScanRefresh(dialog, content);
+            return true;
+        }
         if (data.error) {
+            mcapListingHasScanning = false;
             const errorDiv = document.createElement('div');
             errorDiv.className = 'text-red-600';
             errorDiv.textContent = `Error: ${data.error}`;
@@ -458,14 +475,15 @@ async function renderMcapList(dialog, content, { refresh = false } = {}) {
         attachMcapTableListeners();
         const searchInput = document.getElementById('mcap-search');
         if (searchInput && searchInput.value) searchInput.oninput();
-        stopMcapScanRefresh();
-        if (dialog.open && files.some((file) => file.scanning === true)) {
-            mcapScanTimer = setTimeout(() => {
-                mcapScanTimer = null;
-                if (dialog.open) renderMcapList(dialog, content, { refresh: true });
-            }, MCAP_SCAN_REFRESH_MS);
-        }
+        mcapListingHasScanning = files.some((file) => file.scanning === true);
+        if (mcapListingHasScanning) scheduleMcapScanRefresh(dialog, content);
+        else stopMcapScanRefresh();
     } catch (error) {
+        if (retry) {
+            scheduleMcapScanRefresh(dialog, content);
+            return true;
+        }
+        mcapListingHasScanning = false;
         content.innerHTML = `<div class="text-red-600">Error connecting to server</div>`;
     }
     return true;
