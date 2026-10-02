@@ -31,10 +31,12 @@ import { DISCONTINUITY_MS } from './stamp.js'
  * Each tile has its own stream, so one stream can fall behind the others.
  * A tile more than `DISCONTINUITY_MS` from the last emitted stamp is only
  * taken as a clock step once tiles of the new time have arrived on most
- * streams; until then the newest such tile per stream is held aside, and
+ * streams, or once no tile of the old time has arrived for `maxWaitMs`
+ * (streams that stopped cannot confirm, the ones still alive have all
+ * moved). Until then the newest such tile per stream is held aside, and
  * the assembler then starts over with the held tiles. A lagging stream
- * alone never confirms, so its tiles are closed without disturbing the
- * groups of the other streams.
+ * alone never confirms while the others keep delivering, so its tiles are
+ * closed without disturbing the groups of the other streams.
  */
 export default class TileAssembler {
     constructor({ tiles, maxWaitMs = 100, minIntervalMs = 0 }) {
@@ -45,6 +47,7 @@ export default class TileAssembler {
         this.groups = new Map()
         this.lastEmittedMs = null
         this.step = null
+        this.lastInTimeMs = null
     }
 
     /**
@@ -54,15 +57,18 @@ export default class TileAssembler {
     add(tileName, stampMs, bitmap, nowMs = performance.now()) {
         if (this.lastEmittedMs !== null && Math.abs(stampMs - this.lastEmittedMs) > DISCONTINUITY_MS) {
             this._holdStepTile(tileName, stampMs, bitmap, nowMs)
-            if (this.step.tiles.size > this.tiles.length / 2) {
+            const quiet = this.lastInTimeMs === null || nowMs - this.lastInTimeMs > this.maxWaitMs
+            if (quiet || this.step.tiles.size > this.tiles.length / 2) {
                 const held = [...this.step.tiles]
                 this.step = null
                 this.reset()
                 for (const [name, t] of held) this._place(name, t.stampMs, t.bitmap, t.nowMs)
             }
         } else if (this.lastEmittedMs !== null && stampMs <= this.lastEmittedMs) {
+            this.lastInTimeMs = nowMs
             bitmap.close()
         } else {
+            this.lastInTimeMs = nowMs
             this._place(tileName, stampMs, bitmap, nowMs)
         }
         return this._emit(nowMs)
@@ -71,6 +77,7 @@ export default class TileAssembler {
     reset() {
         for (const stamp of [...this.groups.keys()]) this._drop(stamp)
         this.lastEmittedMs = null
+        this.lastInTimeMs = null
         this._dropStep()
     }
 

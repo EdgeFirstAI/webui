@@ -151,7 +151,8 @@ function lagRun(lagMs) {
     ev.sort((x, y) => x.now - y.now)
     let emitted = 0, back = 0, last = -Infinity
     const all = []
-    for (const e of ev) {
+    const end = 900 * P
+    for (const e of ev.filter((x) => x.now < end)) {
         const b = strict()
         all.push(b)
         const g = a.add(e.t, e.stamp, b, e.now)
@@ -253,4 +254,36 @@ test('with no tile loss the merge rate follows minIntervalMs and every merge is 
     }
     assert.ok(merged >= 148, `merged ${merged} in 10 s`)
     assert.equal(partial, 0)
+})
+
+test('a clock step seen on only the streams still alive is confirmed once the old time goes quiet', () => {
+    const a = new TileAssembler({ tiles: TILES, minIntervalMs: 60 })
+    const all = []
+    const add = (t, stamp, now) => {
+        const b = strict()
+        all.push(b)
+        const g = a.add(t, stamp, b, now)
+        if (g) for (const x of Object.values(g.bitmaps)) x.close()
+        return g
+    }
+    let now = 0
+    let before = 0
+    for (let i = 0; i < 30; i++) {
+        now += 33
+        for (const t of TILES) if (add(t, 1e6 + i * 33, now)) before++
+    }
+    assert.ok(before > 0)
+    const after = []
+    for (let i = 0; i < 60; i++) {
+        now += 33
+        for (const t of ['topLeft', 'topRight']) {
+            const g = add(t, 9e5 + i * 33, now)
+            if (g && g.stampMs < 1e6) after.push(g.stampMs)
+        }
+    }
+    assert.ok(after.length >= 25, `emitted ${after.length} after the step`)
+    assert.ok(after[0] < 9e5 + 6 * 33, `first emission ${after[0] - 9e5} ms into the new time`)
+    for (let i = 1; i < after.length; i++) assert.ok(after[i] > after[i - 1])
+    a.reset()
+    assert.deepEqual(all.filter((b) => b.closes !== 1).length, 0)
 })
