@@ -7,6 +7,10 @@ import { DISCONTINUITY_MS } from './stamp.js'
  * Holds decoded camera frames until the playout delay has passed, so the
  * overlays for a frame have arrived by the time it is shown. The released
  * frame's stamp is what overlays are selected against.
+ *
+ * Displayed stamps never go backwards: a frame at or before the last
+ * released stamp is closed on arrival, unless it is more than
+ * `DISCONTINUITY_MS` away, which is a clock step and starts over.
  */
 export default class FrameSync {
     constructor({ clock, reference = 'camera', capacity = 30 }) {
@@ -14,6 +18,7 @@ export default class FrameSync {
         this.reference = reference
         this.capacity = capacity
         this.frames = []
+        this.lastReleasedMs = null
     }
 
     get depth() {
@@ -21,15 +26,20 @@ export default class FrameSync {
     }
 
     /**
-     * Queues a frame. If more than `capacity` frames are queued, which only
-     * happens when `release()` is not called between pushes, the oldest is
-     * closed.
+     * Queues a frame, or closes it if it is not newer than the last released
+     * frame. If more than `capacity` frames are queued, which only happens
+     * when `release()` is not called between pushes, the oldest is closed.
      */
     pushFrame(stampMs, bitmap, arrivalMs = performance.now()) {
         this.clock.observe(this.reference, stampMs, arrivalMs)
         const newest = this.frames[this.frames.length - 1]
-        if (newest && Math.abs(stampMs - newest.stampMs) > DISCONTINUITY_MS) {
+        const last = this.lastReleasedMs
+        if ((newest && Math.abs(stampMs - newest.stampMs) > DISCONTINUITY_MS)
+            || (last !== null && Math.abs(stampMs - last) > DISCONTINUITY_MS)) {
             this.reset()
+        } else if (last !== null && stampMs <= last) {
+            bitmap.close()
+            return
         }
         let i = this.frames.length
         while (i > 0 && this.frames[i - 1].stampMs > stampMs) i--
@@ -57,11 +67,13 @@ export default class FrameSync {
         const released = this.frames.splice(0, due + 1)
         const shown = released.pop()
         for (const f of released) f.bitmap.close()
+        this.lastReleasedMs = shown.stampMs
         return { stampMs: shown.stampMs, bitmap: shown.bitmap }
     }
 
     reset() {
         for (const f of this.frames) f.bitmap.close()
         this.frames = []
+        this.lastReleasedMs = null
     }
 }

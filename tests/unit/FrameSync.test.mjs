@@ -144,3 +144,43 @@ test('a delay longer than the queue can hold degrades instead of freezing', () =
     assert.ok(all.slice(0, all.length - sync.depth).every((b) => b.closes === 1))
     assert.ok(all.slice(all.length - sync.depth).every((b) => b.closes === 0))
 })
+
+test('a frame at or before the last released stamp is closed, never shown', () => {
+    const sync = new FrameSync({ clock: fixedDelay(0) })
+    const pushes = [25393.9, 26393.9, 25427.2, 26427.2, 25460.6, 26460.6, 26493.9, 26527.2]
+    const bitmaps = []
+    const shown = []
+    let now = 0
+    for (const p of pushes) {
+        const b = strictBitmap(p)
+        bitmaps.push(b)
+        sync.pushFrame(T + p, b, now)
+        const out = sync.release((now += 16))
+        if (!out) continue
+        shown.push(Math.round((out.stampMs - T) * 10) / 10)
+        out.bitmap.close()
+    }
+    assert.deepEqual(shown, [25393.9, 26393.9, 26427.2, 26460.6, 26493.9, 26527.2])
+    assert.ok(bitmaps.every((b) => b.closes === 1))
+})
+
+test('a stamp far behind the last released one is a clock step and is shown', () => {
+    const sync = new FrameSync({ clock: fixedDelay(0) })
+    sync.pushFrame(T, strictBitmap('a'), 0)
+    sync.release(1).bitmap.close()
+    const back = strictBitmap('back')
+    sync.pushFrame(T - 3600000, back, 2)
+    const out = sync.release(3)
+    assert.equal(out.bitmap, back)
+    assert.equal(back.closes, 0)
+})
+
+test('reset forgets the last released stamp', () => {
+    const sync = new FrameSync({ clock: fixedDelay(0) })
+    sync.pushFrame(T, strictBitmap('a'), 0)
+    sync.release(1).bitmap.close()
+    sync.reset()
+    const older = strictBitmap('older')
+    sync.pushFrame(T - 33, older, 2)
+    assert.equal(sync.release(3).bitmap, older)
+})
