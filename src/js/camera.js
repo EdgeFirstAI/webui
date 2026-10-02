@@ -675,6 +675,11 @@ const ENRICHED_COLOR_MODES = [
     { value: 'instance_id',  label: 'Instance ID',   field: 'instance_id' },
 ]
 
+/** True when the LiDAR colour mode is drawn from enriched points. */
+function colorModeNeedsEnriched() {
+    return ENRICHED_COLOR_MODES.some((mode) => mode.value === lidarColorMode)
+}
+
 /**
  * Update the LiDAR colour-mode dropdown to show only modes whose fields
  * exist in the current PointCloud2 data. fixed/distance are always present.
@@ -751,8 +756,7 @@ function renderLidarOverlay() {
     const m = lidarToCameraMatrix
 
     // Use enriched data when available and mode needs it, otherwise raw points
-    const needsEnriched = ['cluster', 'vision_class', 'track_id', 'instance_id'].includes(lidarColorMode)
-    const useEnriched = needsEnriched && lidarEnrichedPoints
+    const useEnriched = colorModeNeedsEnriched() && lidarEnrichedPoints
     const rawData = useEnriched ? lidarEnrichedPoints : lidarPoints
 
     let parsed
@@ -986,8 +990,7 @@ function connectEnrichedSocket() {
     lidarEnrichedBuffer.clear()
     video.clock.remove('lidarEnriched')
 
-    const needsEnriched = ['cluster', 'vision_class', 'track_id', 'instance_id'].includes(lidarColorMode)
-    if (needsEnriched) {
+    if (colorModeNeedsEnriched()) {
         let fieldsDetected = false
         const enrichedUrl = lidarColorMode === 'cluster' ? socketUrlLidarCluster : socketUrlFusion
         reconnectingSocket(
@@ -1238,6 +1241,7 @@ renderer.setAnimationLoop(() => {
     lidarPoints = lidar ? lidar.value : null
     const enriched = lidarEnabled ? selectSensor(lidarEnrichedBuffer, displayed) : null
     lidarEnrichedPoints = enriched ? enriched.value : null
+    const lidarDrawn = lidar && colorModeNeedsEnriched() && enriched ? enriched : lidar
 
     // Update segmentation uniforms before render (shader runs on GPU)
     if (segEnabled) renderSegmentation()
@@ -1248,7 +1252,7 @@ renderer.setAnimationLoop(() => {
     if (boxEnabled) renderBoxes()
     if (lidarEnabled) renderLidarOverlay()
 
-    renderSyncStats(video.reportSync({ model, lidar }))
+    renderSyncStats(video.reportSync({ model, lidar: lidarDrawn }))
 })
 
 // ---------------------------------------------------------------------------
