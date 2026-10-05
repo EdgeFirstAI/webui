@@ -3,7 +3,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-    TOPIC_POLL_MS, TOPIC_HIDE_AFTER_MS, TOPIC_RETRY_MS, LOCAL_SAMPLE_FRESH_MS,
+    TOPIC_POLL_MS, TOPIC_RETRY_MS, LOCAL_SAMPLE_FRESH_MS, DEFAULT_REFRESH_MS, PENDING_GRACE_MS,
     createTopicGateState, classifyTopicResponse, applyTopicPoll, shouldPollTopics, decideSection, topicStatusUrl,
 } from '../../src/js/topicGate.js'
 
@@ -12,28 +12,42 @@ const LIDAR = 'lidar/points'
 const TOPICS = [LIDAR, RADAR]
 const T = 1_000_000
 
-const json = (topics) => ({ kind: 'topics', topics })
+const json = (topics, refreshMs = 10000) => ({ kind: 'topics', topics, refreshMs })
+const seen = (available, lastSeenMs) => ({ available, last_seen_ms: lastSeenMs })
 const status = (radar, lidar = false) => json({
-    [RADAR]: { available: radar, age_ms: radar ? 50 : null },
-    [LIDAR]: { available: lidar, age_ms: lidar ? 80 : null },
+    [RADAR]: radar ? seen(true, 3150) : seen(false, 18000),
+    [LIDAR]: lidar ? seen(true, 2000) : seen(false, null),
 })
 const services = (radar, lidar) => [
     { service: 'radarpub', enabled: radar ? 'enabled' : 'disabled' },
     { service: 'lidarpub', enabled: lidar ? 'enabled' : 'disabled' },
 ]
+const shown = (s, topic = RADAR, on = false) => decideSection(s, topic, 'radarpub', null, { visible: true, on })
+const hidden = (s, topic = RADAR) => decideSection(s, topic, 'radarpub', null, { visible: false, on: false })
 
 test('constants match the websrv contract and the agreed timings', () => {
-    assert.equal(TOPIC_POLL_MS, 2000)
-    assert.equal(TOPIC_HIDE_AFTER_MS, 10000)
+    assert.equal(TOPIC_POLL_MS, 5000)
     assert.equal(TOPIC_RETRY_MS, 60000)
     assert.equal(LOCAL_SAMPLE_FRESH_MS, 3000)
+    assert.equal(DEFAULT_REFRESH_MS, 10000)
+    assert.equal(PENDING_GRACE_MS, 5000)
     assert.equal(topicStatusUrl(TOPICS), '/api/topics/status?topics=lidar/points,radar/targets')
 })
 
-test('classify: a JSON topics object is a topic response', () => {
-    const body = JSON.stringify({ topics: { [RADAR]: { available: true, age_ms: 12 } } })
+test('classify: a JSON topics object is a topic response with the server refresh period', () => {
+    const body = JSON.stringify({
+        refresh_ms: 10000, last_cycle_ms: 3120, extra: 'ignored',
+        topics: { [RADAR]: { available: true, last_seen_ms: 3150, more: 1 } },
+    })
     assert.deepEqual(classifyTopicResponse({ status: 200, contentType: 'application/json', body }),
-        { kind: 'topics', topics: { [RADAR]: { available: true, age_ms: 12 } } })
+        { kind: 'topics', topics: { [RADAR]: { available: true, last_seen_ms: 3150, more: 1 } }, refreshMs: 10000 })
+})
+
+test('classify: a missing or invalid refresh period uses the default', () => {
+    for (const refresh of [undefined, 0, -5, 'x']) {
+        const body = JSON.stringify({ refresh_ms: refresh, topics: {} })
+        assert.equal(classifyTopicResponse({ status: 200, contentType: 'application/json', body }).refreshMs, DEFAULT_REFRESH_MS)
+    }
 })
 
 test('classify: 404, HTML fallback and malformed JSON mean the endpoint is unsupported', () => {
@@ -55,14 +69,14 @@ test('unknown before the first response: sections keep their state and nothing s
     assert.deepEqual(decideSection(s, RADAR, 'radarpub', services(true, true), { visible: false, on: false }), { visible: false, stop: false })
 })
 
-test('a section shows once its topic is available', () => {
+test('a section shows once websrv has seen its topic', () => {
     let s = createTopicGateState(TOPICS)
-    s = applyTopicPoll(s, status(false), T)          // first request starts the watch
+    s = applyTopicPoll(s, json({ [RADAR]: seen(false, null), [LIDAR]: seen(false, null) }), T)
     assert.equal(s.mode, 'topics')
-    assert.deepEqual(decideSection(s, RADAR, 'radarpub', null, { visible: false, on: false }), { visible: false, stop: false })
-    s = applyTopicPoll(s, status(true), T + 2000)
-    assert.deepEqual(decideSection(s, RADAR, 'radarpub', null, { visible: false, on: false }), { visible: true, stop: false })
-    assert.deepEqual(decideSection(s, LIDAR, 'lidarpub', null, { visible: false, on: false }), { visible: false, stop: false })
+    assert.deepEqual(hidden(s), { visible: false, stop: false })
+    s = applyTopicPoll(s, status(true), T + 5000)
+    assert.deepEqual(hidden(s), { visible: true, stop: false })
+    assert.deepEqual(hidden(s, LIDAR), { visible: false, stop: false })
 })
 
 test('topic gating ignores the systemd enabled state', () => {
@@ -71,48 +85,63 @@ test('topic gating ignores the systemd enabled state', () => {
     assert.equal(decideSection(s, RADAR, 'radarpub', services(false, false), { visible: false, on: false }).visible, true)
 })
 
-test('a section hides only after its topic is unavailable for 10 s of polls', () => {
+test('the server availability is used directly: one unavailable response hides', () => {
     let s = createTopicGateState(TOPICS)
     s = applyTopicPoll(s, status(true), T)
-    for (let t = T + 2000; t < T + 2000 + TOPIC_HIDE_AFTER_MS; t += 2000) {
-        s = applyTopicPoll(s, status(false), t)
-        assert.equal(decideSection(s, RADAR, 'radarpub', null, { visible: true, on: false }).visible, true, `still shown at ${t - T}`)
-    }
-    s = applyTopicPoll(s, status(false), T + 2000 + TOPIC_HIDE_AFTER_MS)
-    assert.equal(decideSection(s, RADAR, 'radarpub', null, { visible: true, on: false }).visible, false)
-})
-
-test('one available poll inside the window restarts the hysteresis', () => {
-    let s = createTopicGateState(TOPICS)
-    s = applyTopicPoll(s, status(true), T)
-    s = applyTopicPoll(s, status(false), T + 2000)
-    s = applyTopicPoll(s, status(true), T + 8000)
-    s = applyTopicPoll(s, status(false), T + 10000)
-    s = applyTopicPoll(s, status(false), T + 18000)
-    assert.equal(decideSection(s, RADAR, 'radarpub', null, { visible: true, on: false }).visible, true)
-    s = applyTopicPoll(s, status(false), T + 20000)
-    assert.equal(decideSection(s, RADAR, 'radarpub', null, { visible: true, on: false }).visible, false)
+    s = applyTopicPoll(s, status(false), T + 5000)
+    assert.equal(shown(s).visible, false)
 })
 
 test('hiding while the overlay is on stops it, and the section returns with it off', () => {
     let s = createTopicGateState(TOPICS)
     s = applyTopicPoll(s, status(true), T)
-    s = applyTopicPoll(s, status(false), T + 2000)
-    s = applyTopicPoll(s, status(false), T + 12000)
-    assert.deepEqual(decideSection(s, RADAR, 'radarpub', null, { visible: true, on: true }), { visible: false, stop: true })
-    s = applyTopicPoll(s, status(true), T + 14000)
-    assert.deepEqual(decideSection(s, RADAR, 'radarpub', null, { visible: false, on: false }), { visible: true, stop: false })
+    s = applyTopicPoll(s, status(false), T + 5000)
+    assert.deepEqual(shown(s, RADAR, true), { visible: false, stop: true })
+    s = applyTopicPoll(s, status(true), T + 10000)
+    assert.deepEqual(hidden(s), { visible: true, stop: false })
+})
+
+test('a not-yet-sampled topic does not hide a visible section within one refresh plus grace', () => {
+    let s = createTopicGateState(TOPICS)
+    s = applyTopicPoll(s, { kind: 'unsupported' }, T)
+    const now = T + TOPIC_RETRY_MS
+    const pending = json({ [RADAR]: seen(false, null), [LIDAR]: seen(false, null) })
+    s = applyTopicPoll(s, pending, now, {}, { [RADAR]: true, [LIDAR]: false })
+    assert.deepEqual(shown(s, RADAR, true), { visible: true, stop: false })
+    s = applyTopicPoll(s, pending, now + DEFAULT_REFRESH_MS + PENDING_GRACE_MS - 1)
+    assert.equal(shown(s, RADAR, true).visible, true)
+    assert.equal(hidden(s, LIDAR).visible, false)
+    s = applyTopicPoll(s, pending, now + DEFAULT_REFRESH_MS + PENDING_GRACE_MS)
+    assert.deepEqual(shown(s, RADAR, true), { visible: false, stop: true })
+})
+
+test('the pending window follows the server refresh period', () => {
+    let s = createTopicGateState(TOPICS)
+    s = applyTopicPoll(s, status(true), T)
+    const pending = json({ [RADAR]: seen(false, null) }, 20000)
+    s = applyTopicPoll(s, pending, T + 5000)
+    s = applyTopicPoll(s, pending, T + 5000 + 20000 + PENDING_GRACE_MS - 1)
+    assert.equal(shown(s).visible, true)
+    s = applyTopicPoll(s, pending, T + 5000 + 20000 + PENDING_GRACE_MS)
+    assert.equal(shown(s).visible, false)
+})
+
+test('a topic seen before but now gone hides at once, even if it was pending', () => {
+    let s = createTopicGateState(TOPICS)
+    s = applyTopicPoll(s, status(true), T)
+    s = applyTopicPoll(s, json({ [RADAR]: seen(false, null) }), T + 5000)
+    assert.equal(shown(s).visible, true)
+    s = applyTopicPoll(s, json({ [RADAR]: seen(false, 16000) }), T + 10000)
+    assert.equal(shown(s).visible, false)
 })
 
 test('recent samples of the overlay\'s own stream count as available', () => {
     let s = createTopicGateState(TOPICS)
     s = applyTopicPoll(s, status(true), T)
-    s = applyTopicPoll(s, status(false), T + 2000, { [RADAR]: T + 1900 })
-    s = applyTopicPoll(s, status(false), T + 12000, { [RADAR]: T + 11500 })
-    assert.equal(decideSection(s, RADAR, 'radarpub', null, { visible: true, on: true }).visible, true)
-    s = applyTopicPoll(s, status(false), T + 13000, { [RADAR]: T + 9000 })   // 4 s old: not fresh
-    s = applyTopicPoll(s, status(false), T + 23000, { [RADAR]: T + 9000 })
-    assert.deepEqual(decideSection(s, RADAR, 'radarpub', null, { visible: true, on: true }), { visible: false, stop: true })
+    s = applyTopicPoll(s, status(false), T + 5000, { [RADAR]: T + 4900 })
+    assert.equal(shown(s, RADAR, true).visible, true)
+    s = applyTopicPoll(s, status(false), T + 10000, { [RADAR]: T + 6000 })   // 4 s old: not fresh
+    assert.deepEqual(shown(s, RADAR, true), { visible: false, stop: true })
 })
 
 test('404 or non-JSON on the first poll falls back to the service gate', () => {
@@ -138,16 +167,15 @@ test('fallback stops polling and retries once after 60 s', () => {
     assert.equal(shouldPollTopics(s, T + 10 * TOPIC_RETRY_MS), false)
 })
 
-test('a successful retry switches to topic gating, keeping shown sections through the hysteresis', () => {
+test('a successful retry switches to topic gating', () => {
     let s = createTopicGateState(TOPICS)
     s = applyTopicPoll(s, { kind: 'unsupported' }, T)
     const now = T + TOPIC_RETRY_MS
-    s = applyTopicPoll(s, status(false), now, {}, { [RADAR]: true, [LIDAR]: false })
+    s = applyTopicPoll(s, status(true), now, {}, { [RADAR]: true, [LIDAR]: false })
     assert.equal(s.mode, 'topics')
-    assert.equal(shouldPollTopics(s, now + 2000), true)
-    assert.equal(decideSection(s, RADAR, 'radarpub', null, { visible: true, on: true }).visible, true)
-    s = applyTopicPoll(s, status(true), now + 2000)
-    assert.equal(decideSection(s, RADAR, 'radarpub', null, { visible: true, on: true }).visible, true)
+    assert.equal(shouldPollTopics(s, now + TOPIC_POLL_MS), true)
+    assert.deepEqual(shown(s, RADAR, true), { visible: true, stop: false })
+    assert.equal(hidden(s, LIDAR).visible, false)
 })
 
 test('errors after a successful poll hold the state and keep polling', () => {
@@ -161,9 +189,13 @@ test('errors after a successful poll hold the state and keep polling', () => {
     }
 })
 
-test('a topic missing from the response counts as unavailable', () => {
+test('a topic missing from the response counts as not yet sampled', () => {
     let s = createTopicGateState(TOPICS)
-    s = applyTopicPoll(s, json({ [RADAR]: { available: true, age_ms: 10 } }), T)
-    assert.equal(decideSection(s, LIDAR, 'lidarpub', null, { visible: false, on: false }).visible, false)
-    assert.equal(decideSection(s, RADAR, 'radarpub', null, { visible: false, on: false }).visible, true)
+    s = applyTopicPoll(s, json({ [RADAR]: seen(true, 10) }), T)
+    assert.equal(hidden(s, LIDAR).visible, false)
+    assert.equal(hidden(s).visible, true)
+    s = applyTopicPoll(s, json({}), T + 5000)
+    assert.equal(shown(s).visible, true)
+    s = applyTopicPoll(s, json({}), T + 5000 + DEFAULT_REFRESH_MS + PENDING_GRACE_MS)
+    assert.equal(shown(s).visible, false)
 })
