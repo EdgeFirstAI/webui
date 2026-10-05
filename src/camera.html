@@ -46,7 +46,7 @@
             display: block;
         }
 
-        #boxes, #lidar-overlay {
+        #boxes, #lidar-overlay, #radar-overlay {
             position: absolute;
             inset: 0;
             pointer-events: none;
@@ -210,6 +210,25 @@
             cursor: pointer;
         }
 
+        .camera-controls__color-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            font-size: 12px;
+            color: var(--color-text-secondary, var(--color-text-primary));
+        }
+
+        .camera-controls__color-row input[type="color"] {
+            width: 36px;
+            height: 22px;
+            padding: 0;
+            border: 1px solid var(--color-border);
+            border-radius: 4px;
+            background: none;
+            cursor: pointer;
+        }
+
         .camera-controls__cluster-filters {
             display: none;
             flex-direction: row;
@@ -259,6 +278,7 @@
 
 <body>
     <script>
+        /* global initNavbar, NeuralMesh */
         window.addEventListener('load', () => {
             initNavbar('Camera');
             NeuralMesh.init();
@@ -269,6 +289,7 @@
             <canvas id="player" data-testid="camera-player"></canvas>
             <canvas id="boxes" data-testid="camera-boxes"></canvas>
             <canvas id="lidar-overlay" data-testid="camera-lidar-overlay"></canvas>
+            <canvas id="radar-overlay" data-testid="camera-radar-overlay"></canvas>
 
             <div id="camera-controls" class="camera-controls" data-testid="camera-controls">
                 <div class="camera-controls__header" data-testid="camera-controls-header">
@@ -326,7 +347,7 @@
                 </div>
 
                 <!-- LiDAR Points -->
-                <div class="camera-controls__section" data-active="false"
+                <div class="camera-controls__section" data-active="false" hidden
                      data-testid="camera-overlay-lidar">
                     <div class="camera-controls__toggle-row">
                         <span class="camera-controls__label">LiDAR Points</span>
@@ -365,6 +386,37 @@
                             <input type="checkbox" id="lidar-draw-background"
                                    data-testid="camera-lidar-draw-background">
                             Draw Background
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Radar Points -->
+                <div class="camera-controls__section" data-active="false" hidden
+                     data-testid="camera-overlay-radar">
+                    <div class="camera-controls__toggle-row">
+                        <span class="camera-controls__label">Radar Points</span>
+                        <label class="camera-controls__switch">
+                            <input type="checkbox" id="overlay-radar"
+                                   aria-label="Toggle Radar Points"
+                                   data-testid="camera-toggle-radar">
+                            <span class="camera-controls__switch-slider"></span>
+                        </label>
+                    </div>
+                    <div class="camera-controls__suboptions" id="radar-options"
+                         data-testid="camera-options-radar">
+                        <label class="camera-controls__suboption-label"
+                               for="radar-color-mode">Color</label>
+                        <select id="radar-color-mode" class="camera-controls__select"
+                                data-testid="camera-radar-color-mode">
+                            <option value="fixed">Fixed</option>
+                            <option value="range" selected>Range</option>
+                        </select>
+                        <label class="camera-controls__color-row" id="radar-color-label"
+                               style="display:none">
+                            Point Color
+                            <input type="color" id="radar-color" value="#ff00ff"
+                                   aria-label="Radar point color"
+                                   data-testid="camera-radar-color">
                         </label>
                     </div>
                 </div>

@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The camera page can draw radar targets over the video ("Radar Points"), projected with the radar and camera extrinsics from `/tf_static` and drawn for the radar sample nearest the displayed frame. Points are coloured by a fixed colour from a colour picker, by range, by speed (approaching blue, receding red) or by power or RCS when the radar publishes them. The colour mode and colour are remembered across reloads. The overlay is offered once websrv has seen `radar/targets` in its periodic topic sampling, including from a publisher started by hand or a replay, and is withdrawn when the topic has been gone for a full sampling cycle; on websrv without `/api/topics/status` it is offered while radarpub is enabled.
+
+### Changed
+
+- The camera page offers the LiDAR overlay only once websrv has seen `lidar/points` in its periodic topic sampling (on websrv without `/api/topics/status`, while lidarpub is enabled). A LiDAR or radar overlay that is on is turned off and hidden when its topic has been gone for a full sampling cycle.
+
+### Fixed
+
+- Turning a camera page overlay off while its connection was waiting to reconnect no longer leaves a second connection running when the overlay is turned back on.
+- LiDAR, radar and model overlays are still drawn when the displayed video runs several seconds behind them (as on a loaded client): their buffers now keep what the displayed frame can reach, up to about 6 s for LiDAR and model results and 10 s for radar, instead of a fixed number of samples (about 3.5 s).
+
 ## [4.6.0] - 2026-10-05
 
 ### Changed

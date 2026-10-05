@@ -12,7 +12,9 @@ import { OrbitControls } from './OrbitControls.js'
 import { clearThree, color_points_class, color_points_field } from './utils.js'
 import { grid_set_radarpoints, init_grid } from './grid_render.js'
 import createSyncedVideo from './SyncedVideo.js'
-import StampBuffer, { selectDerived, selectSensor, sensorToleranceMs } from './StampBuffer.js'
+import StampBuffer, {
+    MODEL_BUFFER_CAPACITY, RADAR_BUFFER_CAPACITY, selectDerived, selectSensor, sensorToleranceMs,
+} from './StampBuffer.js'
 import { stampToMs } from './stamp.js'
 
 const PI = Math.PI
@@ -183,7 +185,7 @@ const video = createSyncedVideo({
 
 const segOverlay = createSegOverlay(scene, camera)
 
-const modelBuffer = new StampBuffer({ capacity: 32 })
+const modelBuffer = new StampBuffer({ capacity: MODEL_BUFFER_CAPACITY })
 const modelFPSUpdate = fpsUpdate(modelPanel)
 modelstream(socketUrlModel, (msg) => {
     const stampMs = stampToMs(msg.header.time.sec, msg.header.time.nanosec)
@@ -198,9 +200,9 @@ const drawBoxSettings = {
 }
 
 // The bird's-eye grid shows the latest radar data; the video overlay uses
-// the sample nearest the displayed frame. Radar runs near 18 Hz, so 64
-// entries (about 3.5 s) cover the same display lag as 32 model entries.
-const radarBuffer = new StampBuffer({ capacity: 64 })
+// the sample nearest the displayed frame. The buffer keeps what the displayed
+// frame can still reach, up to its capacity (see StampBuffer.js).
+const radarBuffer = new StampBuffer({ capacity: RADAR_BUFFER_CAPACITY })
 let radarFpsFn = fpsUpdate(radarPanel);
 pcdStream(socketUrlPcd, ({ stampMs, points }) => {
     radarFpsFn();
@@ -246,6 +248,7 @@ function animate() {
     }
     renderer.render(scene, camera)
     video.reportSync({ model, radar })
+    window.overlaySync.horizonMisses = { radar: radarBuffer.horizonMisses }
 }
 
 let timeoutId;

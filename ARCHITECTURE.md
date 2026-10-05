@@ -108,7 +108,7 @@ hostname on the wire (`{hostname}/camera/h264`).
 - `/api/rt/lidar/points/` → `lidar/points` — Raw LiDAR point cloud (PointCloud2)
 - `/api/rt/lidar/clusters/` → `lidar/clusters` — Enriched LiDAR with cluster/class IDs
 - `/api/rt/fusion/lidar/` → `fusion/lidar` — Fused lidar data
-- `/api/rt/tf_static/` → `tf_static` — Static transforms (LiDAR→camera extrinsics)
+- `/api/rt/tf_static/` → `tf_static` — Static transforms (`base_link` → LiDAR, radar and camera optical extrinsics)
 - `/api/rt/camera/info/` → `camera/info` — Camera intrinsics
 
 **Sensors:**
@@ -174,23 +174,25 @@ The camera, segmentation and combined pages draw each overlay for the camera fra
 | Module | Role |
 |--------|------|
 | `stamp.js` | `stampToMs`, `readHeaderStampMs`, `StampTracker` and the `DISCONTINUITY_MS` constant (2000 ms). |
-| `StampBuffer.js` | Per-stream buffer ordered by stamp with `exact`, `atOrBefore` and `nearest` lookups, plus the `selectDerived` and `selectSensor` policies. |
+| `StampBuffer.js` | Per-stream buffer ordered by stamp with `exact`, `atOrBefore` and `nearest` lookups, plus the `selectDerived` and `selectSensor` policies, which also drop samples the displayed frame can no longer reach. |
 | `PlayoutClock.js` | Learns how late each stream arrives and derives the playout delay. |
 | `FrameSync.js` | Holds decoded camera frames until the playout delay has passed and releases the frame that is due; never releases a frame older than the last one released. |
 | `TileAssembler.js` | Groups decoded 4K tiles by exact `header.stamp` and emits complete groups, or partial groups after 100 ms, at most one per `minIntervalMs`. |
 | `SyncedVideo.js` | `createSyncedVideo()` wires `SmartVideoManager`, `FrameSync` and `PlayoutClock`; `tick()` draws the due frame and returns its stamp. |
 
-The stamp, buffer, clock, frame and tile modules import nothing that touches the DOM, WebGL or Three.js, so they are unit tested with `node --test`.
+The stamp, buffer, clock, frame and tile modules, and the overlay modules `projection.js`, `radarOverlay.js`, `colorMaps.js`, `reconnectingSocket.js`, `topicGate.js` and `serviceGate.js` (see Camera Page Sensor Overlays), import nothing that touches the DOM, WebGL or Three.js, so they are unit tested with `node --test`.
 
 ### Overlay Selection Policy
 
 Each animation frame the page calls `video.tick()`, which returns the stamp of the frame now on screen, and selects every enabled overlay against that stamp.
 
-| Stream | Pages | Buffer capacity | Selection |
+| Stream | Pages | Buffer capacity (horizon) | Selection |
 |--------|-------|-----------------|-----------|
-| Model output | camera, segmentation, combined | 32 | The result with the exact frame stamp; otherwise the newest earlier result, held for up to two model periods (clamped to 50-250 ms, 250 ms when the period is unknown). Never a result newer than the frame. |
-| LiDAR points and clusters | camera | 32 | The sample nearest the frame stamp within half the sensor period plus 10 ms (60 ms until the period is known). No sample inside the tolerance means no overlay. |
-| Radar | combined | 64 | The same nearest-sample rule as LiDAR. The larger buffer covers the lag of the displayed video behind radar, which arrives earlier than the video. |
+| Model output | camera, segmentation, combined | 64 (6.3 s at 10 Hz) | The result with the exact frame stamp; otherwise the newest earlier result, held for up to two model periods (clamped to 50-250 ms, 250 ms when the period is unknown). Never a result newer than the frame. |
+| LiDAR points and clusters | camera | 64 (6.3 s at 10 Hz) | The sample nearest the frame stamp within half the sensor period plus 10 ms (60 ms until the period is known). No sample inside the tolerance means no overlay. |
+| Radar | camera, combined | 192 (10.5 s at 18 Hz) | The same nearest-sample rule as LiDAR. |
+
+Retention follows the display lag rather than a fixed count. Each selection drops the samples stamped before the displayed frame's reach (the frame stamp minus the selection tolerance or the 250 ms model hold, minus a 1 s margin); displayed stamps only move forward, so those samples can never be selected again. A buffer therefore holds about the display lag plus 1 s: around a second when the video is live, more when the displayed video runs seconds behind the sensors (seen on loaded or headless clients, where streams more than 2 s out of line do not delay the video). The capacity is a memory cap that bounds the horizon: a frame more than about capacity × period behind the newest sample finds nothing, and the page counts such misses in `window.overlaySync.horizonMisses`. LiDAR clouds are the largest samples, so their cap allows a few seconds beyond the 2-3 s lags observed, and is only reached while the display lags that far.
 
 The model runs slower than the camera, so a frame the model did not process shows the held result of the last processed frame. Overlays disappear once nothing inside the window remains, so boxes and points do not stay on screen after detections or points stop. On `/combined` the distance and speed labels on each box follow the radar sample selected for the displayed frame. The bird's-eye radar grid on `/combined` shows the latest radar data.
 
@@ -210,7 +212,7 @@ delay         = clamp(0, 1000 ms, max over enabled overlay streams of (lag + tol
 - A stream with no arrival for more than 2 s is ignored.
 - A stream whose lag against the camera exceeds 2 s (`DISCONTINUITY_MS`) is treated as being in another clock domain, which is what a clock step looks like until the camera catches up. It is reported in the statistics but does not contribute to the delay. The trade-off is that a stream that is genuinely more than 2 s late contributes no delay.
 - The delay is capped at 1000 ms.
-- On `/camera`, turning an overlay off removes its stream from the clock, so with every overlay off the delay is 0 and the video is live. `/segmentation` and `/combined` observe the model (and radar) stream for as long as it arrives, so their delay follows that stream's lag and falls to 0 only after the stream has been silent for more than 2 s.
+- On `/camera`, turning an overlay off removes its stream from the clock (`model` for boxes and segmentation, `lidar` and `lidarEnriched` for LiDAR, `radar` for radar), so with every overlay off the delay is 0 and the video is live. `/segmentation` and `/combined` observe the model (and radar) stream for as long as it arrives, so their delay follows that stream's lag and falls to 0 only after the stream has been silent for more than 2 s.
 
 ### Discontinuity Handling
 
@@ -224,7 +226,7 @@ Overlays recover without a page reload.
 
 ### Diagnostics
 
-`createSyncedVideo().reportSync(selections)` publishes `window.overlaySync` every animation frame: `displayedStampMs`, `delayMs`, `streams` (per-stream `lagMs` and `samples`) and, for each selection the page reports, `modelDeltaMs`, `lidarDeltaMs` or `radarDeltaMs`. A delta is the displayed stamp minus the selected sample's stamp, or `null` when no sample is selected. `/camera` also shows the delay and per-stream lag in a statistics box.
+`createSyncedVideo().reportSync(selections)` publishes `window.overlaySync` every animation frame: `displayedStampMs`, `delayMs`, `streams` (per-stream `lagMs` and `samples`), `horizonMisses` on `/camera` and `/combined` (selections that found nothing because the frame was older than a full buffer), and, for each selection the page reports, `modelDeltaMs`, `lidarDeltaMs` or `radarDeltaMs`. A delta is the displayed stamp minus the selected sample's stamp, or `null` when no sample is selected. `/camera` reports `modelDeltaMs`, `lidarDeltaMs` and `radarDeltaMs` (each `null` while its overlay is off) and also shows the delay and per-stream lag in a statistics box.
 
 ## Visualization Pages
 
@@ -233,7 +235,7 @@ Overlays recover without a page reload.
 | Page | Description |
 |------|-------------|
 | `index.html` | Home page with visualization selector |
-| `camera.html` | Camera stream with segmentation, bounding box, and LiDAR overlays |
+| `camera.html` | Camera stream with segmentation, bounding box, LiDAR and radar overlays |
 | `lidar.html` | 3D LiDAR point cloud with colour modes and cluster filtering |
 | `combined.html` | Split view: video, segmentation, radar grid |
 | `grid.html` | Radar point cloud on a polar range/bearing grid with source, colour mode, and elevation controls |
@@ -338,6 +340,7 @@ flowchart TB
         MASK[Segmentation Mask]
         BOXES[Detection Boxes]
         LIDAR[LiDAR Points]
+        RADAR[Radar Targets]
     end
 
     subgraph Rendering["Camera Page Render Layers (bottom to top)"]
@@ -345,15 +348,41 @@ flowchart TB
         L2[2. Segmentation Overlay - WebGL Shader]
         L3[3. Bounding Boxes - Canvas 2D]
         L4[4. LiDAR Points - Canvas 2D]
+        L5[5. Radar Points - Canvas 2D]
     end
 
     H264 --> L1
     MASK --> L2
     BOXES --> L3
     LIDAR --> L4
+    RADAR --> L5
 ```
 
 Each layer streams independently with proper z-ordering for composited visualization.
+
+### Camera Page Sensor Overlays
+
+The LiDAR and radar overlays project sensor points onto the 1920×1080 image with the pinhole model and draw them on their own 2D canvases (`#lidar-overlay`, then `#radar-overlay` on top). Each overlay clears only its own canvas every frame and when it is turned off, so either can be on alone.
+
+- **Extrinsics:** both overlays read `/tf_static`, which repeats every transform about once a second. The matrix from sensor to camera optical frame is `inv(T_base_camera_optical) * T_base_sensor`, where the sensor transform is the child frame containing `lidar` or `radar` (radarpub publishes `base_link` → `radar` from `RADAR_TF_VEC`/`RADAR_TF_QUAT`) and the camera transform prefers `camera_optical` over `base_link_optical`. The math lives in `projection.js`.
+- **Intrinsics:** `fx`, `fy`, `cx` and `cy` come from the `K` matrix of the first calibrated `/camera/info` message.
+- **Topic gating:** the LiDAR section is shown once websrv has seen `lidar/points` in its periodic topic sampling and the radar section once it has seen `radar/targets`, whoever publishes them (a systemd service, a publisher started by hand, or a replay). websrv samples its known topics at start-up and every `refresh_ms` (10 s) and reports a topic `available` when it was seen within the last 15 s, so its answer already covers one missed cycle. `camera.js` polls `GET /api/topics/status?topics=lidar/points,radar/targets` every 5 s and uses `available` directly: a section shows when its topic is available and hides when websrv reports it gone, that is when its last sighting is more than 15 s old. While the overlay is on its own samples keep it available, so it hides about 15-20 s after the publisher stops; with the overlay off the last sighting can already be up to about 12 s old when the publisher stops, so it hides 3-20 s after. While an overlay is on, a sample of its own stream within the last 3 s also counts as available. A topic websrv has not sampled yet (`last_seen_ms: null`) keeps a visible section visible for one `refresh_ms` plus 5 s, so a restarted websrv or a newly requested topic does not flash it; hidden sections stay hidden until their topic is available. Unknown response fields are ignored. When a section hides with its overlay on, the toggle is turned off, which closes the overlay's sockets and removes its stream from the playout clock; when the topic returns the section shows with the overlay off. Both sections start hidden and nothing changes before the first response, so they never flash. Errors after a successful poll hold the current state and polling continues.
+- **Fallback for older websrv:** if the first poll gets a 404, a non-JSON answer (websrv 4.2 and 4.3 serve their HTML fallback) or a network error, the sections follow the service-enabled gate instead (`lidarpub` and `radarpub` enabled in systemd, refreshed through `serviceCache.registerUpdateCallback`; `serviceGate.js`), the endpoint is no longer polled, and it is tried once more after 60 s in case websrv was upgraded. The decisions live in `topicGate.js`.
+- **Shared calibration sockets:** the `/tf_static` and `/camera/info` sockets stay open while either overlay is on and close, forgetting the camera calibration, when both are off.
+- **Reconnects:** every overlay socket (`/tf_static`, `/camera/info`, LiDAR, enriched LiDAR and radar) is a `reconnectingSocket.js` handle that reconnects with backoff from 1 s doubling to 8 s. Turning an overlay off calls `stop()`, which also cancels a pending reconnect, so toggling during a backoff never leaves a second socket behind.
+- **Missing calibration:** when the radar transform, camera transform or intrinsics have not arrived 5 s after the radar overlay is turned on, the page logs one warning naming what is missing and draws no radar points. Radar is still buffered and observed for the playout delay.
+- **Clipping:** points behind the camera, with non-finite coordinates, or whose dot lies wholly outside the image are skipped.
+
+Radar overlay (`radarOverlay.js` for the logic, `camera.js` for the wiring):
+
+| Colour mode | Offered when | Scale |
+|-------------|--------------|-------|
+| Fixed | always | The colour from the colour picker (default `#ff00ff`). |
+| Range | always | Turbo over 0-30 m of sensor range, the same scale as the LiDAR Distance mode. |
+| Speed | `speed` field present | Diverging: negative (approaching) towards blue, zero grey, positive (receding) towards red, normalised by the fastest point in the sample with a 1 m/s floor, as on the radar grid page. |
+| Power, RCS | `power` or `rcs` field present | Turbo stretched over the sample's minimum to maximum, as on the radar grid page. |
+
+A mode whose field is missing from a sample falls back to Range. Points are filled circles with a 6 px radius and a dark outline, drawn farthest first; the LiDAR dots are 7 px squares. The page parses each radar sample once and rebuilds the projected points only when the selected sample, the calibration or the colour settings change. A sensor→camera matrix is recomputed only when the values of its own transform or the camera's change, so the once-a-second `/tf_static` repeats do not invalidate the cache. The colour mode and fixed colour persist in `localStorage` under `camera.radarOverlay`; like every `/camera` overlay, the radar overlay starts off on each page load.
 
 ## Service Status
 

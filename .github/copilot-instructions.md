@@ -54,7 +54,7 @@ The WebSRV backend subscribes to Zenoh topics and bridges them to WebSocket endp
 | `stream.js` | H.264 WebSocket → WebCodecs VideoDecoder → Three.js CanvasTexture pipeline. Handles reconnection with exponential backoff. |
 | `SmartVideoManager.js` | Tiled 4K video: probes 4 tile endpoints, falls back to single stream, upgrades seamlessly via `onUpgrade` callback. Decodes tiles to bitmaps, merges only tiles with the same `header.stamp` (via `TileAssembler`, at most one merge per 60 ms, i.e. 15 fps) and delivers `onMergedFrame(stampMs, bitmap)`. |
 | `stamp.js` | `header.stamp` to milliseconds, CDR header stamp reader, `StampTracker` (chunk sequence to stamp), `DISCONTINUITY_MS` (2 s). Pure. |
-| `StampBuffer.js` | Stamp-ordered sample buffer with exact/nearest lookups; `selectDerived` (model: exact stamp, bounded hold) and `selectSensor` (LiDAR/radar: nearest within half a period). Pure. |
+| `StampBuffer.js` | Stamp-ordered sample buffer with exact/nearest lookups; `selectDerived` (model: exact stamp, bounded hold) and `selectSensor` (LiDAR/radar: nearest within half a period); both drop samples the displayed frame can no longer reach, so retention follows the display lag up to the buffer capacity. Pure. |
 | `PlayoutClock.js` | Learns per-stream arrival lag and derives the playout delay (max 1 s; streams over 2 s off are ignored). Pure. |
 | `FrameSync.js` | Holds decoded camera frames for the playout delay and releases the frame that is due; a full queue releases its oldest frame; never goes back to an older stamp. Pure. |
 | `TileAssembler.js` | Groups 4K tiles by exact stamp; emits complete groups, or partial groups after 100 ms, holding a group that is ready inside the merge interval. Pure. |
@@ -68,12 +68,20 @@ The WebSRV backend subscribes to Zenoh topics and bridges them to WebSocket endp
 | `mask.js` / `ProjectedMask.js` | Segmentation mask decompression (Zstandard WASM) and WebGL overlay. |
 | `lidar.js` | 3D LiDAR point cloud viewer using Three.js with orbit controls and multiple color modes. |
 | `grid.js` | Radar point cloud viewer on a polar range/bearing grid with source, colour mode, and elevation controls. |
-| `pointColors.js` | Shared colour helpers (Turbo, distance, cluster ID, diverging speed, theme-aware fixed) for the LiDAR and Radar viewers. |
+| `pointColors.js` | Shared colour helpers (Turbo, distance, cluster ID, diverging speed, theme-aware fixed) for the LiDAR and Radar viewers; re-exports the pure maps from `colorMaps.js`. |
+| `colorMaps.js` | Turbo, distance, neutral grey and diverging colour maps. Pure. |
+| `projection.js` | Rigid transforms from `/tf_static`, sensor→camera optical matrix and pinhole projection for the camera page overlays. Pure. |
+| `reconnectingSocket.js` | Binary WebSocket with exponential-backoff reconnect; `stop()` cancels a pending reconnect and closes the socket, and at most one socket is open at a time. Used by the camera page overlays. Pure (WebSocket and timers injectable). |
+| `topicGate.js` | Topic-availability gating for the camera page sensor overlays from `GET /api/topics/status` (5 s polls of websrv's periodic topic sampling; `available` is used directly), with the service-enabled fallback for websrv without the endpoint. Pure. |
+| `serviceGate.js` | Service-enabled gating decision for page sections (enabled shows, disabled hides and stops a running overlay, unknown keeps the current state). Pure. |
+| `radarOverlay.js` | Radar camera overlay: colour modes and field detection, saved settings, per-point colours and projected frame. Pure. |
 | `pointcloud2.js` | ROS PointCloud2 message parser for LiDAR and radar data. |
 
 ### Service-Enabled Gating Pattern
 
 UI elements (home page cards, settings cards, overlay options) are conditionally shown based on whether the backing EdgeFirst service is **enabled** (configured in systemd), not just running. Use `window.serviceCache.isServiceEnabled('serviceName')` — never hard-code MAIVIN/RAIVIN platform checks.
+
+The camera page sensor overlay sections (LiDAR, radar) are the exception: they follow whether websrv has seen their topic in its periodic sampling (`GET /api/topics/status`, see `topicGate.js`), so a publisher run by hand or a replay is also offered, and fall back to the service-enabled state on websrv without that endpoint. Home page and settings cards still use the enabled state.
 
 The canonical service list lives in `serviceCache.js` as `ALL_SERVICES`. Don't duplicate it in other files.
 
@@ -86,11 +94,12 @@ The canonical service list lives in `serviceCache.js` as `ALL_SERVICES`. Don't d
 
 ### Rendering Stack (Camera Page)
 
-Four composited layers, bottom to top, each drawn for the stamp of the displayed video frame (see Temporal Synchronization in ARCHITECTURE.md):
+Five composited layers, bottom to top, each drawn for the stamp of the displayed video frame (see Temporal Synchronization in ARCHITECTURE.md):
 1. **Video texture** — WebGL `ProjectedMaterial` on Three.js plane
 2. **Segmentation overlay** — WebGL shader with Zstandard-decompressed mask
 3. **Bounding boxes** — Canvas 2D overlay
 4. **LiDAR points** — Canvas 2D projected overlay
+5. **Radar points** — Canvas 2D projected overlay
 
 ### Segmentation Mask Data
 

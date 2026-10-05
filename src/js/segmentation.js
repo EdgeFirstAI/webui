@@ -8,7 +8,7 @@ import { createSegOverlay, clusterColor, trackIdToHash } from './segOverlay.js'
 import Stats, { fpsUpdate } from './Stats.js'
 import droppedframes from './droppedframes.js'
 import createSyncedVideo from './SyncedVideo.js'
-import StampBuffer, { selectDerived } from './StampBuffer.js'
+import StampBuffer, { MODEL_BUFFER_CAPACITY, selectDerived } from './StampBuffer.js'
 import { stampToMs } from './stamp.js'
 
 const PI = Math.PI
@@ -81,7 +81,7 @@ const video = createSyncedVideo({
 
 const segOverlay = createSegOverlay(scene, camera)
 
-const modelBuffer = new StampBuffer({ capacity: 32 })
+const modelBuffer = new StampBuffer({ capacity: MODEL_BUFFER_CAPACITY })
 const modelFPSUpdate = fpsUpdate(modelPanel)
 modelstream(socketUrlModel, (msg) => {
     const stampMs = stampToMs(msg.header.time.sec, msg.header.time.nanosec)
