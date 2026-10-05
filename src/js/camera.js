@@ -12,7 +12,10 @@ import StampBuffer, { selectDerived, selectSensor, sensorToleranceMs } from './S
 import { readHeaderStampMs, stampToMs } from './stamp.js'
 import { sameTransform, sensorToCameraMatrix } from './projection.js'
 import createReconnectingSocket from './reconnectingSocket.js'
-import { gateOverlay } from './serviceGate.js'
+import {
+    TOPIC_POLL_MS, applyTopicPoll, classifyTopicResponse, createTopicGateState, decideSection, shouldPollTopics,
+    topicStatusUrl,
+} from './topicGate.js'
 import {
     availableRadarColorModes, buildRadarFrame, normalizeRadarSettings, parseHexColor, readRadarColumns,
 } from './radarOverlay.js'
@@ -76,6 +79,7 @@ let radarTransform = null
 let radarToCameraMatrix = null
 let radarPoints = null
 let radarSocket = null  // reconnecting socket handle
+let radarLastArrivalMs = null
 let radarWarnTimer = null
 let cachedRadarRawRef = null
 let cachedRadarColumns = null
@@ -829,6 +833,7 @@ function renderLidarOverlay() {
 let lidarPointsSocket = null   // handle for /lidar/points while LiDAR is on
 let lidarEnrichedSocket = null  // handle for /lidar/clusters or /fusion/lidar when needed
 let lidarEnrichedPoints = null  // latest cluster data (or null)
+let lidarLastArrivalMs = null
 
 /**
  * Open a reconnecting binary socket (see reconnectingSocket.js).
@@ -894,7 +899,8 @@ function startLidar() {
             socketUrlLidar,
             (event) => {
                 const stampMs = readHeaderStampMs(event.data)
-                video.clock.observe('lidar', stampMs, performance.now())
+                lidarLastArrivalMs = performance.now()
+                video.clock.observe('lidar', stampMs, lidarLastArrivalMs)
                 lidarBuffer.push(stampMs, event.data)
                 video.clock.setTolerance('lidar', sensorToleranceMs(lidarBuffer))
                 if (!rawFieldsDetected) {
@@ -983,6 +989,7 @@ function stopLidar() {
     // Setting lidarEnabled = false first stops reconnection via shouldReconnect checks
     lidarPointsSocket = stopSocket(lidarPointsSocket)
     lidarEnrichedSocket = stopSocket(lidarEnrichedSocket)
+    lidarLastArrivalMs = null
     lidarPoints = null
     lidarEnrichedPoints = null
     lidarBuffer.clear()
@@ -1063,7 +1070,8 @@ function startRadar() {
             (event) => {
                 if (!radarEnabled) return
                 const stampMs = readHeaderStampMs(event.data)
-                video.clock.observe('radar', stampMs, performance.now())
+                radarLastArrivalMs = performance.now()
+                video.clock.observe('radar', stampMs, radarLastArrivalMs)
                 radarBuffer.push(stampMs, event.data)
                 video.clock.setTolerance('radar', sensorToleranceMs(radarBuffer))
                 if (!fieldsDetected) {
@@ -1085,6 +1093,7 @@ function stopRadar() {
     clearTimeout(radarWarnTimer)
     radarWarnTimer = null
     radarSocket = stopSocket(radarSocket)
+    radarLastArrivalMs = null
     radarPoints = null
     radarBuffer.clear()
     video.clock.remove('radar')
@@ -1340,21 +1349,26 @@ radarColorInput.value = radarSettings.color
 syncRadarColorSelect()
 
 // ---------------------------------------------------------------------------
-// Service-Enabled Gating
+// Topic Availability Gating
 // ---------------------------------------------------------------------------
-// Sensor overlay sections start hidden and are shown once the service cache
-// reports their publisher enabled. A publisher disabled while its overlay is
-// on turns the overlay off, which closes its sockets and removes its stream
-// from the playout clock.
-const SERVICE_GATES = [
-    { service: 'lidarpub', section: overlayLidarSection, toggle: overlayLidarToggle },
-    { service: 'radarpub', section: overlayRadarSection, toggle: overlayRadarToggle },
+// Sensor overlay sections start hidden and follow whether their topic is
+// being published (GET /api/topics/status, polled every 2 s), so a publisher
+// started by hand is offered too. A section hides after its topic has been
+// unavailable for 10 s; an overlay that is on is then turned off, which
+// closes its sockets and removes its stream from the playout clock. On a
+// websrv without the endpoint the sections follow the systemd enabled state
+// of the publisher instead (see topicGate.js).
+const SECTION_GATES = [
+    { topic: 'lidar/points', service: 'lidarpub', section: overlayLidarSection, toggle: overlayLidarToggle },
+    { topic: 'radar/targets', service: 'radarpub', section: overlayRadarSection, toggle: overlayRadarToggle },
 ]
+const TOPIC_STATUS_TIMEOUT_MS = 2 * TOPIC_POLL_MS
+let topicGate = createTopicGateState(SECTION_GATES.map((g) => g.topic))
 
-function applyServiceGates() {
+function applySectionGates() {
     const statuses = window.serviceCache ? window.serviceCache.serviceStatuses : null
-    for (const { service, section, toggle } of SERVICE_GATES) {
-        const next = gateOverlay(statuses, service, { visible: !section.hidden, on: toggle.checked })
+    for (const { topic, service, section, toggle } of SECTION_GATES) {
+        const next = decideSection(topicGate, topic, service, statuses, { visible: !section.hidden, on: toggle.checked })
         section.hidden = !next.visible
         if (next.stop) {
             toggle.checked = false
@@ -1363,8 +1377,47 @@ function applyServiceGates() {
     }
 }
 
-applyServiceGates()
-if (window.serviceCache) window.serviceCache.registerUpdateCallback(applyServiceGates)
+/** Newest sample arrival of each overlay stream that is on. */
+function localTopicSamples() {
+    const samples = {}
+    if (lidarEnabled && lidarLastArrivalMs != null) samples['lidar/points'] = lidarLastArrivalMs
+    if (radarEnabled && radarLastArrivalMs != null) samples['radar/targets'] = radarLastArrivalMs
+    return samples
+}
+
+async function fetchTopicStatus() {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), TOPIC_STATUS_TIMEOUT_MS)
+    try {
+        const res = await fetch(topicStatusUrl(topicGate.topics), { cache: 'no-store', signal: controller.signal })
+        const body = await res.text()
+        return classifyTopicResponse({ status: res.status, contentType: res.headers.get('content-type'), body })
+    } catch {
+        return classifyTopicResponse(null)
+    } finally {
+        clearTimeout(timer)
+    }
+}
+
+async function pollTopicStatus() {
+    const started = performance.now()
+    if (shouldPollTopics(topicGate, started)) {
+        const result = await fetchTopicStatus()
+        const wasMode = topicGate.mode
+        const visible = Object.fromEntries(SECTION_GATES.map((g) => [g.topic, !g.section.hidden]))
+        topicGate = applyTopicPoll(topicGate, result, performance.now(), localTopicSamples(), visible)
+        if (topicGate.mode !== wasMode) {
+            console.log(topicGate.mode === 'topics'
+                ? 'Overlay sections follow topic availability'
+                : 'No /api/topics/status on this websrv; overlay sections follow the publisher services')
+        }
+        applySectionGates()
+    }
+    setTimeout(pollTopicStatus, Math.max(0, TOPIC_POLL_MS - (performance.now() - started)))
+}
+
+pollTopicStatus()
+if (window.serviceCache) window.serviceCache.registerUpdateCallback(applySectionGates)
 
 // ---------------------------------------------------------------------------
 // Animation Loop

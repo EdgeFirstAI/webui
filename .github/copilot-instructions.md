@@ -72,6 +72,7 @@ The WebSRV backend subscribes to Zenoh topics and bridges them to WebSocket endp
 | `colorMaps.js` | Turbo, distance, neutral grey and diverging colour maps. Pure. |
 | `projection.js` | Rigid transforms from `/tf_static`, sensor→camera optical matrix and pinhole projection for the camera page overlays. Pure. |
 | `reconnectingSocket.js` | Binary WebSocket with exponential-backoff reconnect; `stop()` cancels a pending reconnect and closes the socket, and at most one socket is open at a time. Used by the camera page overlays. Pure (WebSocket and timers injectable). |
+| `topicGate.js` | Topic-availability gating for the camera page sensor overlays from `GET /api/topics/status` (2 s polls, 10 s hide hysteresis), with the service-enabled fallback for websrv without the endpoint. Pure. |
 | `serviceGate.js` | Service-enabled gating decision for page sections (enabled shows, disabled hides and stops a running overlay, unknown keeps the current state). Pure. |
 | `radarOverlay.js` | Radar camera overlay: colour modes and field detection, saved settings, per-point colours and projected frame. Pure. |
 | `pointcloud2.js` | ROS PointCloud2 message parser for LiDAR and radar data. |
@@ -79,6 +80,8 @@ The WebSRV backend subscribes to Zenoh topics and bridges them to WebSocket endp
 ### Service-Enabled Gating Pattern
 
 UI elements (home page cards, settings cards, overlay options) are conditionally shown based on whether the backing EdgeFirst service is **enabled** (configured in systemd), not just running. Use `window.serviceCache.isServiceEnabled('serviceName')` — never hard-code MAIVIN/RAIVIN platform checks.
+
+The camera page sensor overlay sections (LiDAR, radar) are the exception: they follow whether their topic is being published (`GET /api/topics/status`, see `topicGate.js`), so a publisher run by hand or a replay is also offered, and fall back to the service-enabled state on websrv without that endpoint. Home page and settings cards still use the enabled state.
 
 The canonical service list lives in `serviceCache.js` as `ALL_SERVICES`. Don't duplicate it in other files.
 
