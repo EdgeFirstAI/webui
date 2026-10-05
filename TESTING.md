@@ -305,7 +305,7 @@ Quote the glob; Node 24 does not accept a bare directory argument. Lint the sour
 npx eslint src/ tests/
 ```
 
-The command also reports findings in older vendored and page files; the synchronization modules and `tests/` lint clean.
+The command skips the vendored libraries listed in `eslint.config.js` and still reports findings in older page files; the synchronization modules and `tests/` lint clean.
 
 ## Test Automation
 

@@ -238,11 +238,13 @@
                 }
             );
 
-            const hemiLight = new THREE.HemisphereLight(0x8d7c7c, 0x494966, 3);
+            // Intensities are scaled by π to match the brightness of the
+            // non-physical light units the model was tuned under.
+            const hemiLight = new THREE.HemisphereLight(0x8d7c7c, 0x494966, 3 * Math.PI);
             scene.add(hemiLight);
 
-            addShadowedLight(1, 1, 1, 0xffffff, 3.5);
-            addShadowedLight(0.5, 1, -1, 0xffd500, 3);
+            addShadowedLight(1, 1, 1, 0xffffff, 3.5 * Math.PI);
+            addShadowedLight(0.5, 1, -1, 0xffd500, 3 * Math.PI);
         }
 
         function animate() {

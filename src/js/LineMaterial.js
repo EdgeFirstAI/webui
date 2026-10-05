@@ -1,32 +1,32 @@
 import {
-    ShaderLib,
-    ShaderMaterial,
-    UniformsLib,
-    UniformsUtils,
-    Vector2,
+	ShaderLib,
+	ShaderMaterial,
+	UniformsLib,
+	UniformsUtils,
+	Vector2,
 } from './three.js';
 
 UniformsLib.line = {
 
-    worldUnits: { value: 1 },
-    linewidth: { value: 1 },
-    resolution: { value: new Vector2(1, 1) },
-    dashOffset: { value: 0 },
-    dashScale: { value: 1 },
-    dashSize: { value: 1 },
-    gapSize: { value: 1 } // todo FIX - maybe change to totalSize
+	worldUnits: { value: 1 },
+	linewidth: { value: 1 },
+	resolution: { value: new Vector2() },
+	dashOffset: { value: 0 },
+	dashScale: { value: 1 },
+	dashSize: { value: 1 },
+	gapSize: { value: 1 } // todo FIX - maybe change to totalSize
 
 };
 
-ShaderLib['line'] = {
+ShaderLib[ 'line' ] = {
 
-    uniforms: UniformsUtils.merge([
-        UniformsLib.common,
-        UniformsLib.fog,
-        UniformsLib.line
-    ]),
+	uniforms: UniformsUtils.merge( [
+		UniformsLib.common,
+		UniformsLib.fog,
+		UniformsLib.line
+	] ),
 
-    vertexShader:
+	vertexShader:
 	/* glsl */`
 		#include <common>
 		#include <color_pars_vertex>
@@ -70,18 +70,20 @@ ShaderLib['line'] = {
 
 		#endif
 
-		void trimSegment( const in vec4 start, inout vec4 end ) {
+		float trimSegmentAlpha( const in vec4 start, const in vec4 end ) {
 
-			// trim end segment so it terminates between the camera plane and the near plane
+			// compute the interpolation factor needed to trim the segment so it terminates
+			// between the camera plane and the near plane
 
 			// conservative estimate of the near plane
 			float a = projectionMatrix[ 2 ][ 2 ]; // 3nd entry in 3th column
 			float b = projectionMatrix[ 3 ][ 2 ]; // 3nd entry in 4th column
-			float nearEstimate = - 0.5 * b / a;
 
-			float alpha = ( nearEstimate - start.z ) / ( end.z - start.z );
+			// we need different nearEstimate formula for reversed and default depth buffer
+			// a is positive with a reversed depth buffer so it can be used for controlling the code flow
+			float nearEstimate = ( a > 0.0 ) ? ( - b / ( a + 1.0 ) ) : ( - 0.5 * b / a );
 
-			end.xyz = mix( start.xyz, end.xyz, alpha );
+			return ( nearEstimate - start.z ) / ( end.z - start.z );
 
 		}
 
@@ -93,18 +95,18 @@ ShaderLib['line'] = {
 
 			#endif
 
-			#ifdef USE_DASH
-
-				vLineDistance = ( position.y < 0.5 ) ? dashScale * instanceDistanceStart : dashScale * instanceDistanceEnd;
-				vUv = uv;
-
-			#endif
-
 			float aspect = resolution.x / resolution.y;
 
 			// camera space
 			vec4 start = modelViewMatrix * vec4( instanceStart, 1.0 );
 			vec4 end = modelViewMatrix * vec4( instanceEnd, 1.0 );
+
+			#ifdef USE_DASH
+
+				float lineDistanceStart = dashScale * instanceDistanceStart;
+				float lineDistanceEnd = dashScale * instanceDistanceEnd;
+
+			#endif
 
 			#ifdef WORLD_UNITS
 
@@ -128,15 +130,36 @@ ShaderLib['line'] = {
 
 				if ( start.z < 0.0 && end.z >= 0.0 ) {
 
-					trimSegment( start, end );
+					float alpha = trimSegmentAlpha( start, end );
+					end.xyz = mix( start.xyz, end.xyz, alpha );
+
+					#ifdef USE_DASH
+
+						lineDistanceEnd = mix( lineDistanceStart, lineDistanceEnd, alpha );
+
+					#endif
 
 				} else if ( end.z < 0.0 && start.z >= 0.0 ) {
 
-					trimSegment( end, start );
+					float alpha = trimSegmentAlpha( end, start );
+					start.xyz = mix( end.xyz, start.xyz, alpha );
+
+					#ifdef USE_DASH
+
+						lineDistanceStart = mix( lineDistanceEnd, lineDistanceStart, alpha );
+
+					#endif
 
 				}
 
 			}
+
+			#ifdef USE_DASH
+
+				vLineDistance = ( position.y < 0.5 ) ? lineDistanceStart : lineDistanceEnd;
+				vUv = uv;
+
+			#endif
 
 			// clip space
 			vec4 clipStart = projectionMatrix * start;
@@ -240,7 +263,7 @@ ShaderLib['line'] = {
 		}
 		`,
 
-    fragmentShader:
+	fragmentShader:
 	/* glsl */`
 		uniform vec3 diffuse;
 		uniform float opacity;
@@ -311,6 +334,9 @@ ShaderLib['line'] = {
 
 		void main() {
 
+			float alpha = opacity;
+			vec4 diffuseColor = vec4( diffuse, alpha );
+
 			#include <clipping_planes_fragment>
 
 			#ifdef USE_DASH
@@ -320,8 +346,6 @@ ShaderLib['line'] = {
 				if ( mod( vLineDistance + dashOffset, dashSize + gapSize ) > dashSize ) discard; // todo - FIX
 
 			#endif
-
-			float alpha = opacity;
 
 			#ifdef WORLD_UNITS
 
@@ -387,8 +411,6 @@ ShaderLib['line'] = {
 
 			#endif
 
-			vec4 diffuseColor = vec4( diffuse, alpha );
-
 			#include <logdepthbuf_fragment>
 			#include <color_fragment>
 
@@ -403,205 +425,301 @@ ShaderLib['line'] = {
 		`
 };
 
+/**
+ * A material for drawing wireframe-style geometries.
+ *
+ * Unlike {@link LineBasicMaterial}, it supports arbitrary line widths and allows using world units
+ * instead of screen space units. This material is used with {@link LineSegments2} and {@link Line2}.
+ *
+ * This module can only be used with {@link WebGLRenderer}. When using {@link WebGPURenderer},
+ * use {@link Line2NodeMaterial}.
+ *
+ * @augments ShaderMaterial
+ * @three_import import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
+ */
 class LineMaterial extends ShaderMaterial {
 
+	/**
+	 * Constructs a new line segments geometry.
+	 *
+	 * @param {Object} [parameters] - An object with one or more properties
+	 * defining the material's appearance. Any property of the material
+	 * (including any property from inherited materials) can be passed
+	 * in here. Color values can be passed any type of value accepted
+	 * by {@link Color#set}.
+	 */
+	constructor( parameters ) {
 
-    static get type() {
+		super( {
 
-        return 'LineMaterial';
+			type: 'LineMaterial',
+			uniforms: UniformsUtils.clone( ShaderLib[ 'line' ].uniforms ),
 
-    }
+			vertexShader: ShaderLib[ 'line' ].vertexShader,
+			fragmentShader: ShaderLib[ 'line' ].fragmentShader,
 
-    constructor(parameters) {
+			clipping: true // required for clipping support
 
-        super({
+		} );
 
-            uniforms: UniformsUtils.clone(ShaderLib['line'].uniforms),
+		/**
+		 * This flag can be used for type testing.
+		 *
+		 * @type {boolean}
+		 * @readonly
+		 * @default true
+		 */
+		this.isLineMaterial = true;
 
-            vertexShader: ShaderLib['line'].vertexShader,
-            fragmentShader: ShaderLib['line'].fragmentShader,
+		this.setValues( parameters );
 
-            clipping: true // required for clipping support
+	}
 
-        });
+	/**
+	 * The material's color.
+	 *
+	 * @type {Color}
+	 * @default (1,1,1)
+	 */
+	get color() {
 
-        this.isLineMaterial = true;
+		return this.uniforms.diffuse.value;
 
-        this.setValues(parameters);
+	}
 
-    }
+	set color( value ) {
 
-    get color() {
+		this.uniforms.diffuse.value = value;
 
-        return this.uniforms.diffuse.value;
+	}
 
-    }
+	/**
+	 * Whether the material's sizes (width, dash gaps) are in world units.
+	 *
+	 * @type {boolean}
+	 * @default false
+	 */
+	get worldUnits() {
 
-    set color(value) {
+		return 'WORLD_UNITS' in this.defines;
 
-        this.uniforms.diffuse.value = value;
+	}
 
-    }
+	set worldUnits( value ) {
 
-    get worldUnits() {
+		if ( ( value === true ) !== this.worldUnits ) {
 
-        return 'WORLD_UNITS' in this.defines;
+			this.needsUpdate = true;
 
-    }
+		}
 
-    set worldUnits(value) {
+		if ( value === true ) {
 
-        if (value === true) {
+			this.defines.WORLD_UNITS = '';
 
-            this.defines.WORLD_UNITS = '';
+		} else {
 
-        } else {
+			delete this.defines.WORLD_UNITS;
 
-            delete this.defines.WORLD_UNITS;
+		}
 
-        }
+	}
 
-    }
+	/**
+	 * Controls line thickness in CSS pixel units when `worldUnits` is `false` (default),
+	 * or in world units when `worldUnits` is `true`.
+	 *
+	 * @type {number}
+	 * @default 1
+	 */
+	get linewidth() {
 
-    get linewidth() {
+		return this.uniforms.linewidth.value;
 
-        return this.uniforms.linewidth.value;
+	}
 
-    }
+	set linewidth( value ) {
 
-    set linewidth(value) {
+		if ( ! this.uniforms.linewidth ) return;
+		this.uniforms.linewidth.value = value;
 
-        if (!this.uniforms.linewidth) return;
-        this.uniforms.linewidth.value = value;
+	}
 
-    }
+	/**
+	 * Whether the line is dashed, or solid.
+	 *
+	 * @type {boolean}
+	 * @default false
+	 */
+	get dashed() {
 
-    get dashed() {
+		return 'USE_DASH' in this.defines;
 
-        return 'USE_DASH' in this.defines;
+	}
 
-    }
+	set dashed( value ) {
 
-    set dashed(value) {
+		if ( ( value === true ) !== this.dashed ) {
 
-        if ((value === true) !== this.dashed) {
+			this.needsUpdate = true;
 
-            this.needsUpdate = true;
+		}
 
-        }
+		if ( value === true ) {
 
-        if (value === true) {
+			this.defines.USE_DASH = '';
 
-            this.defines.USE_DASH = '';
+		} else {
 
-        } else {
+			delete this.defines.USE_DASH;
 
-            delete this.defines.USE_DASH;
+		}
 
-        }
+	}
 
-    }
+	/**
+	 * The scale of the dashes and gaps.
+	 *
+	 * @type {number}
+	 * @default 1
+	 */
+	get dashScale() {
 
-    get dashScale() {
+		return this.uniforms.dashScale.value;
 
-        return this.uniforms.dashScale.value;
+	}
 
-    }
+	set dashScale( value ) {
 
-    set dashScale(value) {
+		this.uniforms.dashScale.value = value;
 
-        this.uniforms.dashScale.value = value;
+	}
 
-    }
+	/**
+	 * The size of the dash.
+	 *
+	 * @type {number}
+	 * @default 1
+	 */
+	get dashSize() {
 
-    get dashSize() {
+		return this.uniforms.dashSize.value;
 
-        return this.uniforms.dashSize.value;
+	}
 
-    }
+	set dashSize( value ) {
 
-    set dashSize(value) {
+		this.uniforms.dashSize.value = value;
 
-        this.uniforms.dashSize.value = value;
+	}
 
-    }
+	/**
+	 * Where in the dash cycle the dash starts.
+	 *
+	 * @type {number}
+	 * @default 0
+	 */
+	get dashOffset() {
 
-    get dashOffset() {
+		return this.uniforms.dashOffset.value;
 
-        return this.uniforms.dashOffset.value;
+	}
 
-    }
+	set dashOffset( value ) {
 
-    set dashOffset(value) {
+		this.uniforms.dashOffset.value = value;
 
-        this.uniforms.dashOffset.value = value;
+	}
 
-    }
+	/**
+	 * The size of the gap.
+	 *
+	 * @type {number}
+	 * @default 0
+	 */
+	get gapSize() {
 
-    get gapSize() {
+		return this.uniforms.gapSize.value;
 
-        return this.uniforms.gapSize.value;
+	}
 
-    }
+	set gapSize( value ) {
 
-    set gapSize(value) {
+		this.uniforms.gapSize.value = value;
 
-        this.uniforms.gapSize.value = value;
+	}
 
-    }
+	/**
+	 * The opacity.
+	 *
+	 * @type {number}
+	 * @default 1
+	 */
+	get opacity() {
 
-    get opacity() {
+		return this.uniforms.opacity.value;
 
-        return this.uniforms.opacity.value;
+	}
 
-    }
+	set opacity( value ) {
 
-    set opacity(value) {
+		if ( ! this.uniforms ) return;
+		this.uniforms.opacity.value = value;
 
-        if (!this.uniforms) return;
-        this.uniforms.opacity.value = value;
+	}
 
-    }
+	/**
+	 * The size of the viewport, in screen pixels. This must be kept updated to make
+	 * screen-space rendering accurate. The `LineSegments2.onBeforeRender` callback
+	 * performs the update for visible objects.
+	 *
+	 * @type {Vector2}
+	 */
+	get resolution() {
 
-    get resolution() {
+		return this.uniforms.resolution.value;
 
-        return this.uniforms.resolution.value;
+	}
 
-    }
+	set resolution( value ) {
 
-    set resolution(value) {
+		this.uniforms.resolution.value.copy( value );
 
-        this.uniforms.resolution.value.copy(value);
+	}
 
-    }
+	/**
+	 * Whether to use alphaToCoverage or not. When enabled, this can improve the
+	 * anti-aliasing of line edges when using MSAA.
+	 *
+	 * @type {boolean}
+	 */
+	get alphaToCoverage() {
 
-    get alphaToCoverage() {
+		return 'USE_ALPHA_TO_COVERAGE' in this.defines;
 
-        return 'USE_ALPHA_TO_COVERAGE' in this.defines;
+	}
 
-    }
+	set alphaToCoverage( value ) {
 
-    set alphaToCoverage(value) {
+		if ( ! this.defines ) return;
 
-        if (!this.defines) return;
+		if ( ( value === true ) !== this.alphaToCoverage ) {
 
-        if ((value === true) !== this.alphaToCoverage) {
+			this.needsUpdate = true;
 
-            this.needsUpdate = true;
+		}
 
-        }
+		if ( value === true ) {
 
-        if (value === true) {
+			this.defines.USE_ALPHA_TO_COVERAGE = '';
 
-            this.defines.USE_ALPHA_TO_COVERAGE = '';
+		} else {
 
-        } else {
+			delete this.defines.USE_ALPHA_TO_COVERAGE;
 
-            delete this.defines.USE_ALPHA_TO_COVERAGE;
+		}
 
-        }
-
-    }
+	}
 
 }
 
