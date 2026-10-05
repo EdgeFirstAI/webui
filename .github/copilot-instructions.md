@@ -13,7 +13,7 @@ WebSRV is a Rust native server built with `cargo-zigbuild` for cross-compilation
 ```bash
 # Lint (requires Node.js + npm dependencies installed)
 npx eslint src/ tests/
-# (reports existing findings in older vendored/page files; the synchronization modules and tests/ lint clean)
+# (skips vendored libraries; reports existing findings in older page files; the synchronization modules and tests/ lint clean)
 
 # Unit tests for the pure modules (Node.js 22+, no npm install; quote the glob)
 node --test "tests/unit/*.test.mjs"
