@@ -57,12 +57,13 @@ The WebSRV acts as a **Zenoh-to-WebSocket bridge**: browsers connect via WebSock
 
 | Component | Technology | Purpose |
 |-----------|------------|---------|
-| 3D Rendering | Three.js r167 | WebGL scene rendering |
+| 3D Rendering | Three.js r186, three-spritetext 1.10.0 | WebGL scene rendering |
 | 2D Overlays | Canvas API | Bounding boxes, labels |
 | Video Codec | WebCodecs API | Hardware-accelerated H.264 |
-| Styling | Tailwind CSS | Responsive design |
-| Maps | Leaflet.js | GPS visualization |
+| Styling | Tailwind CSS 3.4.17 (Play CDN build), daisyUI 3.9.4 | Responsive design |
+| Maps | Leaflet 1.9.4, tinyworldmap (offline tiles) | GPS visualization |
 | Compression | Zstandard (WASM) | Mask decompression |
+| Messages | @foxglove/cdr 3.5.1 | CDR deserialization |
 
 ### Backend (WebSRV)
 
