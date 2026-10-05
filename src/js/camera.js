@@ -12,6 +12,7 @@ import StampBuffer, { selectDerived, selectSensor, sensorToleranceMs } from './S
 import { readHeaderStampMs, stampToMs } from './stamp.js'
 import { sameTransform, sensorToCameraMatrix } from './projection.js'
 import createReconnectingSocket from './reconnectingSocket.js'
+import { gateOverlay } from './serviceGate.js'
 import {
     availableRadarColorModes, buildRadarFrame, normalizeRadarSettings, parseHexColor, readRadarColumns,
 } from './radarOverlay.js'
@@ -1337,6 +1338,33 @@ function updateLidarBgVisibility() {
 
 radarColorInput.value = radarSettings.color
 syncRadarColorSelect()
+
+// ---------------------------------------------------------------------------
+// Service-Enabled Gating
+// ---------------------------------------------------------------------------
+// Sensor overlay sections start hidden and are shown once the service cache
+// reports their publisher enabled. A publisher disabled while its overlay is
+// on turns the overlay off, which closes its sockets and removes its stream
+// from the playout clock.
+const SERVICE_GATES = [
+    { service: 'lidarpub', section: overlayLidarSection, toggle: overlayLidarToggle },
+    { service: 'radarpub', section: overlayRadarSection, toggle: overlayRadarToggle },
+]
+
+function applyServiceGates() {
+    const statuses = window.serviceCache ? window.serviceCache.serviceStatuses : null
+    for (const { service, section, toggle } of SERVICE_GATES) {
+        const next = gateOverlay(statuses, service, { visible: !section.hidden, on: toggle.checked })
+        section.hidden = !next.visible
+        if (next.stop) {
+            toggle.checked = false
+            toggle.dispatchEvent(new Event('change'))
+        }
+    }
+}
+
+applyServiceGates()
+if (window.serviceCache) window.serviceCache.registerUpdateCallback(applyServiceGates)
 
 // ---------------------------------------------------------------------------
 // Animation Loop

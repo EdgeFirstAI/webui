@@ -72,6 +72,7 @@ The WebSRV backend subscribes to Zenoh topics and bridges them to WebSocket endp
 | `colorMaps.js` | Turbo, distance, neutral grey and diverging colour maps. Pure. |
 | `projection.js` | Rigid transforms from `/tf_static`, sensor→camera optical matrix and pinhole projection for the camera page overlays. Pure. |
 | `reconnectingSocket.js` | Binary WebSocket with exponential-backoff reconnect; `stop()` cancels a pending reconnect and closes the socket, and at most one socket is open at a time. Used by the camera page overlays. Pure (WebSocket and timers injectable). |
+| `serviceGate.js` | Service-enabled gating decision for page sections (enabled shows, disabled hides and stops a running overlay, unknown keeps the current state). Pure. |
 | `radarOverlay.js` | Radar camera overlay: colour modes and field detection, saved settings, per-point colours and projected frame. Pure. |
 | `pointcloud2.js` | ROS PointCloud2 message parser for LiDAR and radar data. |
 

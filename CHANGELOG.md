@@ -9,7 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- The camera page can draw radar targets over the video ("Radar Points"), projected with the radar and camera extrinsics from `/tf_static` and drawn for the radar sample nearest the displayed frame. Points are coloured by a fixed colour from a colour picker, by range, by speed (approaching blue, receding red) or by power or RCS when the radar publishes them. The colour mode and colour are remembered across reloads.
+- The camera page can draw radar targets over the video ("Radar Points"), projected with the radar and camera extrinsics from `/tf_static` and drawn for the radar sample nearest the displayed frame. Points are coloured by a fixed colour from a colour picker, by range, by speed (approaching blue, receding red) or by power or RCS when the radar publishes them. The colour mode and colour are remembered across reloads. The overlay is offered only while radarpub is enabled.
+
+### Changed
+
+- The camera page offers the LiDAR overlay only while lidarpub is enabled. A LiDAR or radar overlay that is on is turned off when its publisher is disabled.
 
 ### Fixed
 

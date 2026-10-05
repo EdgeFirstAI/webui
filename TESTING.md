@@ -139,7 +139,8 @@ Accept the self-signed certificate when prompted.
 5. In Cluster mode, test Noise/Ground filter checkboxes
 6. Test radar overlay colour modes: Fixed (the colour picker appears and changes the dots), Range, and Speed, Power and RCS when the radar publishes those fields
 7. Reload the page and verify the radar colour mode and fixed colour are restored and the radar toggle starts off, like the other overlays
-8. Verify tile upgrade: if 4K tiles are available, video should upgrade automatically
+8. With the radar overlay on, disable radarpub (`sudo systemctl disable --now radarpub`): within about 5 s the Radar Points section hides and the overlay stops (`radar` leaves `window.overlaySync.streams`). Enable it again (`sudo systemctl enable --now radarpub`): the section returns with the overlay off. The LiDAR Points section follows `lidarpub` the same way
+9. Verify tile upgrade: if 4K tiles are available, video should upgrade automatically
 
 **Expected behavior:**
 - Video renders smoothly without artifacts
@@ -298,7 +299,7 @@ Test on supported browsers:
 
 ## Unit Tests
 
-The stamp, buffer, clock, frame and tile modules, and the overlay modules (`projection.js`, `radarOverlay.js`, `colorMaps.js`, `reconnectingSocket.js`), are pure and covered by `node --test` unit tests in `tests/unit/`. They need Node.js 22 or later and no `npm install`:
+The stamp, buffer, clock, frame and tile modules, and the overlay modules (`projection.js`, `radarOverlay.js`, `colorMaps.js`, `reconnectingSocket.js`, `serviceGate.js`), are pure and covered by `node --test` unit tests in `tests/unit/`. They need Node.js 22 or later and no `npm install`:
 
 ```bash
 node --test "tests/unit/*.test.mjs"
