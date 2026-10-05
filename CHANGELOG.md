@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.7.0] - 2026-10-05
+
 ### Added
 
 - The camera page can draw radar targets over the video ("Radar Points"), projected with the radar and camera extrinsics from `/tf_static` and drawn for the radar sample nearest the displayed frame. Points are coloured by a fixed colour from a colour picker, by range, by speed (approaching blue, receding red) or by power or RCS when the radar publishes them. The colour mode and colour are remembered across reloads. The overlay is offered once websrv has seen `radar/targets` in its periodic topic sampling, including from a publisher started by hand or a replay, and is withdrawn when the topic has been gone for a full sampling cycle; on websrv without `/api/topics/status` it is offered while radarpub is enabled.
