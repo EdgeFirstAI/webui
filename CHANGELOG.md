@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Turning a camera page overlay off while its connection was waiting to reconnect no longer leaves a second connection running when the overlay is turned back on.
+- LiDAR, radar and model overlays are still drawn when the displayed video runs several seconds behind them (as on a loaded client): their buffers now keep what the displayed frame can reach, up to about 6 s for LiDAR and model results and 10 s for radar, instead of a fixed number of samples (about 3.5 s).
 
 ## [4.6.0] - 2026-10-05
 

@@ -151,6 +151,7 @@ Accept the self-signed certificate when prompted.
 - In non-cluster modes, noise/ground points are NOT filtered even if checkboxes were unchecked
 - Radar points are larger than LiDAR dots; turning the radar overlay off clears them and removes `radar` from the statistics box, and `window.overlaySync.radarDeltaMs` becomes `null`
 - With the radar overlay on, `window.overlaySync.radarDeltaMs` stays within half the radar period plus 10 ms (37.5 ms at 18 Hz)
+- `radarDeltaMs` and `lidarDeltaMs` stay non-null even when `streams.radar.lagMs` or `streams.lidar.lagMs` is below -3000 ms (the displayed video several seconds behind the sensor); `window.overlaySync.horizonMisses` stays 0 unless the lag exceeds about 10 s for radar or 6 s for LiDAR
 - If tiles are available, video upgrades to 4K and the old fallback texture is disposed
 - In 4K tile mode the video keeps moving (up to the merge limit of one frame per 60 ms, 15 fps from 30 fps tiles) even when tiles are lost; a lost tile leaves its quadrant showing the previous picture for that frame
 

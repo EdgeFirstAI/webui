@@ -8,7 +8,9 @@ import { mask_colors } from './utils.js'
 import { CdrReader } from './Cdr.js'
 import { parsePointCloud2, readField } from './pointcloud2.js'
 import createSyncedVideo from './SyncedVideo.js'
-import StampBuffer, { selectDerived, selectSensor, sensorToleranceMs } from './StampBuffer.js'
+import StampBuffer, {
+    LIDAR_BUFFER_CAPACITY, MODEL_BUFFER_CAPACITY, RADAR_BUFFER_CAPACITY, selectDerived, selectSensor, sensorToleranceMs,
+} from './StampBuffer.js'
 import { readHeaderStampMs, stampToMs } from './stamp.js'
 import { sameTransform, sensorToCameraMatrix } from './projection.js'
 import createReconnectingSocket from './reconnectingSocket.js'
@@ -164,12 +166,12 @@ radarCanvas.height = height
 // ---------------------------------------------------------------------------
 // Video Stream
 // ---------------------------------------------------------------------------
-const modelBuffer = new StampBuffer({ capacity: 32 })
-const lidarBuffer = new StampBuffer({ capacity: 32 })
-const lidarEnrichedBuffer = new StampBuffer({ capacity: 32 })
-// Radar runs near 18 Hz, so 64 entries (about 3.5 s) cover the same display
-// lag as 32 entries of the slower streams.
-const radarBuffer = new StampBuffer({ capacity: 64 })
+const modelBuffer = new StampBuffer({ capacity: MODEL_BUFFER_CAPACITY })
+// Sensor buffers keep what the displayed frame can still reach, so they
+// follow the display lag up to their capacity (see StampBuffer.js).
+const lidarBuffer = new StampBuffer({ capacity: LIDAR_BUFFER_CAPACITY })
+const lidarEnrichedBuffer = new StampBuffer({ capacity: LIDAR_BUFFER_CAPACITY })
+const radarBuffer = new StampBuffer({ capacity: RADAR_BUFFER_CAPACITY })
 let lastStatsUpdate = 0
 
 let videoMaterial = null
@@ -1445,7 +1447,12 @@ renderer.setAnimationLoop(() => {
     if (lidarEnabled) renderLidarOverlay()
     if (radarEnabled) renderRadarOverlay()
 
-    renderSyncStats(video.reportSync({ model, lidar: lidarDrawn, radar }))
+    const syncStats = video.reportSync({ model, lidar: lidarDrawn, radar })
+    window.overlaySync.horizonMisses = {
+        lidar: lidarBuffer.horizonMisses + lidarEnrichedBuffer.horizonMisses,
+        radar: radarBuffer.horizonMisses,
+    }
+    renderSyncStats(syncStats)
 })
 
 // ---------------------------------------------------------------------------
