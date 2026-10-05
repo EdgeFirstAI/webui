@@ -1351,18 +1351,18 @@ syncRadarColorSelect()
 // ---------------------------------------------------------------------------
 // Topic Availability Gating
 // ---------------------------------------------------------------------------
-// Sensor overlay sections start hidden and follow whether their topic is
-// being published (GET /api/topics/status, polled every 2 s), so a publisher
-// started by hand is offered too. A section hides after its topic has been
-// unavailable for 10 s; an overlay that is on is then turned off, which
-// closes its sockets and removes its stream from the playout clock. On a
-// websrv without the endpoint the sections follow the systemd enabled state
-// of the publisher instead (see topicGate.js).
+// Sensor overlay sections start hidden and follow whether websrv has seen
+// their topic in its periodic sampling (GET /api/topics/status, polled every
+// 5 s), so a publisher started by hand is offered too. A section hides once
+// websrv reports its topic gone for a full sampling cycle; an overlay that is
+// on is then turned off, which closes its sockets and removes its stream from
+// the playout clock. On a websrv without the endpoint the sections follow the
+// systemd enabled state of the publisher instead (see topicGate.js).
 const SECTION_GATES = [
     { topic: 'lidar/points', service: 'lidarpub', section: overlayLidarSection, toggle: overlayLidarToggle },
     { topic: 'radar/targets', service: 'radarpub', section: overlayRadarSection, toggle: overlayRadarToggle },
 ]
-const TOPIC_STATUS_TIMEOUT_MS = 2 * TOPIC_POLL_MS
+const TOPIC_STATUS_TIMEOUT_MS = TOPIC_POLL_MS
 let topicGate = createTopicGateState(SECTION_GATES.map((g) => g.topic))
 
 function applySectionGates() {
