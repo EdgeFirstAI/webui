@@ -146,6 +146,7 @@ Accept the self-signed certificate when prompted.
 - LiDAR points in cluster mode: noise (id=0) renders grey, not a hue color
 - In non-cluster modes, noise/ground points are NOT filtered even if checkboxes were unchecked
 - If tiles are available, video upgrades to 4K and the old fallback texture is disposed
+- In 4K tile mode the video keeps moving (up to the merge limit of one frame per 60 ms, 15 fps from 30 fps tiles) even when tiles are lost; a lost tile leaves its quadrant showing the previous picture for that frame
 
 ### Combined View Testing
 
@@ -289,6 +290,22 @@ Test on supported browsers:
 - [ ] Download works
 - [ ] Playback works
 - [ ] Delete works
+
+## Unit Tests
+
+The stamp, buffer, clock, frame and tile modules are pure and covered by `node --test` unit tests in `tests/unit/`. They need Node.js 22 or later and no `npm install`:
+
+```bash
+node --test "tests/unit/*.test.mjs"
+```
+
+Quote the glob; Node 24 does not accept a bare directory argument. Lint the sources and tests with:
+
+```bash
+npx eslint src/ tests/
+```
+
+The command also reports findings in older vendored and page files; the synchronization modules and `tests/` lint clean.
 
 ## Test Automation
 
@@ -434,6 +451,11 @@ enter a non-empty `MODEL` path to reveal the early/mid fusion model section.
 - `toast-close` - Dismiss button on a notification.
 - `toast-dismiss-all` - Bulk dismiss, shown once three or more are stacked.
 
+**Recordings dialog (navbar, every page):**
+- `recordings-list-scanning` - "Scanning…" marker on a recording the server is still scanning (listed with `scanning: true`, no duration or topics yet). While one is shown the list refreshes every 2 s; the marker disappears when the scan finishes.
+- `recordings-details-scanning` - "Scanning…" in place of the duration in the details of a recording being scanned.
+- `recordings-details-clock-steps` - Number of clock steps excluded from the duration.
+
 Success and info toasts clear themselves after 5 seconds and warnings after
 10, so a test that asserts on one should read it promptly. Errors stay until
 dismissed. Toasts stack rather than replace: four failures in a row leave
@@ -500,6 +522,52 @@ test('navigation flow', async ({ page }) => {
   await expect(page.locator('[data-testid="settings-card-services"]')).toBeVisible();
 });
 ```
+
+### Overlay Synchronization
+
+The camera, segmentation and combined pages publish `window.overlaySync` every animation frame with `displayedStampMs`, `delayMs`, `streams` and a `<name>DeltaMs` for each overlay the page reports (`modelDeltaMs` and `lidarDeltaMs` on `/camera`, `modelDeltaMs` on `/segmentation`, `modelDeltaMs` and `radarDeltaMs` on `/combined`). A delta is the displayed frame's stamp minus the stamp of the overlay sample drawn with it, or `null` when no sample is drawn. Sample it from Playwright with the model running:
+
+```js
+await page.goto('https://maivin.local/camera')
+await page.click('[data-testid="camera-toggle-box2d"]')
+await page.waitForTimeout(10000)
+const samples = []
+for (let i = 0; i < 50; i++) {
+    samples.push(await page.evaluate(() => ({ ...window.overlaySync })))
+    await page.waitForTimeout(100)
+}
+const model = samples.map(s => s.modelDeltaMs).filter(d => d !== null)
+if (model.some(d => d < 0)) throw new Error('overlay newer than frame')
+```
+
+**Expected behavior:**
+- `modelDeltaMs` is never negative. The model runs slower than the camera (about 8-11 Hz against 30 fps), so it is 0 on frames the model processed and a small positive hold, typically one or two frame intervals (33 or 67 ms), on the others.
+- `lidarDeltaMs` and `radarDeltaMs` are within half the sensor period plus 10 ms of zero in either direction.
+- `delayMs` settles at the lag of the slowest enabled overlay and never exceeds 1000. On `/camera` with every overlay off it is 0 and the video is live; `/segmentation` and `/combined` keep the delay of the model (and radar) stream while it arrives.
+
+#### Clock Step
+
+A step of the device wall clock must not leave overlays missing or misplaced. With `/camera` open and overlays on, on the device:
+
+```bash
+sudo systemctl stop chronyd
+sudo date -s "+1 hour"
+# observe the page, then
+sudo date -s "-1 hour"
+```
+
+Restore time synchronization afterwards:
+
+```bash
+sudo systemctl start chronyd && sudo chronyc waitsync 30 0.5
+```
+
+A bare `chronyc makestep` right after starting chronyd can leave the clock wrong for about 10 seconds until a time source is selected, so wait for synchronization instead.
+
+**Expected behavior:**
+- After each step the overlays recover within about 2 seconds with no page reload.
+- Once recovered, `modelDeltaMs` is non-negative again and `delayMs` returns to its previous value.
+- In the recording details dialog, a recording made across a step reports its duration without the step and shows how many clock steps were excluded (`recordings-details-clock-steps`).
 
 ### Future Automation Recommendations
 

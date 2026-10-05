@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import * as THREE from './three.js';
 import h264Stream from './stream.js';
+import TileAssembler from './TileAssembler.js';
 
 class SmartVideoManager {
     constructor() {
@@ -21,24 +22,16 @@ class SmartVideoManager {
 
         this.tileProbeTimeout = 5000; // 5 seconds to detect tiles
 
-        // Aggressive frame synchronization system (15fps, requires ALL tiles)
-        this.syncEnabled = true;
-        this.frameReadyMap = new Map();
-        this.lastUpdateTime = 0;
-        this.updateThrottle = 67; // 15fps max
-        this.maxWaitForSync = 500;
-        this.pendingUpdate = false;
-        this.requiredTiles = 4;
+        this.assembler = null;
+        // At most one merge per 60 ms: every second 33.3 ms tile frame (15 fps),
+        // with margin for arrival jitter. 1000 / 15 would miss every second slot.
+        this.minMergeIntervalMs = 60;
 
-        // Temporal sync: track latest tile ROS timestamp
-        this.latestRosTimeSec = 0;
-        this.latestRosTimeNsec = 0;
-
-        // Optional callback for temporal sync consumers (e.g., TemporalSyncManager).
-        // When set, updateMergedCanvas() produces an ImageBitmap instead of updating
+        // Optional callback for consumers that control display timing (SyncedVideo).
+        // When set, drawGroup() produces an ImageBitmap instead of updating
         // the texture directly, letting the consumer control display timing.
+        // Called as onMergedFrame(stampMs, bitmap); the consumer owns the bitmap.
         this.onMergedFrame = null;
-
     }
 
     async init(onFrameUpdate, h264StreamFunc = null, fallbackH264StreamFunc = null) {
@@ -168,9 +161,11 @@ class SmartVideoManager {
                 const texture = await this.h264StreamFunc(url, 1920, 1080, 30, (timing) => {
                     this.onTileFrame(tileName, timing);
                     if (onFrameUpdate) {
-                        onFrameUpdate({ ...timing, tileName, mode: 'tiles' });
+                        const info = { ...timing, tileName, mode: 'tiles' };
+                        delete info.bitmap;
+                        onFrameUpdate(info);
                     }
-                });
+                }, true);
 
                 this.tileCanvases[tileName] = {
                     texture,
@@ -194,8 +189,10 @@ class SmartVideoManager {
             throw new Error('No tiles could be initialized successfully');
         }
 
-        this.frameReadyMap.clear();
-        this.updateMergedCanvas();
+        this.assembler = new TileAssembler({
+            tiles: Object.keys(this.tileCanvases),
+            minIntervalMs: this.minMergeIntervalMs,
+        });
 
         this.currentTexture = mergedTexture;
         return mergedTexture;
@@ -223,95 +220,29 @@ class SmartVideoManager {
     }
 
     onTileFrame(tileName, timing) {
-        const now = performance.now();
-
-        this.latestRosTimeSec = timing.rosTimeSec;
-        this.latestRosTimeNsec = timing.rosTimeNsec;
-
-        if (!this.syncEnabled) {
-            this.updateMergedCanvas();
+        if (!timing.bitmap || !this.assembler) {
+            if (timing.bitmap) timing.bitmap.close();
             return;
         }
-
-        this.frameReadyMap.set(tileName, now);
-        this.tryUpdateWithSync();
+        const group = this.assembler.add(tileName, timing.stampMs, timing.bitmap);
+        if (group) this.drawGroup(group);
     }
 
-    tryUpdateWithSync() {
-        if (this.pendingUpdate) return;
-
-        const now = performance.now();
-        const connectedTileNames = Object.keys(this.tileCanvases);
-
-        if (connectedTileNames.length === 0) return;
-
-        const tilesWithFreshFrames = connectedTileNames.filter(tileName => {
-            const lastFrameTime = this.frameReadyMap.get(tileName);
-            return lastFrameTime && (now - lastFrameTime) < this.maxWaitForSync;
-        });
-
-        const timeSinceLastUpdate = now - this.lastUpdateTime;
-        if (timeSinceLastUpdate < this.updateThrottle) {
-            if (!this.pendingUpdate) {
-                this.pendingUpdate = true;
-                const remainingTime = this.updateThrottle - timeSinceLastUpdate;
-                setTimeout(() => {
-                    this.pendingUpdate = false;
-                    this.tryUpdateWithSync();
-                }, remainingTime);
-            }
+    drawGroup(group) {
+        if (!this.mergedContext || this.mode !== 'tiles') {
+            for (const b of Object.values(group.bitmaps)) b.close();
             return;
         }
-
-        if (tilesWithFreshFrames.length >= this.requiredTiles) {
-            this.updateMergedCanvas();
-            this.lastUpdateTime = now;
-            tilesWithFreshFrames.forEach(tileName => {
-                this.frameReadyMap.delete(tileName);
-            });
-        } else if (tilesWithFreshFrames.length > 0 && timeSinceLastUpdate > this.maxWaitForSync) {
-            this.updateMergedCanvas();
-            this.lastUpdateTime = now;
-            tilesWithFreshFrames.forEach(tileName => {
-                this.frameReadyMap.delete(tileName);
-            });
-        } else {
-            if (!this.pendingUpdate) {
-                this.pendingUpdate = true;
-                const waitTime = tilesWithFreshFrames.length > 0 ? 50 : 16;
-                setTimeout(() => {
-                    this.pendingUpdate = false;
-                    this.tryUpdateWithSync();
-                }, waitTime);
-            }
+        for (const [name, bitmap] of Object.entries(group.bitmaps)) {
+            const { x, y } = this.tileCanvases[name].position;
+            this.mergedContext.drawImage(bitmap, x, y, 1920, 1080);
+            bitmap.close();
         }
-    }
-
-    updateMergedCanvas() {
-        if (!this.mergedContext || this.mode !== 'tiles') return;
-
-        this.mergedContext.clearRect(0, 0, 3840, 2160);
-
-        Object.values(this.tileCanvases).forEach(tile => {
-            if (tile.canvas) {
-                this.mergedContext.drawImage(
-                    tile.canvas,
-                    tile.position.x, tile.position.y,
-                    1920, 1080
-                );
-            }
-        });
-
         if (this.onMergedFrame) {
             createImageBitmap(this.mergedCanvas).then((bitmap) => {
-                if (this.onMergedFrame) {
-                    this.onMergedFrame(this.latestRosTimeSec, this.latestRosTimeNsec, bitmap)
-                } else {
-                    bitmap.close()
-                }
-            }).catch((err) => {
-                console.warn('SmartVideoManager: Failed to create merged ImageBitmap:', err)
-            })
+                if (this.onMergedFrame) this.onMergedFrame(group.stampMs, bitmap);
+                else bitmap.close();
+            }).catch((err) => console.warn('SmartVideoManager: Failed to create merged ImageBitmap:', err));
         } else if (this.currentTexture) {
             this.currentTexture.needsUpdate = true;
         }
@@ -338,10 +269,9 @@ class SmartVideoManager {
 
         this.tileCanvases = {};
         this.currentTexture = null;
-        this.frameReadyMap.clear();
+        if (this.assembler) this.assembler.reset();
+        this.assembler = null;
         this.onMergedFrame = null;
-        this.latestRosTimeSec = 0;
-        this.latestRosTimeNsec = 0;
     }
 }
 

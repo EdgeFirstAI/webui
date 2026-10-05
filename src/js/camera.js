@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 import * as THREE from './three.js'
 import ProjectedMaterial from './ProjectedMaterial.js'
-import h264Stream from './stream.js'
-import SmartVideoManager from './SmartVideoManager.js'
 import modelstream from './model.js'
 import ModelInfo from './modelInfo.js'
 import { mask_colors } from './utils.js'
 import { CdrReader } from './Cdr.js'
 import { parsePointCloud2, readField } from './pointcloud2.js'
-import TemporalSync from './TemporalSync.js'
+import createSyncedVideo from './SyncedVideo.js'
+import StampBuffer, { selectDerived, selectSensor, sensorToleranceMs } from './StampBuffer.js'
+import { readHeaderStampMs, stampToMs } from './stamp.js'
 
 const PI = Math.PI
 const UNAVAILABLE_TIMEOUT_MS = 15000
@@ -31,7 +31,6 @@ let socketUrlCameraInfo = '/api/rt/camera/info/'
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
-let texture_camera = null
 
 // Overlay enabled state
 let segEnabled = false
@@ -99,38 +98,6 @@ const lidarDrawBgCheckbox = document.getElementById('lidar-draw-background')
 const lidarDrawBgLabel = document.getElementById('lidar-draw-bg-label')
 
 // ---------------------------------------------------------------------------
-// Temporal Sync
-// ---------------------------------------------------------------------------
-let syncCanvasCtx = null
-let lastStatsUpdate = 0
-const sync = new TemporalSync({
-    onRelease: (bitmap) => {
-        if (!texture_camera) {
-            bitmap.close()
-            return
-        }
-        const canvas = texture_camera.image
-        if (!syncCanvasCtx) {
-            syncCanvasCtx = canvas.getContext('2d')
-        }
-        if (canvas.width !== bitmap.width || canvas.height !== bitmap.height) {
-            canvas.width = bitmap.width
-            canvas.height = bitmap.height
-        }
-        syncCanvasCtx.drawImage(bitmap, 0, 0)
-        bitmap.close()
-        texture_camera.needsUpdate = true
-    },
-    onStats: (stats) => {
-        const now = performance.now()
-        if (now - lastStatsUpdate < 1000) return
-        lastStatsUpdate = now
-        syncStatsEl.style.display = 'block'
-        syncStatsEl.textContent = `Latency: ${stats.latencyMs.toFixed(0)}ms\nModel:  ${stats.throughputFps.toFixed(1)} fps\nBuffer: ${stats.bufferDepth}/${stats.bufferCapacity}`
-    },
-})
-
-// ---------------------------------------------------------------------------
 // THREE.js Scene
 // ---------------------------------------------------------------------------
 const width = 1920
@@ -160,58 +127,45 @@ lidarCanvas.height = height
 // ---------------------------------------------------------------------------
 // Video Stream
 // ---------------------------------------------------------------------------
-function initVideoStream() {
-    const quad = new THREE.PlaneGeometry(width / height * 500, 500)
+const modelBuffer = new StampBuffer({ capacity: 32 })
+const lidarBuffer = new StampBuffer({ capacity: 32 })
+const lidarEnrichedBuffer = new StampBuffer({ capacity: 32 })
+let lastStatsUpdate = 0
 
-    const videoManager = new SmartVideoManager()
-    let material = null
-
-    // Register upgrade handler before init() so it's available when tile
-    // probes resolve — even if that happens before the fallback .then() fires.
-    videoManager.onUpgrade = (tileTexture) => {
-        sync.reset()
-        syncCanvasCtx = null
-        const oldTexture = texture_camera
-        texture_camera = tileTexture
-        if (material) {
-            material.uniforms.tex.value = tileTexture
-            material.needsUpdate = true
+let videoMaterial = null
+const video = createSyncedVideo({
+    onFrame: () => resetTimeout(),
+    onTexture: (tex) => {
+        if (videoMaterial) {
+            videoMaterial.uniforms.tex.value = tex
+            videoMaterial.needsUpdate = true
+            return
         }
-        if (oldTexture) oldTexture.dispose()
-    }
-
-    videoManager.onMergedFrame = (rosTimeSec, rosTimeNsec, bitmap) => {
-        sync.pushFrame(rosTimeSec, rosTimeNsec, bitmap)
-    }
-
-    const h264StreamCapture = (url, w, h, fps, cb) => h264Stream(url, w, h, fps, cb, true)
-
-    videoManager.init((timing) => {
-        resetTimeout()
-        if (timing.bitmap && videoManager.mode !== 'tiles') {
-            sync.pushFrame(timing.rosTimeSec, timing.rosTimeNsec, timing.bitmap)
-        } else if (timing.bitmap) {
-            timing.bitmap.close()
-        }
-        if (timing.mode && !videoManager.loggedMode) {
-            console.log(`Video Mode: ${timing.mode === 'tiles' ? '4K Tiles' : 'H.264 Fallback'}`)
-            videoManager.loggedMode = true
-        }
-    }, h264Stream, h264StreamCapture).then((tex) => {
-        texture_camera = tex
-        material = new ProjectedMaterial({
-            camera: camera,
-            texture: texture_camera,
-            color: '#000',
-            transparent: true,
-        })
-        const mesh = new THREE.Mesh(quad, material)
-        mesh.needsUpdate = true
+        const quad = new THREE.PlaneGeometry(width / height * 500, 500)
+        videoMaterial = new ProjectedMaterial({ camera, texture: tex, color: '#000', transparent: true })
+        const mesh = new THREE.Mesh(quad, videoMaterial)
         mesh.position.z = 50
         mesh.rotation.x = PI
         mesh.renderOrder = 0
         scene.add(mesh)
-    })
+    },
+})
+
+function renderSyncStats(stats) {
+    const now = performance.now()
+    if (now - lastStatsUpdate < 1000) return
+    lastStatsUpdate = now
+    const names = Object.keys(stats.streams)
+    if (names.length === 0) {
+        syncStatsEl.style.display = 'none'
+        return
+    }
+    const lines = [`Delay:  ${stats.delayMs.toFixed(0)}ms`]
+    for (const name of names) {
+        lines.push(`${name.padEnd(6)} lag ${stats.streams[name].lagMs.toFixed(0)}ms`)
+    }
+    syncStatsEl.style.display = 'block'
+    syncStatsEl.textContent = lines.join('\n')
 }
 
 // ---------------------------------------------------------------------------
@@ -503,8 +457,9 @@ function stopSegmentation() {
 function ensureModelSocket() {
     if (modelSocket) return
     modelSocket = modelstream(socketUrlModel, (msg) => {
-        modelData = msg
-        sync.onModelOutput(msg.header.time)
+        const stampMs = stampToMs(msg.header.time.sec, msg.header.time.nanosec)
+        video.clock.observe('model', stampMs, performance.now())
+        modelBuffer.push(stampMs, msg)
     })
 }
 
@@ -515,8 +470,8 @@ function maybeCloseModelSocket() {
         modelSocket = null
     }
     modelData = null
-    sync.reset()
-    syncStatsEl.style.display = 'none'
+    modelBuffer.clear()
+    video.clock.remove('model')
 }
 
 // ---------------------------------------------------------------------------
@@ -534,12 +489,11 @@ function stopBoxes() {
 }
 
 function renderBoxes() {
+    boxCtx.clearRect(0, 0, width, height)
     if (!modelData) return
 
     const { boxes } = modelData
     if (!boxes || boxes.length === 0) return
-
-    boxCtx.clearRect(0, 0, width, height)
 
     for (const box of boxes) {
         const x = (box.center_x - box.width / 2) * width
@@ -721,6 +675,11 @@ const ENRICHED_COLOR_MODES = [
     { value: 'instance_id',  label: 'Instance ID',   field: 'instance_id' },
 ]
 
+/** True when the LiDAR colour mode is drawn from enriched points. */
+function colorModeNeedsEnriched() {
+    return ENRICHED_COLOR_MODES.some((mode) => mode.value === lidarColorMode)
+}
+
 /**
  * Update the LiDAR colour-mode dropdown to show only modes whose fields
  * exist in the current PointCloud2 data. fixed/distance are always present.
@@ -788,6 +747,7 @@ function colorToCSS(c) {
  */
 
 function renderLidarOverlay() {
+    lidarCtx.clearRect(0, 0, width, height)
     if (!lidarPoints || !lidarToCameraMatrix || !cameraIntrinsics) {
         return
     }
@@ -796,8 +756,7 @@ function renderLidarOverlay() {
     const m = lidarToCameraMatrix
 
     // Use enriched data when available and mode needs it, otherwise raw points
-    const needsEnriched = ['cluster', 'vision_class', 'track_id', 'instance_id'].includes(lidarColorMode)
-    const useEnriched = needsEnriched && lidarEnrichedPoints
+    const useEnriched = colorModeNeedsEnriched() && lidarEnrichedPoints
     const rawData = useEnriched ? lidarEnrichedPoints : lidarPoints
 
     let parsed
@@ -822,8 +781,6 @@ function renderLidarOverlay() {
     const hasVisionClass = fieldMap.vision_class
     const hasTrackId = fieldMap.track_id
     const hasInstanceId = fieldMap.instance_id
-
-    lidarCtx.clearRect(0, 0, width, height)
 
     // Determine max distance for distance coloring
     const maxDist = 30.0 // metres
@@ -966,7 +923,10 @@ function startLidar() {
         reconnectingSocket(
             socketUrlLidar,
             (event) => {
-                lidarPoints = event.data
+                const stampMs = readHeaderStampMs(event.data)
+                video.clock.observe('lidar', stampMs, performance.now())
+                lidarBuffer.push(stampMs, event.data)
+                video.clock.setTolerance('lidar', sensorToleranceMs(lidarBuffer))
                 if (!rawFieldsDetected) {
                     try {
                         const p = parsePointCloud2(event.data)
@@ -1027,15 +987,19 @@ function connectEnrichedSocket() {
         lidarEnrichedSocket = null
     }
     lidarEnrichedPoints = null
+    lidarEnrichedBuffer.clear()
+    video.clock.remove('lidarEnriched')
 
-    const needsEnriched = ['cluster', 'vision_class', 'track_id', 'instance_id'].includes(lidarColorMode)
-    if (needsEnriched) {
+    if (colorModeNeedsEnriched()) {
         let fieldsDetected = false
         const enrichedUrl = lidarColorMode === 'cluster' ? socketUrlLidarCluster : socketUrlFusion
         reconnectingSocket(
             enrichedUrl,
             (event) => {
-                lidarEnrichedPoints = event.data
+                const stampMs = readHeaderStampMs(event.data)
+                video.clock.observe('lidarEnriched', stampMs, performance.now())
+                lidarEnrichedBuffer.push(stampMs, event.data)
+                video.clock.setTolerance('lidarEnriched', sensorToleranceMs(lidarEnrichedBuffer))
                 if (!fieldsDetected) {
                     try {
                         const p = parsePointCloud2(event.data)
@@ -1075,6 +1039,10 @@ function stopLidar() {
     }
     lidarPoints = null
     lidarEnrichedPoints = null
+    lidarBuffer.clear()
+    video.clock.remove('lidar')
+    lidarEnrichedBuffer.clear()
+    video.clock.remove('lidarEnriched')
     resetEnrichedColorModes()
     lidarTransform = null
     cameraTransform = null
@@ -1265,22 +1233,26 @@ function updateLidarBgVisibility() {
 // Animation Loop
 // ---------------------------------------------------------------------------
 renderer.setAnimationLoop(() => {
-    sync.release()
+    const displayed = video.tick()
+
+    const model = (boxEnabled || segEnabled) ? selectDerived(modelBuffer, displayed) : null
+    modelData = model ? model.value : null
+    const lidar = lidarEnabled ? selectSensor(lidarBuffer, displayed) : null
+    lidarPoints = lidar ? lidar.value : null
+    const enriched = lidarEnabled ? selectSensor(lidarEnrichedBuffer, displayed) : null
+    lidarEnrichedPoints = enriched ? enriched.value : null
+    const lidarDrawn = lidar && colorModeNeedsEnriched() && enriched ? enriched : lidar
 
     // Update segmentation uniforms before render (shader runs on GPU)
-    if (segEnabled) {
-        renderSegmentation()
-    }
+    if (segEnabled) renderSegmentation()
 
     renderer.render(scene, camera)
 
     // Render 2D canvas overlays after GL render
-    if (boxEnabled) {
-        renderBoxes()
-    }
-    if (lidarEnabled) {
-        renderLidarOverlay()
-    }
+    if (boxEnabled) renderBoxes()
+    if (lidarEnabled) renderLidarOverlay()
+
+    renderSyncStats(video.reportSync({ model, lidar: lidarDrawn }))
 })
 
 // ---------------------------------------------------------------------------
@@ -1306,8 +1278,3 @@ ModelInfo.onChange(() => {
     updateLidarBgVisibility()
 })
 ModelInfo.connect(socketUrlModelInfo)
-
-// ---------------------------------------------------------------------------
-// Boot
-// ---------------------------------------------------------------------------
-initVideoStream()
