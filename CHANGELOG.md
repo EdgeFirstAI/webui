@@ -7,11 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.6.0] - 2026-10-05
+
 ### Changed
 
 - Camera, segmentation and combined pages draw each overlay for the frame it belongs to: model results by exact frame stamp (held across frames the model skipped), LiDAR and radar by nearest acquisition stamp. The video waits only as long as the slowest enabled overlay needs (at most 1 s), and the camera page returns to live when its overlays are off.
 - 4K tile mode builds each frame only from tiles of the same frame; when a tile is lost the frame is shown after 100 ms with that quadrant keeping its previous picture, instead of the frame being dropped. A frame that arrives while the 15 fps merge limit is in effect is held for the next slot instead of being dropped, so a newer complete frame is preferred over an older partial one, and the limit now gives 15 fps rather than about 11.
 - When the playout delay is longer than the held frames span, the video shows the oldest held frame instead of dropping it, so the effective delay shrinks rather than the video freezing.
+- Vendored libraries updated: three.js r152 → r186 (its addons, previously a mix of r152 to r170, now all r186), three-spritetext 1.8.2 → 1.10.0, Leaflet 1.7.1 → 1.9.4, @foxglove/cdr 3.3.0 → 3.5.1, Tailwind CSS Play CDN build 3.4.5 → 3.4.17, daisyUI 3.7.5 → 3.9.4, the tinyworldmap offline map to its 2024-04-27 data (adds lakes and US, Australian and Canadian state borders; 1.27 MB → 643 KB), and the Font Awesome stylesheet on the GPSD and Services settings pages 6.0.0-beta3 → 7.3.1. three.js is now served as `js/three.js` and `js/three.core.js`.
 
 ### Fixed
 
