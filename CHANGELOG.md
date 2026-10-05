@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The camera page can draw radar targets over the video ("Radar Points"), projected with the radar and camera extrinsics from `/tf_static` and drawn for the radar sample nearest the displayed frame. Points are coloured by a fixed colour from a colour picker, by range, by speed (approaching blue, receding red) or by power or RCS when the radar publishes them. The colour mode and colour are remembered across reloads.
+
+### Fixed
+
+- Turning a camera page overlay off while its connection was waiting to reconnect no longer leaves a second connection running when the overlay is turned back on.
+
 ## [4.6.0] - 2026-10-05
 
 ### Changed

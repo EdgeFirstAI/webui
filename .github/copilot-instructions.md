@@ -68,7 +68,11 @@ The WebSRV backend subscribes to Zenoh topics and bridges them to WebSocket endp
 | `mask.js` / `ProjectedMask.js` | Segmentation mask decompression (Zstandard WASM) and WebGL overlay. |
 | `lidar.js` | 3D LiDAR point cloud viewer using Three.js with orbit controls and multiple color modes. |
 | `grid.js` | Radar point cloud viewer on a polar range/bearing grid with source, colour mode, and elevation controls. |
-| `pointColors.js` | Shared colour helpers (Turbo, distance, cluster ID, diverging speed, theme-aware fixed) for the LiDAR and Radar viewers. |
+| `pointColors.js` | Shared colour helpers (Turbo, distance, cluster ID, diverging speed, theme-aware fixed) for the LiDAR and Radar viewers; re-exports the pure maps from `colorMaps.js`. |
+| `colorMaps.js` | Turbo, distance, neutral grey and diverging colour maps. Pure. |
+| `projection.js` | Rigid transforms from `/tf_static`, sensor→camera optical matrix and pinhole projection for the camera page overlays. Pure. |
+| `reconnectingSocket.js` | Binary WebSocket with exponential-backoff reconnect; `stop()` cancels a pending reconnect and closes the socket, and at most one socket is open at a time. Used by the camera page overlays. Pure (WebSocket and timers injectable). |
+| `radarOverlay.js` | Radar camera overlay: colour modes and field detection, saved settings, per-point colours and projected frame. Pure. |
 | `pointcloud2.js` | ROS PointCloud2 message parser for LiDAR and radar data. |
 
 ### Service-Enabled Gating Pattern
@@ -86,11 +90,12 @@ The canonical service list lives in `serviceCache.js` as `ALL_SERVICES`. Don't d
 
 ### Rendering Stack (Camera Page)
 
-Four composited layers, bottom to top, each drawn for the stamp of the displayed video frame (see Temporal Synchronization in ARCHITECTURE.md):
+Five composited layers, bottom to top, each drawn for the stamp of the displayed video frame (see Temporal Synchronization in ARCHITECTURE.md):
 1. **Video texture** — WebGL `ProjectedMaterial` on Three.js plane
 2. **Segmentation overlay** — WebGL shader with Zstandard-decompressed mask
 3. **Bounding boxes** — Canvas 2D overlay
 4. **LiDAR points** — Canvas 2D projected overlay
+5. **Radar points** — Canvas 2D projected overlay
 
 ### Segmentation Mask Data
 

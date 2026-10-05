@@ -134,9 +134,12 @@ Accept the self-signed certificate when prompted.
    - **Segmentation**: Toggle on, verify mask overlay appears
    - **Bounding Boxes**: Toggle on, verify boxes with labels/confidence
    - **LiDAR Points**: Toggle on, verify projected points appear
+   - **Radar Points**: Toggle on, verify projected radar targets appear on the objects they belong to
 4. Test LiDAR overlay color modes (Distance, Cluster, Vision Class, etc.)
 5. In Cluster mode, test Noise/Ground filter checkboxes
-6. Verify tile upgrade: if 4K tiles are available, video should upgrade automatically
+6. Test radar overlay colour modes: Fixed (the colour picker appears and changes the dots), Range, and Speed, Power and RCS when the radar publishes those fields
+7. Reload the page and verify the radar colour mode and fixed colour are restored and the radar toggle starts off, like the other overlays
+8. Verify tile upgrade: if 4K tiles are available, video should upgrade automatically
 
 **Expected behavior:**
 - Video renders smoothly without artifacts
@@ -145,6 +148,8 @@ Accept the self-signed certificate when prompted.
 - Labels show class names and confidence
 - LiDAR points in cluster mode: noise (id=0) renders grey, not a hue color
 - In non-cluster modes, noise/ground points are NOT filtered even if checkboxes were unchecked
+- Radar points are larger than LiDAR dots; turning the radar overlay off clears them and removes `radar` from the statistics box, and `window.overlaySync.radarDeltaMs` becomes `null`
+- With the radar overlay on, `window.overlaySync.radarDeltaMs` stays within half the radar period plus 10 ms (37.5 ms at 18 Hz)
 - If tiles are available, video upgrades to 4K and the old fallback texture is disposed
 - In 4K tile mode the video keeps moving (up to the merge limit of one frame per 60 ms, 15 fps from 30 fps tiles) even when tiles are lost; a lost tile leaves its quadrant showing the previous picture for that frame
 
@@ -293,7 +298,7 @@ Test on supported browsers:
 
 ## Unit Tests
 
-The stamp, buffer, clock, frame and tile modules are pure and covered by `node --test` unit tests in `tests/unit/`. They need Node.js 22 or later and no `npm install`:
+The stamp, buffer, clock, frame and tile modules, and the overlay modules (`projection.js`, `radarOverlay.js`, `colorMaps.js`, `reconnectingSocket.js`), are pure and covered by `node --test` unit tests in `tests/unit/`. They need Node.js 22 or later and no `npm install`:
 
 ```bash
 node --test "tests/unit/*.test.mjs"
@@ -341,6 +346,7 @@ data-testid="<page>-<element>-<name>"
 - `camera-player` - Video canvas
 - `camera-boxes` - Bounding box overlay canvas
 - `camera-lidar-overlay` - LiDAR projection overlay canvas
+- `camera-radar-overlay` - Radar projection overlay canvas
 - `camera-controls` - Overlay control panel
 - `camera-controls-header` - Control panel header
 - `camera-overlay-segmentation` - Segmentation section
@@ -357,6 +363,11 @@ data-testid="<page>-<element>-<name>"
 - `camera-lidar-cluster-filters` - Cluster filter container
 - `camera-lidar-noise` - Noise filter checkbox
 - `camera-lidar-ground` - Ground filter checkbox
+- `camera-overlay-radar` - Radar overlay section
+- `camera-toggle-radar` - Radar toggle checkbox
+- `camera-options-radar` - Radar sub-options
+- `camera-radar-color-mode` - Radar colour mode selector (Fixed, Range, and Speed, Power, RCS when present)
+- `camera-radar-color` - Radar fixed colour picker (shown in Fixed mode)
 - `camera-unavailable` - Camera unavailable overlay
 
 **LiDAR Page (`lidar.html`):**

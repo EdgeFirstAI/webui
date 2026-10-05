@@ -10,12 +10,19 @@ import { parsePointCloud2, readField } from './pointcloud2.js'
 import createSyncedVideo from './SyncedVideo.js'
 import StampBuffer, { selectDerived, selectSensor, sensorToleranceMs } from './StampBuffer.js'
 import { readHeaderStampMs, stampToMs } from './stamp.js'
+import { sameTransform, sensorToCameraMatrix } from './projection.js'
+import createReconnectingSocket from './reconnectingSocket.js'
+import {
+    availableRadarColorModes, buildRadarFrame, normalizeRadarSettings, parseHexColor, readRadarColumns,
+} from './radarOverlay.js'
 
 const PI = Math.PI
 const UNAVAILABLE_TIMEOUT_MS = 15000
 const LIDAR_DOT_RADIUS = 3
-const RECONNECT_MIN_MS = 1000
-const RECONNECT_MAX_MS = 8000
+// Radar returns tens of targets, so they are drawn well above LiDAR dot size.
+const RADAR_DOT_RADIUS = 6
+const RADAR_SETTINGS_KEY = 'camera.radarOverlay'
+const RADAR_CALIBRATION_WARN_MS = 5000
 
 // ---------------------------------------------------------------------------
 // Default topic URLs
@@ -27,6 +34,7 @@ let socketUrlModel = '/api/rt/model/output/'
 let socketUrlModelInfo = '/api/rt/model/info/'
 let socketUrlTfStatic = '/api/rt/tf_static/'
 let socketUrlCameraInfo = '/api/rt/camera/info/'
+let socketUrlRadar = '/api/rt/radar/targets/'
 
 // ---------------------------------------------------------------------------
 // State
@@ -42,13 +50,15 @@ let showConfidence = true
 let lidarShowNoise = true
 let lidarShowGround = true
 let drawBackground = false
+const radarSettings = normalizeRadarSettings(loadRadarSettings())
+let radarEnabled = false
 
 // Overlay scene objects (for cleanup)
 let segMesh = null
 let modelData = null
 let modelSocket = null
-let tfStaticSocket = null
-let cameraInfoSocket = null
+let tfStaticSocket = null    // reconnecting socket handle
+let cameraInfoSocket = null  // reconnecting socket handle
 let lidarTransform = null
 let cameraTransform = null
 let lidarPoints = null
@@ -59,6 +69,18 @@ let cameraIntrinsics = null // { fx, fy, cx, cy }
 // Computed LiDAR→camera 4x4 matrix (Float64Array[16], column-major)
 let lidarToCameraMatrix = null
 
+// Radar overlay: base_link → radar transform, radar→camera matrix, the
+// sample drawn this frame, and the projected points cached per sample.
+let radarTransform = null
+let radarToCameraMatrix = null
+let radarPoints = null
+let radarSocket = null  // reconnecting socket handle
+let radarWarnTimer = null
+let cachedRadarRawRef = null
+let cachedRadarColumns = null
+let cachedRadarFrame = null
+let cachedRadarFrameKey = null
+
 // PointCloud2 parse cache — avoid re-parsing the same buffer every frame
 let cachedLidarRawRef = null
 let cachedLidarParsed = null
@@ -66,11 +88,12 @@ let cachedLidarParsed = null
 // ---------------------------------------------------------------------------
 // DOM references
 // ---------------------------------------------------------------------------
-const viewport = document.getElementById('camera-viewport')
 const playerCanvas = document.getElementById('player')
 const boxCanvas = document.getElementById('boxes')
 const lidarCanvas = document.getElementById('lidar-overlay')
 const lidarCtx = lidarCanvas.getContext('2d')
+const radarCanvas = document.getElementById('radar-overlay')
+const radarCtx = radarCanvas.getContext('2d')
 const cameraUnavailable = document.getElementById('camera-unavailable')
 const syncStatsEl = document.getElementById('sync-stats')
 
@@ -97,6 +120,13 @@ const lidarGroundCheckbox = document.getElementById('lidar-show-ground')
 const lidarDrawBgCheckbox = document.getElementById('lidar-draw-background')
 const lidarDrawBgLabel = document.getElementById('lidar-draw-bg-label')
 
+const overlayRadarToggle = document.getElementById('overlay-radar')
+const overlayRadarSection = overlayRadarToggle.closest('.camera-controls__section')
+const radarOptions = document.getElementById('radar-options')
+const radarColorSelect = document.getElementById('radar-color-mode')
+const radarColorInput = document.getElementById('radar-color')
+const radarColorLabel = document.getElementById('radar-color-label')
+
 // ---------------------------------------------------------------------------
 // THREE.js Scene
 // ---------------------------------------------------------------------------
@@ -119,6 +149,8 @@ boxCanvas.width = width
 boxCanvas.height = height
 lidarCanvas.width = width
 lidarCanvas.height = height
+radarCanvas.width = width
+radarCanvas.height = height
 
 // ---------------------------------------------------------------------------
 // Config Loading
@@ -130,6 +162,9 @@ lidarCanvas.height = height
 const modelBuffer = new StampBuffer({ capacity: 32 })
 const lidarBuffer = new StampBuffer({ capacity: 32 })
 const lidarEnrichedBuffer = new StampBuffer({ capacity: 32 })
+// Radar runs near 18 Hz, so 64 entries (about 3.5 s) cover the same display
+// lag as 32 entries of the slower streams.
+const radarBuffer = new StampBuffer({ capacity: 64 })
 let lastStatsUpdate = 0
 
 let videoMaterial = null
@@ -567,101 +602,32 @@ function trackIdToHash(id) {
 const MASK_MAX_ALPHA = 0.75
 
 // ---------------------------------------------------------------------------
-// LiDAR Overlay — Transform Math
+// Sensor Overlays — Transforms
 // ---------------------------------------------------------------------------
 
 /**
- * Build a 4x4 column-major matrix from translation + quaternion.
+ * Store a /tf_static transform and recompute only the sensor→camera optical
+ * matrices that depend on it. /tf_static repeats every transform about once
+ * a second; a repeat with the same values keeps the existing matrix, so
+ * caches keyed on the matrix stay valid until the calibration changes.
+ * @param {'lidar'|'radar'|'camera'} which
+ * @param {object|null} transform
  */
-function tfToMatrix(t, q) {
-    const { x: tx, y: ty, z: tz } = t
-    let { x: qx, y: qy, z: qz, w: qw } = q
-
-    // Normalize quaternion (some publishers send non-unit quaternions)
-    const len = Math.sqrt(qx * qx + qy * qy + qz * qz + qw * qw)
-    if (len > 1e-9) { qx /= len; qy /= len; qz /= len; qw /= len }
-
-    // Rotation matrix from quaternion
-    const xx = qx * qx, yy = qy * qy, zz = qz * qz
-    const xy = qx * qy, xz = qx * qz, yz = qy * qz
-    const wx = qw * qx, wy = qw * qy, wz = qw * qz
-
-    // Column-major 4x4
-    return new Float64Array([
-        1 - 2 * (yy + zz), 2 * (xy + wz), 2 * (xz - wy), 0,
-        2 * (xy - wz), 1 - 2 * (xx + zz), 2 * (yz + wx), 0,
-        2 * (xz + wy), 2 * (yz - wx), 1 - 2 * (xx + yy), 0,
-        tx, ty, tz, 1,
-    ])
-}
-
-/**
- * Invert a 4x4 column-major rigid-body transform (rotation + translation).
- * For rigid transforms: R^-1 = R^T, t^-1 = -R^T * t
- */
-function invertRigidTransform(m) {
-    // Extract rotation (transposed) and translation
-    const r00 = m[0], r01 = m[4], r02 = m[8]
-    const r10 = m[1], r11 = m[5], r12 = m[9]
-    const r20 = m[2], r21 = m[6], r22 = m[10]
-    const tx = m[12], ty = m[13], tz = m[14]
-
-    return new Float64Array([
-        r00, r01, r02, 0,
-        r10, r11, r12, 0,
-        r20, r21, r22, 0,
-        -(r00 * tx + r10 * ty + r20 * tz),
-        -(r01 * tx + r11 * ty + r21 * tz),
-        -(r02 * tx + r12 * ty + r22 * tz),
-        1,
-    ])
-}
-
-/**
- * Multiply two 4x4 column-major matrices: result = A * B
- */
-function multiplyMatrices(a, b) {
-    const out = new Float64Array(16)
-    for (let col = 0; col < 4; col++) {
-        for (let row = 0; row < 4; row++) {
-            out[col * 4 + row] =
-                a[0 * 4 + row] * b[col * 4 + 0] +
-                a[1 * 4 + row] * b[col * 4 + 1] +
-                a[2 * 4 + row] * b[col * 4 + 2] +
-                a[3 * 4 + row] * b[col * 4 + 3]
-        }
+function setTransform(which, transform) {
+    if (which === 'lidar') {
+        if (sameTransform(lidarTransform, transform)) return
+        lidarTransform = transform
+        lidarToCameraMatrix = sensorToCameraMatrix(lidarTransform, cameraTransform)
+    } else if (which === 'radar') {
+        if (sameTransform(radarTransform, transform)) return
+        radarTransform = transform
+        radarToCameraMatrix = sensorToCameraMatrix(radarTransform, cameraTransform)
+    } else {
+        if (sameTransform(cameraTransform, transform)) return
+        cameraTransform = transform
+        lidarToCameraMatrix = sensorToCameraMatrix(lidarTransform, cameraTransform)
+        radarToCameraMatrix = sensorToCameraMatrix(radarTransform, cameraTransform)
     }
-    return out
-}
-
-/**
- * Recompute the LiDAR→camera optical transform from the two tf_static
- * transforms we've received:
- *   base_link → lidar  (lidarTransform)
- *   base_link → camera_optical  (cameraTransform)
- *
- * lidar_to_camera = inv(base_link→camera_optical) * (base_link→lidar)
- *                 = camera_optical_from_base * base_from_lidar... no:
- *
- * tf_static gives parent→child. So:
- *   T_base_lidar = base_link → lidar  (point in lidar frame → base frame)
- *   T_base_cam   = base_link → camera_optical
- *
- * To go from lidar frame to camera frame:
- *   p_cam = inv(T_base_cam) * T_base_lidar * p_lidar
- */
-function computeLidarToCameraMatrix() {
-    if (!lidarTransform || !cameraTransform) {
-        lidarToCameraMatrix = null
-        return
-    }
-
-    const T_base_lidar = tfToMatrix(lidarTransform.translation, lidarTransform.rotation)
-    const T_base_cam = tfToMatrix(cameraTransform.translation, cameraTransform.rotation)
-    const T_cam_base = invertRigidTransform(T_base_cam)
-
-    lidarToCameraMatrix = multiplyMatrices(T_cam_base, T_base_lidar)
-
 }
 
 // ---------------------------------------------------------------------------
@@ -859,68 +825,71 @@ function renderLidarOverlay() {
 // ---------------------------------------------------------------------------
 // LiDAR Overlay — WebSocket Management
 // ---------------------------------------------------------------------------
-let lidarPointsSocket = null   // always subscribed to /lidar/points
-let lidarEnrichedSocket = null  // subscribed to /lidar/clusters when needed
+let lidarPointsSocket = null   // handle for /lidar/points while LiDAR is on
+let lidarEnrichedSocket = null  // handle for /lidar/clusters or /fusion/lidar when needed
 let lidarEnrichedPoints = null  // latest cluster data (or null)
 
 /**
- * Create a WebSocket with automatic reconnection on close.
- * Returns the socket. The caller's variable is updated via the setter callback.
- * @param {string} url - WebSocket URL
- * @param {function} onmessage - message handler
- * @param {function} setter - called with new socket on reconnect (e.g., s => myVar = s)
- * @param {function} shouldReconnect - returns false to stop reconnection
- * @param {string} label - log label
+ * Open a reconnecting binary socket (see reconnectingSocket.js).
+ * @returns {{socket: WebSocket|null, stopped: boolean, stop: () => void}}
  */
-function reconnectingSocket(url, onmessage, setter, shouldReconnect, label) {
-    let delay = RECONNECT_MIN_MS
-    function connect() {
-        if (!shouldReconnect()) return
-        const ws = new WebSocket(url)
-        ws.binaryType = 'arraybuffer'
-        ws.onmessage = onmessage
-        ws.onerror = (e) => console.warn(`${label} WebSocket error:`, e)
-        ws.onopen = () => {
-            delay = RECONNECT_MIN_MS
-        }
-        ws.onclose = () => {
-            if (!shouldReconnect()) return
-            console.log(`${label} WebSocket closed — reconnecting in ${delay / 1000}s`)
-            setTimeout(connect, delay)
-            delay = Math.min(delay * 2, RECONNECT_MAX_MS)
-        }
-        setter(ws)
-    }
-    connect()
+function reconnectingSocket(url, onmessage, shouldReconnect, label) {
+    return createReconnectingSocket({ url, onmessage, shouldReconnect, label })
 }
 
-function startLidar() {
-    // Subscribe to tf_static for camera-LiDAR transform
-    if (!tfStaticSocket) {
-        reconnectingSocket(
+/** Stop a reconnecting socket handle, cancelling any pending reconnect. Returns null. */
+function stopSocket(handle) {
+    if (handle) handle.stop()
+    return null
+}
+
+/** True for a handle that is connected or will reconnect. */
+function socketLive(handle) {
+    return Boolean(handle) && !handle.stopped
+}
+
+/** True while an overlay that projects sensor points is on. */
+function projectionNeeded() {
+    return lidarEnabled || radarEnabled
+}
+
+/** Subscribe to the extrinsics (/tf_static) and intrinsics (/camera/info). */
+function ensureCalibrationSockets() {
+    if (!socketLive(tfStaticSocket)) {
+        tfStaticSocket = reconnectingSocket(
             socketUrlTfStatic,
             (event) => parseTfStatic(event.data),
-            (ws) => { tfStaticSocket = ws },
-            () => lidarEnabled && !cameraTransform,
+            projectionNeeded,
             'tf_static'
         )
     }
 
-    // Subscribe to camera_info for intrinsics
-    if (!cameraInfoSocket) {
-        reconnectingSocket(
+    if (!socketLive(cameraInfoSocket) && !cameraIntrinsics) {
+        cameraInfoSocket = reconnectingSocket(
             socketUrlCameraInfo,
             (event) => parseCameraInfo(event.data),
-            (ws) => { cameraInfoSocket = ws },
-            () => lidarEnabled && !cameraIntrinsics,
+            () => projectionNeeded() && !cameraIntrinsics,
             'camera_info'
         )
     }
+}
+
+/** Close the calibration sockets and forget the camera calibration once no overlay projects. */
+function maybeCloseCalibrationSockets() {
+    if (projectionNeeded()) return
+    tfStaticSocket = stopSocket(tfStaticSocket)
+    cameraInfoSocket = stopSocket(cameraInfoSocket)
+    setTransform('camera', null)
+    cameraIntrinsics = null
+}
+
+function startLidar() {
+    ensureCalibrationSockets()
 
     // Always subscribe to the raw points topic
-    if (!lidarPointsSocket) {
+    if (!socketLive(lidarPointsSocket)) {
         let rawFieldsDetected = false
-        reconnectingSocket(
+        lidarPointsSocket = reconnectingSocket(
             socketUrlLidar,
             (event) => {
                 const stampMs = readHeaderStampMs(event.data)
@@ -932,10 +901,9 @@ function startLidar() {
                         const p = parsePointCloud2(event.data)
                         updateAvailableLidarColorModes(p.fieldMap)
                         rawFieldsDetected = true
-                    } catch (_) { /* ignore parse errors for detection */ }
+                    } catch { /* ignore parse errors for detection */ }
                 }
             },
-            (ws) => { lidarPointsSocket = ws },
             () => lidarEnabled,
             'LiDAR points'
         )
@@ -962,7 +930,7 @@ function probeTopicFields(url) {
         try {
             const p = parsePointCloud2(event.data)
             updateAvailableLidarColorModes(p.fieldMap)
-        } catch (_) { /* topic may not be available */ }
+        } catch { /* topic may not be available */ }
         ws.close()
     }
     ws.onerror = () => {
@@ -981,11 +949,7 @@ function resetEnrichedColorModes() {
 }
 
 function connectEnrichedSocket() {
-    if (lidarEnrichedSocket) {
-        lidarEnrichedSocket.onclose = null
-        lidarEnrichedSocket.close()
-        lidarEnrichedSocket = null
-    }
+    lidarEnrichedSocket = stopSocket(lidarEnrichedSocket)
     lidarEnrichedPoints = null
     lidarEnrichedBuffer.clear()
     video.clock.remove('lidarEnriched')
@@ -993,7 +957,7 @@ function connectEnrichedSocket() {
     if (colorModeNeedsEnriched()) {
         let fieldsDetected = false
         const enrichedUrl = lidarColorMode === 'cluster' ? socketUrlLidarCluster : socketUrlFusion
-        reconnectingSocket(
+        lidarEnrichedSocket = reconnectingSocket(
             enrichedUrl,
             (event) => {
                 const stampMs = readHeaderStampMs(event.data)
@@ -1005,10 +969,9 @@ function connectEnrichedSocket() {
                         const p = parsePointCloud2(event.data)
                         updateAvailableLidarColorModes(p.fieldMap)
                         fieldsDetected = true
-                    } catch (_) { /* ignore parse errors for detection */ }
+                    } catch { /* ignore parse errors for detection */ }
                 }
             },
-            (ws) => { lidarEnrichedSocket = ws },
             () => lidarEnabled,
             'LiDAR enriched'
         )
@@ -1017,26 +980,8 @@ function connectEnrichedSocket() {
 
 function stopLidar() {
     // Setting lidarEnabled = false first stops reconnection via shouldReconnect checks
-    if (lidarPointsSocket) {
-        lidarPointsSocket.onclose = null
-        lidarPointsSocket.close()
-        lidarPointsSocket = null
-    }
-    if (lidarEnrichedSocket) {
-        lidarEnrichedSocket.onclose = null
-        lidarEnrichedSocket.close()
-        lidarEnrichedSocket = null
-    }
-    if (tfStaticSocket) {
-        tfStaticSocket.onclose = null
-        tfStaticSocket.close()
-        tfStaticSocket = null
-    }
-    if (cameraInfoSocket) {
-        cameraInfoSocket.onclose = null
-        cameraInfoSocket.close()
-        cameraInfoSocket = null
-    }
+    lidarPointsSocket = stopSocket(lidarPointsSocket)
+    lidarEnrichedSocket = stopSocket(lidarEnrichedSocket)
     lidarPoints = null
     lidarEnrichedPoints = null
     lidarBuffer.clear()
@@ -1044,14 +989,158 @@ function stopLidar() {
     lidarEnrichedBuffer.clear()
     video.clock.remove('lidarEnriched')
     resetEnrichedColorModes()
-    lidarTransform = null
-    cameraTransform = null
-    lidarToCameraMatrix = null
-    cameraIntrinsics = null
+    setTransform('lidar', null)
+    maybeCloseCalibrationSockets()
     cachedLidarRawRef = null
     cachedLidarParsed = null
     // Clear overlay canvas
     lidarCtx.clearRect(0, 0, width, height)
+}
+
+// ---------------------------------------------------------------------------
+// Radar Overlay
+// ---------------------------------------------------------------------------
+
+function loadRadarSettings() {
+    try {
+        return localStorage.getItem(RADAR_SETTINGS_KEY)
+    } catch {
+        return null
+    }
+}
+
+function saveRadarSettings() {
+    try {
+        localStorage.setItem(RADAR_SETTINGS_KEY, JSON.stringify(radarSettings))
+    } catch { /* storage unavailable: settings last for this page only */ }
+}
+
+/** Select the saved colour mode once it is offered, else Range. */
+function syncRadarColorSelect() {
+    const mode = radarSettings.colorMode
+    radarColorSelect.value = radarColorSelect.querySelector(`option[value="${mode}"]`) ? mode : 'range'
+    radarColorLabel.style.display = mode === 'fixed' ? '' : 'none'
+}
+
+/** Offer the colour modes whose fields the radar PointCloud2 carries. */
+function updateAvailableRadarColorModes(fieldMap) {
+    for (const mode of availableRadarColorModes(fieldMap)) {
+        if (radarColorSelect.querySelector(`option[value="${mode.value}"]`)) continue
+        const option = document.createElement('option')
+        option.value = mode.value
+        option.textContent = mode.label
+        radarColorSelect.appendChild(option)
+    }
+    syncRadarColorSelect()
+}
+
+function resetRadarColorModes() {
+    for (const option of [...radarColorSelect.options]) {
+        if (option.value !== 'fixed' && option.value !== 'range') option.remove()
+    }
+    syncRadarColorSelect()
+}
+
+function warnIfRadarUncalibrated() {
+    radarWarnTimer = null
+    if (!radarEnabled) return
+    const missing = []
+    if (!radarTransform) missing.push('base_link → radar transform on /tf_static')
+    if (!cameraTransform) missing.push('base_link → camera optical transform on /tf_static')
+    if (!cameraIntrinsics) missing.push('calibrated /camera/info')
+    if (missing.length > 0) {
+        console.warn(`Radar overlay: no ${missing.join(', ')}; radar points are not drawn`)
+    }
+}
+
+function startRadar() {
+    ensureCalibrationSockets()
+    if (!socketLive(radarSocket)) {
+        let fieldsDetected = false
+        radarSocket = reconnectingSocket(
+            socketUrlRadar,
+            (event) => {
+                if (!radarEnabled) return
+                const stampMs = readHeaderStampMs(event.data)
+                video.clock.observe('radar', stampMs, performance.now())
+                radarBuffer.push(stampMs, event.data)
+                video.clock.setTolerance('radar', sensorToleranceMs(radarBuffer))
+                if (!fieldsDetected) {
+                    try {
+                        updateAvailableRadarColorModes(parsePointCloud2(event.data).fieldMap)
+                        fieldsDetected = true
+                    } catch { /* ignore parse errors for detection */ }
+                }
+            },
+            () => radarEnabled,
+            'Radar targets'
+        )
+    }
+    clearTimeout(radarWarnTimer)
+    radarWarnTimer = setTimeout(warnIfRadarUncalibrated, RADAR_CALIBRATION_WARN_MS)
+}
+
+function stopRadar() {
+    clearTimeout(radarWarnTimer)
+    radarWarnTimer = null
+    radarSocket = stopSocket(radarSocket)
+    radarPoints = null
+    radarBuffer.clear()
+    video.clock.remove('radar')
+    resetRadarColorModes()
+    setTransform('radar', null)
+    maybeCloseCalibrationSockets()
+    cachedRadarRawRef = null
+    cachedRadarColumns = null
+    cachedRadarFrame = null
+    cachedRadarFrameKey = null
+    radarCtx.clearRect(0, 0, width, height)
+}
+
+/**
+ * Draw the radar sample selected for the displayed frame. Columns are
+ * parsed once per sample and the projected points rebuilt only when the
+ * sample, calibration or colour settings change.
+ */
+function renderRadarOverlay() {
+    radarCtx.clearRect(0, 0, width, height)
+    if (!radarPoints || !radarToCameraMatrix || !cameraIntrinsics) return
+
+    if (radarPoints !== cachedRadarRawRef) {
+        cachedRadarRawRef = radarPoints
+        cachedRadarFrame = null
+        try {
+            cachedRadarColumns = readRadarColumns(parsePointCloud2(radarPoints))
+        } catch (e) {
+            cachedRadarColumns = null
+            console.warn('Radar parse error:', e)
+        }
+    }
+    if (!cachedRadarColumns) return
+
+    const key = [radarToCameraMatrix, cameraIntrinsics, radarSettings.colorMode, radarSettings.color]
+    if (!cachedRadarFrame || !cachedRadarFrameKey.every((v, i) => v === key[i])) {
+        cachedRadarFrame = buildRadarFrame(cachedRadarColumns, {
+            matrix: radarToCameraMatrix,
+            intrinsics: cameraIntrinsics,
+            width,
+            height,
+            margin: RADAR_DOT_RADIUS,
+            mode: radarSettings.colorMode,
+            color: parseHexColor(radarSettings.color),
+        })
+        cachedRadarFrameKey = key
+    }
+
+    radarCtx.lineWidth = 1.5
+    radarCtx.strokeStyle = 'rgba(0,0,0,0.8)'
+    for (const p of cachedRadarFrame) {
+        radarCtx.beginPath()
+        radarCtx.arc(p.u, p.v, RADAR_DOT_RADIUS, 0, 2 * PI)
+        radarCtx.fillStyle = p.css
+        radarCtx.fill()
+        radarCtx.stroke()
+    }
 }
 
 /**
@@ -1092,16 +1181,19 @@ function parseTfStatic(arrayBuffer) {
 
         // Store the base_link → lidar transform
         if (childFrameId.includes('lidar')) {
-            lidarTransform = transform
-            computeLidarToCameraMatrix()
+            setTransform('lidar', transform)
+        }
+
+        // Store the base_link → radar transform
+        if (childFrameId.includes('radar') && !childFrameId.includes('optical')) {
+            setTransform('radar', transform)
         }
 
         // Store the base_link → camera optical transform
         // Prefer 'camera_optical' over 'base_link_optical' if both exist
         if (childFrameId.includes('optical')) {
             if (!cameraTransform || childFrameId.includes('camera')) {
-                cameraTransform = transform
-                computeLidarToCameraMatrix()
+                setTransform('camera', transform)
             }
         }
     } catch (e) {
@@ -1131,14 +1223,14 @@ function parseCameraInfo(arrayBuffer) {
         // Header
         reader.uint32() // stamp.sec
         reader.uint32() // stamp.nanosec
-        const ciFrameId = reader.string()
+        reader.string() // frame_id
 
         // Image dimensions
-        const imgHeight = reader.uint32()
-        const imgWidth = reader.uint32()
+        reader.uint32() // height
+        reader.uint32() // width
 
         // Distortion model
-        const distModel = reader.string()
+        reader.string() // distortion_model
 
         // D (distortion coefficients) — variable-length sequence
         const dLen = reader.sequenceLength()
@@ -1157,11 +1249,7 @@ function parseCameraInfo(arrayBuffer) {
             cameraIntrinsics = { fx, fy, cx, cy }
 
             // Once we have intrinsics, we can stop subscribing
-            if (cameraInfoSocket) {
-                cameraInfoSocket.onclose = null
-                cameraInfoSocket.close()
-                cameraInfoSocket = null
-            }
+            cameraInfoSocket = stopSocket(cameraInfoSocket)
         } else {
             console.warn('camera_info: uncalibrated (fx=0)')
         }
@@ -1208,6 +1296,24 @@ wireToggle(overlayLidarToggle, overlayLidarSection, lidarOptions, (on) => {
     else stopLidar()
 })
 
+wireToggle(overlayRadarToggle, overlayRadarSection, radarOptions, (on) => {
+    radarEnabled = on
+    if (on) startRadar()
+    else stopRadar()
+})
+
+radarColorSelect.addEventListener('change', () => {
+    radarSettings.colorMode = radarColorSelect.value
+    syncRadarColorSelect()
+    saveRadarSettings()
+})
+
+radarColorInput.addEventListener('input', () => {
+    if (!parseHexColor(radarColorInput.value)) return
+    radarSettings.color = radarColorInput.value.toLowerCase()
+    saveRadarSettings()
+})
+
 lidarColorSelect.addEventListener('change', () => {
     lidarColorMode = lidarColorSelect.value
     lidarClusterFilters.setAttribute('data-visible', lidarColorMode === 'cluster')
@@ -1229,6 +1335,9 @@ function updateLidarBgVisibility() {
         (lidarColorMode === 'vision_class' && ModelInfo.hasBackground) ? '' : 'none'
 }
 
+radarColorInput.value = radarSettings.color
+syncRadarColorSelect()
+
 // ---------------------------------------------------------------------------
 // Animation Loop
 // ---------------------------------------------------------------------------
@@ -1242,6 +1351,8 @@ renderer.setAnimationLoop(() => {
     const enriched = lidarEnabled ? selectSensor(lidarEnrichedBuffer, displayed) : null
     lidarEnrichedPoints = enriched ? enriched.value : null
     const lidarDrawn = lidar && colorModeNeedsEnriched() && enriched ? enriched : lidar
+    const radar = radarEnabled ? selectSensor(radarBuffer, displayed) : null
+    radarPoints = radar ? radar.value : null
 
     // Update segmentation uniforms before render (shader runs on GPU)
     if (segEnabled) renderSegmentation()
@@ -1251,8 +1362,9 @@ renderer.setAnimationLoop(() => {
     // Render 2D canvas overlays after GL render
     if (boxEnabled) renderBoxes()
     if (lidarEnabled) renderLidarOverlay()
+    if (radarEnabled) renderRadarOverlay()
 
-    renderSyncStats(video.reportSync({ model, lidar: lidarDrawn }))
+    renderSyncStats(video.reportSync({ model, lidar: lidarDrawn, radar }))
 })
 
 // ---------------------------------------------------------------------------
