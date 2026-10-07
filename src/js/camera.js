@@ -21,6 +21,7 @@ import {
 import {
     availableRadarColorModes, buildRadarFrame, normalizeRadarSettings, parseHexColor, readRadarColumns,
 } from './radarOverlay.js'
+import { loadMirror, mirrorCssTransform, mirrorScale, saveMirror } from './viewMirror.js'
 
 const PI = Math.PI
 const UNAVAILABLE_TIMEOUT_MS = 15000
@@ -28,6 +29,7 @@ const LIDAR_DOT_RADIUS = 3
 // Radar returns tens of targets, so they are drawn well above LiDAR dot size.
 const RADAR_DOT_RADIUS = 6
 const RADAR_SETTINGS_KEY = 'camera.radarOverlay'
+const MIRROR_KEY = 'camera.mirror'
 const RADAR_CALIBRATION_WARN_MS = 5000
 
 // ---------------------------------------------------------------------------
@@ -58,6 +60,7 @@ let lidarShowGround = true
 let drawBackground = false
 const radarSettings = normalizeRadarSettings(loadRadarSettings())
 let radarEnabled = false
+let mirrorMode = loadMirror(MIRROR_KEY)
 
 // Overlay scene objects (for cleanup)
 let segMesh = null
@@ -95,6 +98,7 @@ let cachedLidarParsed = null
 // ---------------------------------------------------------------------------
 // DOM references
 // ---------------------------------------------------------------------------
+const cameraStage = document.getElementById('camera-stage')
 const playerCanvas = document.getElementById('player')
 const boxCanvas = document.getElementById('boxes')
 const lidarCanvas = document.getElementById('lidar-overlay')
@@ -133,6 +137,7 @@ const radarOptions = document.getElementById('radar-options')
 const radarColorSelect = document.getElementById('radar-color-mode')
 const radarColorInput = document.getElementById('radar-color')
 const radarColorLabel = document.getElementById('radar-color-label')
+const mirrorSelect = document.getElementById('view-mirror')
 
 // ---------------------------------------------------------------------------
 // THREE.js Scene
@@ -573,9 +578,15 @@ function renderBoxes() {
             boxCtx.fillStyle = color
             boxCtx.fillRect(x, y - textH, textW, textH)
 
-            // Label text
+            // Label text, counter-mirrored about the label centre so it reads
+            // correctly when the stage is mirrored.
+            const { x: sx, y: sy } = mirrorScale(mirrorMode)
+            boxCtx.save()
+            boxCtx.translate(x + textW / 2, y - textH / 2)
+            boxCtx.scale(sx, sy)
             boxCtx.fillStyle = '#000'
-            boxCtx.fillText(label, x + 4, y - 4)
+            boxCtx.fillText(label, -textW / 2 + 4, textH / 2 - 4)
+            boxCtx.restore()
         }
     }
 }
@@ -1349,6 +1360,19 @@ function updateLidarBgVisibility() {
 
 radarColorInput.value = radarSettings.color
 syncRadarColorSelect()
+
+function applyMirror() {
+    cameraStage.style.transform = mirrorCssTransform(mirrorMode)
+}
+
+mirrorSelect.addEventListener('change', () => {
+    mirrorMode = mirrorSelect.value
+    applyMirror()
+    saveMirror(MIRROR_KEY, mirrorMode)
+})
+
+mirrorSelect.value = mirrorMode
+applyMirror()
 
 // ---------------------------------------------------------------------------
 // Topic Availability Gating

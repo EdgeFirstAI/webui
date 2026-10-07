@@ -56,7 +56,8 @@
             gap: 8px;
         }
 
-        #color-mode {
+        #color-mode,
+        #mirror-mode {
             padding: 6px 12px;
             border-radius: 6px;
             border: 1px solid var(--color-border);
@@ -68,7 +69,8 @@
             box-shadow: 0 2px 4px var(--color-shadow);
         }
 
-        #color-mode:focus {
+        #color-mode:focus,
+        #mirror-mode:focus {
             outline: 2px solid var(--brand-gold);
             outline-offset: 2px;
         }
@@ -175,6 +177,12 @@
                 <div id="bg-filter" style="display:none" data-testid="lidar-bg-filter">
                     <label><input type="checkbox" id="show-background" data-testid="lidar-show-background"> Draw Background</label>
                 </div>
+                <select id="mirror-mode" data-testid="lidar-mirror" aria-label="Mirror view">
+                    <option value="none" selected>Mirror: Off</option>
+                    <option value="horizontal">Mirror: Horizontal</option>
+                    <option value="vertical">Mirror: Vertical</option>
+                    <option value="both">Mirror: Both</option>
+                </select>
             </div>
             <div id="fusion-warning" data-testid="lidar-fusion-warning">Fusion data unavailable — showing distance colours</div>
             <div id="lidar-unavailable" data-testid="lidar-unavailable"><span>LiDAR Unavailable</span></div>
