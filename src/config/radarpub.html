@@ -411,7 +411,9 @@
                     CLUSTERING_PARAM_SCALE: document.getElementById('clustering_param_scale').value,
                     CLUSTERING_POINT_LIMIT: document.getElementById('clustering_point_limit').value,
                     RADAR_TF_VEC: document.getElementById('radar_tf_vec').value,
-                    RADAR_TF_QUAT: document.getElementById('radar_tf_quat').value
+                    RADAR_TF_QUAT: document.getElementById('radar_tf_quat').value,
+                    // Comments out a legacy MIRROR entry; radarpub no longer mirrors points.
+                    MIRROR: null
                 };
 
                 saveServiceConfig('radarpub', configData).then(result => {

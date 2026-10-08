@@ -62,6 +62,21 @@ test('load ignores an invalid saved value and save normalizes', () => {
     assert.equal(storage.data['camera.mirror'], 'none')
 })
 
+test('blocked localStorage access falls back without throwing', () => {
+    const original = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
+    Object.defineProperty(globalThis, 'localStorage', {
+        configurable: true,
+        get() { throw new Error('SecurityError: storage blocked') },
+    })
+    try {
+        assert.equal(loadMirror('camera.mirror'), 'none')
+        assert.doesNotThrow(() => saveMirror('camera.mirror', 'both'))
+    } finally {
+        if (original) Object.defineProperty(globalThis, 'localStorage', original)
+        else delete globalThis.localStorage
+    }
+})
+
 test('unavailable storage falls back without throwing', () => {
     assert.equal(loadMirror('camera.mirror', throwingStorage), 'none')
     assert.doesNotThrow(() => saveMirror('camera.mirror', 'both', throwingStorage))

@@ -34,18 +34,21 @@ export function mirrorCssTransform(mode) {
     return x === 1 && y === 1 ? '' : `scale(${x}, ${y})`
 }
 
+// Storage defaults to localStorage, resolved inside each try: reading
+// globalThis.localStorage itself throws when site storage is blocked.
+
 /** The mirror mode saved under `key`, or `none`. */
-export function loadMirror(key, storage = globalThis.localStorage) {
+export function loadMirror(key, storage) {
     try {
-        return normalizeMirror(storage.getItem(key))
+        return normalizeMirror((storage ?? globalThis.localStorage).getItem(key))
     } catch {
         return DEFAULT_MIRROR
     }
 }
 
 /** Save a mirror mode under `key`; unavailable storage keeps it for this page only. */
-export function saveMirror(key, mode, storage = globalThis.localStorage) {
+export function saveMirror(key, mode, storage) {
     try {
-        storage.setItem(key, normalizeMirror(mode))
+        (storage ?? globalThis.localStorage).setItem(key, normalizeMirror(mode))
     } catch { /* storage unavailable */ }
 }

@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
-- The Mirror settings on the LiDAR and radar service configuration pages; saving these pages no longer writes `MIRROR` (EDGEAI-2021).
+- The Mirror settings on the LiDAR and radar service configuration pages (EDGEAI-2021). Saving either page comments out a legacy `MIRROR` entry, so a publisher that still reads it stops mirroring.
 
 ## [4.7.0] - 2026-10-05
 

@@ -1038,7 +1038,9 @@
                     CLUSTERING_BRIDGE: document.getElementById('clustering_bridge').value,
                     MSOP_PORT: document.getElementById('msop_port').value,
                     DIFOP_PORT: document.getElementById('difop_port').value,
-                    INCLUDE_NOISY: document.getElementById('include_noisy').checked ? 'true' : 'false'
+                    INCLUDE_NOISY: document.getElementById('include_noisy').checked ? 'true' : 'false',
+                    // Comments out a legacy MIRROR entry; lidarpub no longer mirrors points.
+                    MIRROR: null
                 };
 
                 saveServiceConfig('lidarpub', configData).then(result => {
