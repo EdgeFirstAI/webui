@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.8.0] - 2026-10-07
+
 ### Added
 
 - A view-only Mirror option (Off, Horizontal, Vertical, Both) on the camera, LiDAR and radar pages (EDGEAI-2021). The camera page mirrors the video and all overlays together; the LiDAR and radar pages mirror the drawn scene. Sensor data is not changed, labels stay readable, and the choice is remembered per page across reloads.
