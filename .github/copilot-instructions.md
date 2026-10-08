@@ -76,6 +76,7 @@ The WebSRV backend subscribes to Zenoh topics and bridges them to WebSocket endp
 | `serviceGate.js` | Service-enabled gating decision for page sections (enabled shows, disabled hides and stops a running overlay, unknown keeps the current state). Pure. |
 | `radarOverlay.js` | Radar camera overlay: colour modes and field detection, saved settings, per-point colours and projected frame. Pure. |
 | `pointcloud2.js` | ROS PointCloud2 message parser for LiDAR and radar data. |
+| `viewMirror.js` | View-only mirror option (none/horizontal/vertical/both) for the camera, LiDAR and radar pages: scale factors, CSS transform and saved setting. The mirror is applied to the drawn view, never to sensor data. Pure. |
 
 ### Service-Enabled Gating Pattern
 

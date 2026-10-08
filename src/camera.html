@@ -46,6 +46,13 @@
             display: block;
         }
 
+        /* The video and its overlays share this box, so mirroring it keeps
+           the overlays registered to the video. */
+        #camera-stage {
+            position: absolute;
+            inset: 0;
+        }
+
         #boxes, #lidar-overlay, #radar-overlay {
             position: absolute;
             inset: 0;
@@ -194,6 +201,10 @@
             outline-offset: 1px;
         }
 
+        .camera-controls__toggle-row .camera-controls__select {
+            width: auto;
+        }
+
         .camera-controls__checkbox-label {
             display: flex;
             align-items: center;
@@ -286,10 +297,12 @@
     </script>
     <main id="container" class="bg-neural">
         <div id="camera-viewport" data-testid="camera-viewport">
-            <canvas id="player" data-testid="camera-player"></canvas>
-            <canvas id="boxes" data-testid="camera-boxes"></canvas>
-            <canvas id="lidar-overlay" data-testid="camera-lidar-overlay"></canvas>
-            <canvas id="radar-overlay" data-testid="camera-radar-overlay"></canvas>
+            <div id="camera-stage" data-testid="camera-stage">
+                <canvas id="player" data-testid="camera-player"></canvas>
+                <canvas id="boxes" data-testid="camera-boxes"></canvas>
+                <canvas id="lidar-overlay" data-testid="camera-lidar-overlay"></canvas>
+                <canvas id="radar-overlay" data-testid="camera-radar-overlay"></canvas>
+            </div>
 
             <div id="camera-controls" class="camera-controls" data-testid="camera-controls">
                 <div class="camera-controls__header" data-testid="camera-controls-header">
@@ -418,6 +431,20 @@
                                    aria-label="Radar point color"
                                    data-testid="camera-radar-color">
                         </label>
+                    </div>
+                </div>
+
+                <!-- View -->
+                <div class="camera-controls__section" data-testid="camera-view-mirror">
+                    <div class="camera-controls__toggle-row">
+                        <label class="camera-controls__label" for="view-mirror">Mirror</label>
+                        <select id="view-mirror" class="camera-controls__select"
+                                data-testid="camera-mirror">
+                            <option value="none" selected>Off</option>
+                            <option value="horizontal">Horizontal</option>
+                            <option value="vertical">Vertical</option>
+                            <option value="both">Both</option>
+                        </select>
                     </div>
                 </div>
             </div>

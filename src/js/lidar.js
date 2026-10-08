@@ -8,6 +8,7 @@ import ModelInfo from './modelInfo.js'
 import { mask_colors } from './utils.js'
 import { distanceColor, clusterColor, getFixedColor, neutralGrey, resolveIsDark, getBgColorFromCSS } from './pointColors.js'
 import { parsePointCloud2, extractFieldArray } from './pointcloud2.js'
+import { loadMirror, mirrorScale, saveMirror } from './viewMirror.js'
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -18,6 +19,7 @@ const FUSION_TOPIC = '/api/rt/fusion/lidar/'
 const UNAVAILABLE_TIMEOUT_MS = 1000
 const FUSION_WARNING_DURATION_MS = 5000
 const RECONNECT_DELAY_MS = 3000
+const MIRROR_KEY = 'lidar.mirror'
 
 // ---------------------------------------------------------------------------
 // State
@@ -48,6 +50,7 @@ const showNoiseCheckbox = document.getElementById('show-noise')
 const showGroundCheckbox = document.getElementById('show-ground')
 const bgFilter = document.getElementById('bg-filter')
 const showBgCheckbox = document.getElementById('show-background')
+const mirrorSelect = document.getElementById('mirror-mode')
 let unavailableTimer = null
 
 // ---------------------------------------------------------------------------
@@ -69,6 +72,17 @@ controls.dampingFactor = 0.05
 controls.screenSpacePanning = true
 controls.maxDistance = 100
 controls.maxPolarAngle = Math.PI
+
+// The point cloud is drawn inside this group so the view can be mirrored
+// without touching point data. In world space x is sensor -y (left/right)
+// and y is sensor z (up/down).
+const mirrorGroup = new THREE.Group()
+scene.add(mirrorGroup)
+
+function applyMirror(mode) {
+    const { x, y } = mirrorScale(mode)
+    mirrorGroup.scale.set(x, y, 1)
+}
 
 const pcdLoader = new PCDLoader()
 
@@ -357,6 +371,11 @@ function updateBgFilterVisibility() {
         ? 'flex' : 'none'
 }
 
+mirrorSelect.addEventListener('change', () => {
+    applyMirror(mirrorSelect.value)
+    saveMirror(MIRROR_KEY, mirrorSelect.value)
+})
+
 // ---------------------------------------------------------------------------
 // Part C: WebSocket & Point Cloud Rendering
 // ---------------------------------------------------------------------------
@@ -513,10 +532,10 @@ function updatePointCloud(arrayBuffer) {
                     child.material.dispose()
                 }
             })
-            scene.remove(pointsGroup)
+            mirrorGroup.remove(pointsGroup)
         }
         pointsGroup = group
-        scene.add(pointsGroup)
+        mirrorGroup.add(pointsGroup)
     } catch (error) {
         console.error('Error updating point cloud:', error)
     }
@@ -554,6 +573,8 @@ ModelInfo.connect('/api/rt/model/info/')
 // ---------------------------------------------------------------------------
 // Initialisation
 // ---------------------------------------------------------------------------
+mirrorSelect.value = loadMirror(MIRROR_KEY)
+applyMirror(mirrorSelect.value)
 connectSocket()
 probeTopicFields(socketUrlCluster)
 probeTopicFields(socketUrlFusion)

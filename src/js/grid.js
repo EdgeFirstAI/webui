@@ -17,6 +17,7 @@ import {
     distanceColor, divergingColor, clusterColor, getFixedColor, neutralGrey,
     resolveIsDark, getBgColorFromCSS
 } from './pointColors.js'
+import { loadMirror, mirrorScale, saveMirror } from './viewMirror.js'
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -46,6 +47,7 @@ const HFOV_DEG = 82
 const UNAVAILABLE_TIMEOUT_MS = 2000
 const FUSION_WARNING_DURATION_MS = 5000
 const RECONNECT_DELAY_MS = 3000
+const MIRROR_KEY = 'grid.mirror'
 
 // Radar returns a few dozen points per frame, so draw them considerably
 // larger than the LiDAR page's 3–4 px.
@@ -92,6 +94,7 @@ const colorModeSelect = document.getElementById('color-mode')
 const showElevationCheckbox = document.getElementById('show-elevation')
 const bgFilter = document.getElementById('bg-filter')
 const showBgCheckbox = document.getElementById('show-background')
+const mirrorSelect = document.getElementById('mirror-mode')
 const fusionWarning = document.getElementById('fusion-warning')
 const gridUnavailable = document.getElementById('grid-unavailable')
 
@@ -105,6 +108,18 @@ viewport.insertBefore(renderer.domElement, viewport.firstChild)
 
 const scene = new THREE.Scene()
 scene.background = getBgColorFromCSS(cachedIsDark)
+
+// The fan, its labels and the points are drawn inside this group so the view
+// can be mirrored without touching point data. Scene x is radar y
+// (left/right) and scene y is radar z (up/down). Sprites take the magnitude
+// of their world scale, so the labels move with the fan but stay readable.
+const mirrorGroup = new THREE.Group()
+scene.add(mirrorGroup)
+
+function applyMirror(mode) {
+    const { x, y } = mirrorScale(mode)
+    mirrorGroup.scale.set(x, y, 1)
+}
 
 // Vertical FOV is derived from a fixed horizontal FOV so the whole fan stays
 // in view regardless of the viewport aspect ratio.
@@ -161,7 +176,7 @@ function buildGrid() {
                 child.material.dispose()
             }
         })
-        scene.remove(gridGroup)
+        mirrorGroup.remove(gridGroup)
     }
     gridGroup = new THREE.Group()
 
@@ -209,7 +224,7 @@ function buildGrid() {
         gridGroup.add(text)
     }
 
-    scene.add(gridGroup)
+    mirrorGroup.add(gridGroup)
 }
 
 // ---------------------------------------------------------------------------
@@ -362,19 +377,19 @@ function rebuildPointCloud() {
 
     if (pointCloud) {
         pointCloud.geometry.dispose()
-        scene.remove(pointCloud)
+        mirrorGroup.remove(pointCloud)
     }
     pointMaterial.size = pointSize()
     pointMaterial.needsUpdate = true
     pointCloud = new THREE.Points(geometry, pointMaterial)
     pointCloud.frustumCulled = false
-    scene.add(pointCloud)
+    mirrorGroup.add(pointCloud)
 }
 
 function clearPointCloud() {
     if (!pointCloud) return
     pointCloud.geometry.dispose()
-    scene.remove(pointCloud)
+    mirrorGroup.remove(pointCloud)
     pointCloud = null
 }
 
@@ -512,6 +527,11 @@ showBgCheckbox.addEventListener('change', () => {
     rebuildPointCloud()
 })
 
+mirrorSelect.addEventListener('change', () => {
+    applyMirror(mirrorSelect.value)
+    saveMirror(MIRROR_KEY, mirrorSelect.value)
+})
+
 // ---------------------------------------------------------------------------
 // Theme integration
 // ---------------------------------------------------------------------------
@@ -534,5 +554,7 @@ ModelInfo.connect('/api/rt/model/info/')
 // ---------------------------------------------------------------------------
 // Initialisation
 // ---------------------------------------------------------------------------
+mirrorSelect.value = loadMirror(MIRROR_KEY)
+applyMirror(mirrorSelect.value)
 buildGrid()
 connectSocket()

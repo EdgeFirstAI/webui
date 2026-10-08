@@ -519,18 +519,6 @@
                         pattern="-?\d*\.?\d+\s+-?\d*\.?\d+\s+-?\d*\.?\d+\s+-?\d*\.?\d+">
                     <div class="comment">LiDAR frame rotation quaternion (X Y Z W) from the base_link</div>
                 </div>
-
-                <div class="form-group">
-                    <label for="mirror">Mirror:</label>
-                    <select id="mirror" name="mirror">
-                        <option value="" selected>None</option>
-                        <option value="horizontal">Horizontal</option>
-                        <option value="vertical">Vertical</option>
-                        <option value="both">Both</option>
-                    </select>
-                    <div class="comment">Mirror the point cloud when the sensor's coordinate frame does not
-                        match the expected orientation</div>
-                </div>
             </div>
 
             <div class="form-group">
@@ -995,7 +983,6 @@
                     document.getElementById('tf_vec').value = Array.isArray(data.TF_VEC) ? data.TF_VEC.join(' ') : (data.TF_VEC || '0 0 -0.19');
                     document.getElementById('tf_quat').value = Array.isArray(data.TF_QUAT) ? data.TF_QUAT.join(' ') : (data.TF_QUAT || '0 0 -0.9998157 0.0191974');
                     document.getElementById('sensor_type').value = data.SENSOR_TYPE || 'ouster';
-                    document.getElementById('mirror').value = data.MIRROR || '';
                     document.getElementById('ground_filter').checked = data.GROUND_FILTER === 'true';
                     document.getElementById('ground_thickness').value = data.GROUND_THICKNESS || '';
                     document.getElementById('sensor_height').value = data.SENSOR_HEIGHT || '';
@@ -1042,7 +1029,6 @@
                     TF_VEC: document.getElementById('tf_vec').value,
                     TF_QUAT: document.getElementById('tf_quat').value,
                     SENSOR_TYPE: document.getElementById('sensor_type').value,
-                    MIRROR: document.getElementById('mirror').value,
                     GROUND_FILTER: document.getElementById('ground_filter').checked ? 'true' : 'false',
                     GROUND_THICKNESS: document.getElementById('ground_thickness').value,
                     SENSOR_HEIGHT: document.getElementById('sensor_height').value,
@@ -1052,7 +1038,9 @@
                     CLUSTERING_BRIDGE: document.getElementById('clustering_bridge').value,
                     MSOP_PORT: document.getElementById('msop_port').value,
                     DIFOP_PORT: document.getElementById('difop_port').value,
-                    INCLUDE_NOISY: document.getElementById('include_noisy').checked ? 'true' : 'false'
+                    INCLUDE_NOISY: document.getElementById('include_noisy').checked ? 'true' : 'false',
+                    // Comments out a legacy MIRROR entry; lidarpub no longer mirrors points.
+                    MIRROR: null
                 };
 
                 saveServiceConfig('lidarpub', configData).then(result => {

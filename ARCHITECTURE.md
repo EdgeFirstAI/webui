@@ -180,7 +180,7 @@ The camera, segmentation and combined pages draw each overlay for the camera fra
 | `TileAssembler.js` | Groups decoded 4K tiles by exact `header.stamp` and emits complete groups, or partial groups after 100 ms, at most one per `minIntervalMs`. |
 | `SyncedVideo.js` | `createSyncedVideo()` wires `SmartVideoManager`, `FrameSync` and `PlayoutClock`; `tick()` draws the due frame and returns its stamp. |
 
-The stamp, buffer, clock, frame and tile modules, and the overlay modules `projection.js`, `radarOverlay.js`, `colorMaps.js`, `reconnectingSocket.js`, `topicGate.js` and `serviceGate.js` (see Camera Page Sensor Overlays), import nothing that touches the DOM, WebGL or Three.js, so they are unit tested with `node --test`.
+The stamp, buffer, clock, frame and tile modules, and the overlay modules `projection.js`, `radarOverlay.js`, `colorMaps.js`, `reconnectingSocket.js`, `topicGate.js`, `serviceGate.js` and `viewMirror.js` (see Camera Page Sensor Overlays), import nothing that touches the DOM, WebGL or Three.js, so they are unit tested with `node --test`.
 
 ### Overlay Selection Policy
 

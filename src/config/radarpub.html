@@ -297,12 +297,6 @@
             </div>
 
             <div class="form-group">
-                <label for="mirror">Mirror Radar Data:</label>
-                <input type="checkbox" id="mirror" name="mirror">
-                <label for="mirror">Enabled</label>
-            </div>
-
-            <div class="form-group">
                 <label for="radar_tf_vec">Radar Transform Vector:</label>
                 <input type="text" id="radar_tf_vec" name="radar_tf_vec" placeholder="0 0 0">
                 <div class="comment">Translation from base_link, "x y z" in metres (default: 0 0 0).</div>
@@ -388,7 +382,6 @@
                         (data.CLUSTERING_PARAM_SCALE || '1.0 1.0 0.0 0.0');
                     document.getElementById('clustering_param_scale').value = clusteringParamScale.replace(/,/g, ' ');
                     document.getElementById('clustering_point_limit').value = data.CLUSTERING_POINT_LIMIT || '3';
-                    document.getElementById('mirror').checked = data.MIRROR === 'true';
                     const radarTfVec = Array.isArray(data.RADAR_TF_VEC) ? data.RADAR_TF_VEC.join(' ') : (data.RADAR_TF_VEC || '');
                     document.getElementById('radar_tf_vec').value = radarTfVec.replace(/,/g, ' ');
                     const radarTfQuat = Array.isArray(data.RADAR_TF_QUAT) ? data.RADAR_TF_QUAT.join(' ') : (data.RADAR_TF_QUAT || '');
@@ -417,9 +410,10 @@
                     CLUSTERING_EPS: document.getElementById('clustering_eps').value,
                     CLUSTERING_PARAM_SCALE: document.getElementById('clustering_param_scale').value,
                     CLUSTERING_POINT_LIMIT: document.getElementById('clustering_point_limit').value,
-                    MIRROR: document.getElementById('mirror').checked ? 'true' : 'false',
                     RADAR_TF_VEC: document.getElementById('radar_tf_vec').value,
-                    RADAR_TF_QUAT: document.getElementById('radar_tf_quat').value
+                    RADAR_TF_QUAT: document.getElementById('radar_tf_quat').value,
+                    // Comments out a legacy MIRROR entry; radarpub no longer mirrors points.
+                    MIRROR: null
                 };
 
                 saveServiceConfig('radarpub', configData).then(result => {

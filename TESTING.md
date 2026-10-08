@@ -300,7 +300,7 @@ Test on supported browsers:
 
 ## Unit Tests
 
-The stamp, buffer, clock, frame and tile modules, and the overlay modules (`projection.js`, `radarOverlay.js`, `colorMaps.js`, `reconnectingSocket.js`, `topicGate.js`, `serviceGate.js`), are pure and covered by `node --test` unit tests in `tests/unit/`. They need Node.js 22 or later and no `npm install`:
+The stamp, buffer, clock, frame and tile modules, and the overlay modules (`projection.js`, `radarOverlay.js`, `colorMaps.js`, `reconnectingSocket.js`, `topicGate.js`, `serviceGate.js`, `viewMirror.js`), are pure and covered by `node --test` unit tests in `tests/unit/`. They need Node.js 22 or later and no `npm install`:
 
 ```bash
 node --test "tests/unit/*.test.mjs"
@@ -345,6 +345,7 @@ data-testid="<page>-<element>-<name>"
 
 **Camera Page (`camera.html`):**
 - `camera-viewport` - Main viewport container
+- `camera-stage` - Container of the video and overlay canvases (mirrored by the Mirror option)
 - `camera-player` - Video canvas
 - `camera-boxes` - Bounding box overlay canvas
 - `camera-lidar-overlay` - LiDAR projection overlay canvas
@@ -370,6 +371,8 @@ data-testid="<page>-<element>-<name>"
 - `camera-options-radar` - Radar sub-options
 - `camera-radar-color-mode` - Radar colour mode selector (Fixed, Range, and Speed, Power, RCS when present)
 - `camera-radar-color` - Radar fixed colour picker (shown in Fixed mode)
+- `camera-view-mirror` - Mirror section
+- `camera-mirror` - View mirror selector (Off, Horizontal, Vertical, Both); mirrors the video and overlays together, saved across reloads
 - `camera-unavailable` - Camera unavailable overlay
 
 **LiDAR Page (`lidar.html`):**
@@ -379,6 +382,7 @@ data-testid="<page>-<element>-<name>"
 - `lidar-cluster-filters` - Noise/Ground filter checkboxes (visible in Cluster mode)
 - `lidar-show-noise` - Noise filter checkbox
 - `lidar-show-ground` - Ground filter checkbox
+- `lidar-mirror` - View mirror selector (Off, Horizontal, Vertical, Both); mirrors the drawn point cloud, saved across reloads
 - `lidar-fusion-warning` - Warning banner when fusion data unavailable
 - `lidar-unavailable` - Overlay when LiDAR data is not being received
 
@@ -429,6 +433,7 @@ data-testid="<page>-<element>-<name>"
 - `grid-show-elevation` - Elevation checkbox (draw points at their `z` height instead of flat on the grid)
 - `grid-bg-filter` - Draw Background toggle container (visible in Vision Class mode when a background class is detected)
 - `grid-show-background` - Draw Background checkbox
+- `grid-mirror` - View mirror selector (Off, Horizontal, Vertical, Both); mirrors the drawn grid and points, saved across reloads
 - `grid-fusion-warning` - Hint banner when the selected source is not publishing
 - `grid-unavailable` - Overlay when radar data is not being received
 
