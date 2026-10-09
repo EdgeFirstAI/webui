@@ -9,8 +9,8 @@ import {
 } from '../../src/js/radarOverlay.js'
 import { turboColormap, divergingColor } from '../../src/js/colorMaps.js'
 import { sensorToCameraMatrix } from '../../src/js/projection.js'
+import { POINT_FIELD_DATATYPE } from '../../src/js/vocabulary.js'
 
-const FLOAT32 = 7
 const ZERO_T = { x: 0, y: 0, z: 0 }
 const OPTICAL = { translation: ZERO_T, rotation: { x: -0.5, y: 0.5, z: -0.5, w: 0.5 } }
 const RADAR = { translation: ZERO_T, rotation: { x: 0, y: 0, z: 0, w: 1 } }
@@ -20,7 +20,7 @@ const H = 1080
 
 /** A parsed PointCloud2 (as parsePointCloud2 returns) of float32 fields. */
 function cloud(names, rows) {
-    const fields = names.map((name, i) => ({ name, offset: i * 4, datatype: FLOAT32, count: 1 }))
+    const fields = names.map((name, i) => ({ name, offset: i * 4, datatype: POINT_FIELD_DATATYPE.FLOAT32, count: 1 }))
     const fieldMap = Object.fromEntries(fields.map((f) => [f.name, f]))
     const pointStep = names.length * 4
     const dataView = new DataView(new ArrayBuffer(pointStep * rows.length))
