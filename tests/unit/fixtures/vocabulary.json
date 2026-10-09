@@ -1,0 +1,16 @@
+{
+  "point_field_datatype": {
+    "authority": "edgefirst-schemas sensor_msgs::point_field",
+    "source": "https://raw.githubusercontent.com/EdgeFirstAI/schemas/v4.0.0/crates/schemas/src/sensor_msgs/mod.rs",
+    "codes": {
+      "INT8": 1,
+      "UINT8": 2,
+      "INT16": 3,
+      "UINT16": 4,
+      "INT32": 5,
+      "UINT32": 6,
+      "FLOAT32": 7,
+      "FLOAT64": 8
+    }
+  }
+}
