@@ -9,7 +9,19 @@
 # Usage:  vocabulary.sh [--check]
 #   (no flag)  rewrite the snapshot from the pinned sources
 #   --check    exit 1 if the snapshot differs from the pinned sources
+#   anything else prints this usage and exits 2 without writing
 set -euo pipefail
+
+usage() {
+    echo "usage: $(basename "$0") [--check]" >&2
+    exit 2
+}
+
+case "$#:${1:-}" in
+    0:) check=false ;;
+    1:--check) check=true ;;
+    *) usage ;;
+esac
 
 SCHEMAS_TAG="v4.0.0"
 SCHEMAS_URL="https://raw.githubusercontent.com/EdgeFirstAI/schemas/${SCHEMAS_TAG}/crates/schemas/src/sensor_msgs/mod.rs"
@@ -37,7 +49,7 @@ print(json.dumps({
 }, indent=2))
 ' <<<"$source_text")"
 
-if [[ "${1:-}" == "--check" ]]; then
+if "$check"; then
     if ! diff -u "$snapshot" <(printf '%s\n' "$generated"); then
         echo "vocabulary.json differs from ${SCHEMAS_TAG}; run .github/scripts/vocabulary.sh" >&2
         exit 1
