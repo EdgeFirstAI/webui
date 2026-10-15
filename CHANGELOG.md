@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- PointCloud2 field datatype codes come from one table in `src/js/vocabulary.js`, mirroring `edgefirst-schemas` `sensor_msgs::point_field`, instead of constants local to the parser. A unit test checks the table against a snapshot of the schemas v4.0.0 values, and `.github/scripts/vocabulary.sh --check` checks the snapshot against that release (EDGEAI-2200).
+
 ## [4.8.0] - 2026-10-07
 
 ### Added

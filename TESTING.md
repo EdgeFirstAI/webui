@@ -306,7 +306,16 @@ The stamp, buffer, clock, frame and tile modules, and the overlay modules (`proj
 node --test "tests/unit/*.test.mjs"
 ```
 
-Quote the glob; Node 24 does not accept a bare directory argument. Lint the sources and tests with:
+Quote the glob; Node 24 does not accept a bare directory argument.
+
+`tests/unit/vocabulary.test.mjs` checks the code tables in `src/js/vocabulary.js` against `tests/unit/fixtures/vocabulary.json`, a snapshot of each table's authority at a pinned release. Check the snapshot against the authority, or regenerate it after raising the pin in the script, with:
+
+```bash
+.github/scripts/vocabulary.sh --check
+.github/scripts/vocabulary.sh
+```
+
+Lint the sources and tests with:
 
 ```bash
 npx eslint src/ tests/

@@ -2,16 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { CdrReader } from './Cdr.js'
+import { POINT_FIELD_DATATYPE } from './vocabulary.js'
 
-// PointCloud2 field datatype constants
-const INT8 = 1
-const UINT8 = 2
-const INT16 = 3
-const UINT16 = 4
-const INT32 = 5
-const UINT32 = 6
-const FLOAT32 = 7
-const FLOAT64 = 8
+const { INT8, UINT8, INT16, UINT16, INT32, UINT32, FLOAT32, FLOAT64 } = POINT_FIELD_DATATYPE
 
 /**
  * Parse a PointCloud2 CDR message from a binary ArrayBuffer.
