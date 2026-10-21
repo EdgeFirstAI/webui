@@ -7,9 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.8.1] - 2026-10-21
+
 ### Changed
 
 - PointCloud2 field datatype codes come from one table in `src/js/vocabulary.js`, mirroring `edgefirst-schemas` `sensor_msgs::point_field`, instead of constants local to the parser. A unit test checks the table against a snapshot of the schemas v4.0.0 values, and `.github/scripts/vocabulary.sh --check` checks the snapshot against that release (EDGEAI-2200).
+
+### Fixed
+
+- The camera page LiDAR overlay and the LiDAR page request `lidar/points`, `lidar/clusters` and `fusion/lidar` with `?compress=false`. With permessage-deflate on, websrv delivered fewer than 10 clouds per second, so the overlay lag grew by about 85 ms every second until playout stopped waiting for it and the overlay disappeared; uncompressed, the lag stays at about 140 ms. websrv 4.4.1 also skips compression for these topics.
+- The LiDAR overlay recovers when websrv closes a stream whose Zenoh subscriber ended (websrv 4.4.1): the socket reconnects with a new subscriber instead of staying open without data.
 
 ## [4.8.0] - 2026-10-07
 

@@ -35,9 +35,10 @@ const RADAR_CALIBRATION_WARN_MS = 5000
 // ---------------------------------------------------------------------------
 // Default topic URLs
 // ---------------------------------------------------------------------------
-let socketUrlLidar = '/api/rt/lidar/points/'
-let socketUrlLidarCluster = '/api/rt/lidar/clusters/'
-let socketUrlFusion = '/api/rt/fusion/lidar/'
+// LiDAR clouds barely compress and deflating them on the device cannot keep up with 10 Hz
+let socketUrlLidar = '/api/rt/lidar/points/?compress=false'
+let socketUrlLidarCluster = '/api/rt/lidar/clusters/?compress=false'
+let socketUrlFusion = '/api/rt/fusion/lidar/?compress=false'
 let socketUrlModel = '/api/rt/model/output/'
 let socketUrlModelInfo = '/api/rt/model/info/'
 let socketUrlTfStatic = '/api/rt/tf_static/'

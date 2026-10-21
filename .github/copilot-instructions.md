@@ -161,6 +161,6 @@ await page.evaluate(async () => {
 
 - Copyright header on every source file: `// Copyright (C) 2025 Au-Zone Technologies Inc. All Rights Reserved.` + SPDX identifier
 - Global state via `window.*` (e.g., `window.serviceCache`, `window.ThemeManager`, `window.isPlaying`)
-- WebSocket URLs include `?compress=false` for H.264 streams (already compressed)
+- WebSocket URLs include `?compress=false` for H.264 streams (already compressed) and LiDAR point clouds (barely compress; deflate on the device cannot keep up with 10 Hz)
 - Tailwind CSS classes used inline; custom styles in `src/css/theme.css` via CSS custom properties
 - Changelog follows [Keep a Changelog](https://keepachangelog.com/) format in CHANGELOG.md
