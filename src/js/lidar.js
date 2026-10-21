@@ -13,9 +13,10 @@ import { loadMirror, mirrorScale, saveMirror } from './viewMirror.js'
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-const RAW_TOPIC = '/api/rt/lidar/points/'
-const CLUSTER_TOPIC = '/api/rt/lidar/clusters/'
-const FUSION_TOPIC = '/api/rt/fusion/lidar/'
+// LiDAR clouds barely compress and deflating them on the device cannot keep up with 10 Hz
+const RAW_TOPIC = '/api/rt/lidar/points/?compress=false'
+const CLUSTER_TOPIC = '/api/rt/lidar/clusters/?compress=false'
+const FUSION_TOPIC = '/api/rt/fusion/lidar/?compress=false'
 const UNAVAILABLE_TIMEOUT_MS = 1000
 const FUSION_WARNING_DURATION_MS = 5000
 const RECONNECT_DELAY_MS = 3000
